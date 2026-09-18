@@ -132,6 +132,7 @@ if not st.session_state.authenticated:
 
               st.session_state.authenticated = True
               st.session_state.candidate_email = email_input.strip()
+              st.session_state.voucher_code = voucher_input.strip()
               st.session_state.candidate_first_name = f_name
               st.session_state.candidate_last_name = l_name
               st.session_state.candidate_japanese_name = j_name
@@ -288,16 +289,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
             image_bytes = photo_file.getvalue()
 
-           # 動態掃描 session_state 尋找任何包含 voucher 或 code 的變數
-            voucher_code = "EXAM"
-            for key, value in st.session_state.items():
-              if any(k in key.lower() for k in ["voucher", "code"]) and isinstance(
-                  value, str
-              ):
-                if value and len(value.strip()) > 0 and value != "EXAM":
-                  voucher_code = value.strip()
-                  break
-
+           # 直接讀取已儲存的 voucher_code
+            voucher_code = st.session_state.get("voucher_code", "EXAM")
             file_name = f"{voucher_code}-Verified"
 
             payload = {"key": imgbb_key, "name": file_name}
