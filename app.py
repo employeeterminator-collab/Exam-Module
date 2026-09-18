@@ -2,6 +2,28 @@ import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
 
+# 隱藏 Streamlit 預設選單、頁尾與標題的錨點連結符號
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    [data-testid="stToolbar"] {display: none !important; visibility: hidden !important;}
+    [data-testid="stDecoration"] {display: none !important; visibility: hidden !important;}
+    [data-testid="stStatusWidget"] {display: none !important; visibility: hidden !important;}
+    
+    /* 隱藏所有 Markdown 標題的錨點連結圖示 */
+    .stMarkdown h1 a, .stMarkdown h2 a, .stMarkdown h3 a, .stMarkdown h4 a {
+        display: none !important;
+    }
+    h1 a, h2 a, h3 a, h4 a {
+        display: none !important;
+    }
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+
 # 1. 頁面基本設定
 st.set_page_config(
     page_title="Shisa Kanko-Shi Examination Portal",
