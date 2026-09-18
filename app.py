@@ -219,6 +219,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
   if st.button("🚀 I Understand and Agree"):
     st.session_state.exam_step = 2  # 進入拍照驗證頁面
     st.rerun()
+
+  st.write("---")
 # ==========================================
 # Step 2 - 考生拍照驗證頁面 (Candidate Photo)
 # ==========================================
