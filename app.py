@@ -52,7 +52,33 @@ def get_sheets_connection():
 # ==========================================
 # 畫面邏輯：Step 0 - 考生身分驗證與憑證確認
 # ==========================================
-submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
+if not st.session_state.authenticated:
+  st.markdown(
+      "<h1 style='text-align: center;'>Shisa Kanko-Shi Examination Portal</h1>",
+      unsafe_allow_html=True,
+  )
+  st.markdown(
+      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling"
+      " Specialist)</h3>",
+      unsafe_allow_html=True,
+  )
+  st.write("---")
+
+  st.markdown("### Candidate Authentication")
+  st.write(
+      "Please enter your registered Email and Voucher Code to enter the"
+      " examination room."
+  )
+
+  with st.form("auth_form"):
+    email_input = st.text_input(
+        "Registered Email Address", placeholder="e.g., candidate@example.com"
+    )
+    voucher_input = st.text_input(
+        "Voucher Code", type="password", placeholder="Enter your voucher code"
+    )
+
+    submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
 
     if submitted:
       if not email_input or not voucher_input:
@@ -122,9 +148,7 @@ submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
 # 畫面邏輯：Step 1 - 考試須知與守則
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 1:
-  st.markdown(
-      f"### Welcome, {st.session_state.candidate_name}!"
-  )
+  st.markdown(f"### Welcome, {st.session_state.candidate_name}!")
   st.markdown("### Step 2: Examination Rules & Instructions")
   st.write("Please read the following rules carefully before starting:")
 
@@ -162,6 +186,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 # 畫面邏輯：Step 3 - 交卷與完成畫面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
-  st.markdown("<h2 style='text-align: center;'>🎉 Exam Completed!</h2>", unsafe_allow_html=True)
-  st.success("Your responses have been successfully recorded to the examination database.")
-  st.write(f"Thank you, {st.session_state.candidate_name}. You may now close this window.")
+  st.markdown(
+      "<h2 style='text-align: center;'>🎉 Exam Completed!</h2>",
+      unsafe_allow_html=True,
+  )
+  st.success(
+      "Your responses have been successfully recorded to the examination"
+      " database."
+  )
+  st.write(
+      f"Thank you, {st.session_state.candidate_name}. You may now close this"
+      " window."
+  )
