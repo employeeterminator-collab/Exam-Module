@@ -292,9 +292,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
             # 自動尋找正確的 Voucher 變數名稱，避免變成 EXAM
             voucher_code = (
-                st.session_state.get("voucher")
-                or st.session_state.get("voucher_code")
-                or st.session_state.get("code")
+                st.session_state.get("VoucherCode")
                 or "EXAM"
             )
             file_name = f"{voucher_code}Verified"
