@@ -291,7 +291,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               f"{st.session_state.candidate_first_name}_{timestamp}.jpg"
           )
 
-         file_metadata = {"name": safe_name, "parents": [folder_id]}
+          file_metadata = {"name": safe_name, "parents": [folder_id]}
 
           media = MediaIoBaseUpload(
               photo_file, mimetype="image/jpeg", resumable=True
