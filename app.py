@@ -194,9 +194,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
           font-size: 15px;
           line-height: 1.6;
           box-shadow: inset 0 1px 2px rgba(0,0,0,0.075);
-      ">
+      "> </div>
       {exam_instructions}
-      </div>
+ 
   """,
       unsafe_allow_html=True,
   )
