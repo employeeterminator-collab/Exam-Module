@@ -100,14 +100,14 @@ if not st.session_state.authenticated:
 
             # 尋找各種可能的欄位名稱變體
             r_voucher = (
-                norm_record.get("vouchercode")
-                or norm_record.get("voucher code")
+                norm_record.get("VoucherCode")
+                or norm_record.get("voucherCode")
                 or norm_record.get("voucher")
                 or ""
             )
             r_email = (
-                norm_record.get("email")
-                or norm_record.get("email address")
+                norm_record.get("AssignedEmail")
+                or norm_record.get("assignedemail")
                 or ""
             )
 
