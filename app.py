@@ -174,11 +174,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
       " exam now and contact administrator."
   )
 
-  # 使用 HTML 讓連結強制跳出 iframe，在主視窗中開啟聯絡頁面並終結考試畫面
+  # 在當前畫面/視窗直接跳轉至聯絡頁面
   st.markdown(
       """
         <div style="text-align: left; margin-top: 10px; margin-bottom: 20px;">
-            <a href="https://shisakanko.org/contact" target="_top" style="
+            <a href="https://shisakanko.org/contact" target="_self" style="
                 display: inline-block;
                 background-color: #ffffff;
                 color: #212529;
