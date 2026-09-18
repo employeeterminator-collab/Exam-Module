@@ -95,7 +95,13 @@ if not st.session_state.authenticated:
     submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
 
     if submitted:
-      if not email_input or not voucher_input:
+      # 檢查是否為空值或單純填入空白
+      if (
+          not email_input
+          or not voucher_input
+          or not email_input.strip()
+          or not voucher_input.strip()
+      ):
         st.error("Please enter both your Email and Voucher Code.")
       else:
         try:
@@ -107,10 +113,17 @@ if not st.session_state.authenticated:
           for record in records:
             r_voucher = str(record.get("VoucherCode", "")).strip()
             r_email = str(record.get("AssignedEmail", "")).strip()
+            r_status = str(record.get("Status", "")).strip()
 
+            # 嚴格邏輯檢查：
+            # 1. VoucherCode 必須相符
+            # 2. AssignedEmail 不能為空，且必須與輸入相符
+            # 3. Status 必須嚴格等於 "Used" (代表已透過 exam1 註冊並鎖定)
             if (
                 r_voucher == voucher_input.strip()
+                and r_email != ""
                 and r_email.lower() == email_input.strip().lower()
+                and r_status.lower() == "used"
             ):
               matched = True
               f_name = str(record.get("EnglishFirstName", "")).strip()
@@ -118,7 +131,7 @@ if not st.session_state.authenticated:
               j_name = str(record.get("JapaneseName", "")).strip()
 
               st.session_state.authenticated = True
-              st.session_state.candidate_email = email_input
+              st.session_state.candidate_email = email_input.strip()
               st.session_state.candidate_first_name = f_name
               st.session_state.candidate_last_name = l_name
               st.session_state.candidate_japanese_name = j_name
@@ -179,27 +192,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
         " Ensure you click the submit button before time expires."
     )
 
-  # 使用高對比、清晰舒適的自訂捲軸文字框
-  st.markdown(
-      f"""
-      <div style="
-          background-color: #ffffff;
-          color: #212529;
-          border: 1px solid #ced4da;
-          border-radius: 6px;
-          padding: 15px;
-          height: 200px;
-          overflow-y: auto;
-          white-space: pre-line;
-          font-size: 15px;
-          line-height: 1.6;
-          box-shadow: inset 0 1px 2px rgba(0,0,0,0.075);
-      ">  
-      {exam_instructions}
- 
-  """,
-      unsafe_allow_html=True,
-  )
+  # 使用帶有捲軸且背景乾淨的純文字顯示（避免 HTML 標籤誤植問題）
+  st.text(exam_instructions)
 
   st.markdown("<br>", unsafe_allow_html=True)
   if st.button("🚀 I Understand and Agree"):
