@@ -274,7 +274,7 @@ elif (
       st.success("✅ Photo captured successfully!")
       st.markdown("<br>", unsafe_allow_html=True)
 
-      if st.button("🚀 Proceed to Rest Break"):
+      if st.button("🚀 Proceed to Next Step"):
         st.session_state.photo_attempts += 1
 
         with st.spinner(
@@ -345,7 +345,7 @@ elif (
   )
   st.write(
       "<p style='text-align: center;'>Your photo has been successfully"
-      " verified. Take a brief break before your core examination begins. The"
+      " verified.\n Take a brief break before your core examination begins. \nThe"
       " exam will start automatically when the timer expires.</p>",
       unsafe_allow_html=True,
   )
