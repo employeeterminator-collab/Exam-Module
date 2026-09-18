@@ -239,7 +239,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
 
   st.write("---")
 # ==========================================
-# Step 2 - 考生拍照驗證頁面 (With Voucher Filename & Attempt Limit)
+# Step 2 - 考生拍照驗證頁面 (Fixed Voucher & Strict Attempt Lock)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 2:
   st.markdown("### Step 3: Candidate Photo Verification")
@@ -248,14 +248,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
       f" ({st.session_state.candidate_email})"
   )
 
-  # 初始化嘗試次數計算器
+  # 初始化嘗試次數
   if "photo_attempts" not in st.session_state:
     st.session_state.photo_attempts = 0
 
   MAX_ATTEMPTS = 3
   remaining_attempts = MAX_ATTEMPTS - st.session_state.photo_attempts
 
-  # 檢查是否超過最大嘗試次數
+  # 如果次數用完，徹底鎖定畫面，不顯示相機
   if remaining_attempts <= 0:
     st.error(
         "❌ You have exceeded the maximum allowed photo verification attempts"
@@ -276,7 +276,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
       st.markdown("<br>", unsafe_allow_html=True)
 
       if st.button("🚀 Proceed to Core Examination"):
-        # 每次點擊送出即計算一次嘗試
+        # 增加一次嘗試次數
         st.session_state.photo_attempts += 1
 
         with st.spinner(
@@ -290,8 +290,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
             image_bytes = photo_file.getvalue()
 
-            # 檔案名稱改為：Voucher Code + "Verified"
-            voucher_code = st.session_state.get("voucher", "EXAM")
+            # 自動尋找正確的 Voucher 變數名稱，避免變成 EXAM
+            voucher_code = (
+                st.session_state.get("voucher")
+                or st.session_state.get("voucher_code")
+                or st.session_state.get("code")
+                or "EXAM"
+            )
             file_name = f"{voucher_code}Verified"
 
             payload = {"key": imgbb_key, "name": file_name}
@@ -317,18 +322,20 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               error_msg = result.get("error", {}).get(
                   "message", "Unknown error"
               )
-              current_remaining = MAX_ATTEMPTS - st.session_state.photo_attempts
               st.error(
                   f"Upload failed: {error_msg}. Please try again."
-                  f" ({current_remaining} attempts left)"
+                  f" ({MAX_ATTEMPTS - st.session_state.photo_attempts}"
+                  " attempts left)"
               )
+              st.rerun()  # 重新整理以更新剩餘次數顯示
 
           except Exception as e:
-            current_remaining = MAX_ATTEMPTS - st.session_state.photo_attempts
             st.error(
-                f"An unexpected error occurred: {e}. ({current_remaining}"
-                " attempts left)"
+                f"An unexpected error occurred: {e}."
+                f" ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts"
+                " left)"
             )
+            st.rerun()
 # ==========================================
 # Step 3 - 核心問答模組 (開發中)
 # ==========================================
