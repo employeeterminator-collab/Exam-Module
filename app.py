@@ -265,8 +265,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
   else:
     st.write(
         "Please take a photo for identity verification records prior to"
-        f" starting the exam. \n\n*Submission attempts remaining:"
-        f" {remaining_attempts} out of {MAX_ATTEMPTS}*"
     )
 
     photo_file = st.camera_input("Capture Your Photo")
@@ -290,12 +288,17 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
             image_bytes = photo_file.getvalue()
 
-            # 自動尋找正確的 Voucher 變數名稱，避免變成 EXAM
-            voucher_code = (
-                st.session_state.get("VoucherCode")
-                or "EXAM"
-            )
-            file_name = f"{voucher_code}Verified"
+           # 動態掃描 session_state 尋找任何包含 voucher 或 code 的變數
+            voucher_code = "EXAM"
+            for key, value in st.session_state.items():
+              if any(k in key.lower() for k in ["voucher", "code"]) and isinstance(
+                  value, str
+              ):
+                if value and len(value.strip()) > 0 and value != "EXAM":
+                  voucher_code = value.strip()
+                  break
+
+file_name = f"{voucher_code}-Verified"
 
             payload = {"key": imgbb_key, "name": file_name}
             files = {"image": image_bytes}
