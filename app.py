@@ -173,10 +173,25 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
       "⚠️ If the above information is incorrect or missing, please end the"
       " exam now and contact administrator."
   )
-  st.link_button(
-      "🚪 Quit and Contact Administrator", "https://shisakanko.org/contact"
-  )
 
+  # 使用 HTML 讓連結強制跳出 iframe，在主視窗中開啟聯絡頁面並終結考試畫面
+  st.markdown(
+      """
+        <div style="text-align: left; margin-top: 10px; margin-bottom: 20px;">
+            <a href="https://shisakanko.org/contact" target="_top" style="
+                display: inline-block;
+                background-color: #ff4b4b;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: 600;
+                font-family: sans-serif;
+            ">🚪 Quit and Contact Administrator</a>
+        </div>
+    """,
+      unsafe_allow_html=True,
+  )
   st.write("---")
   st.markdown("### Step 2: Examination Rules & Instructions")
   st.write("Please read the following rules carefully before starting:")
