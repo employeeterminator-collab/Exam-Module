@@ -237,158 +237,130 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
   st.write("---")
 
 # ==========================================
-# Step 2 - 考生拍照驗證頁面
+# Step 2 - 考生拍照驗證與倒數休息頁面
 # ==========================================
-elif (
-    st.session_state.authenticated
-    and st.session_state.exam_step == 2
-    and not st.session_state.on_break
-):
-  st.markdown("### Step 3: Candidate Photo Verification")
-  st.write(
-      f"Candidate: **{st.session_state.candidate_name}**"
-      f" ({st.session_state.candidate_email})"
-  )
-
-  if "photo_attempts" not in st.session_state:
-    st.session_state.photo_attempts = 0
-
-  MAX_ATTEMPTS = 3
-  remaining_attempts = MAX_ATTEMPTS - st.session_state.photo_attempts
-
-  if remaining_attempts <= 0:
-    st.error(
-        "❌ You have exceeded the maximum allowed photo verification attempts"
-        f" ({MAX_ATTEMPTS}/{MAX_ATTEMPTS}). Your session is locked. Please"
-        " contact the administrator."
-    )
-  else:
+elif st.session_state.authenticated and st.session_state.exam_step == 2:
+  
+  # 如果正在休息，顯示倒數計時畫面
+  if st.session_state.on_break:
+    st.markdown("<h2 style='text-align: center;'>☕ Mandatory Rest Break</h2>", unsafe_allow_html=True)
     st.write(
-        "Please take a photo for identity verification records prior to"
-        " starting the exam."
+        "<p style='text-align: center;'>Your photo has been successfully verified. "
+        "Take a brief break before your core examination begins. "
+        "The exam will start automatically when the timer expires.</p>",
+        unsafe_allow_html=True,
     )
+    st.write("---")
 
-    photo_file = st.camera_input("Capture Your Photo", key="exam_camera_input")
+    TOTAL_SECONDS = 5 * 60  # 5 分鐘
+    elapsed = int(time.time() - st.session_state.break_start_time)
+    remaining = TOTAL_SECONDS - elapsed
 
-    # 只有當真的拍了照片，且還沒按過送出時，才顯示送出按鈕
-    if photo_file is not None:
-      st.success("✅ Photo captured successfully!")
-      st.markdown("<br>", unsafe_allow_html=True)
-
-      if st.button("🚀 Proceed to Next Step", key="proceed_btn"):
-        st.session_state.photo_attempts += 1
-
-        with st.spinner(
-            "Uploading verification photo to secure storage and proceeding..."
-        ):
-          try:
-            import requests
-
-            imgbb_key = st.secrets["imgbb"]["api_key"]
-            upload_url = "https://api.imgbb.com/1/upload"
-
-            image_bytes = photo_file.getvalue()
-            voucher_code = st.session_state.get("voucher_code", "EXAM")
-            file_name = f"{voucher_code}-Verified"
-
-            payload = {"key": imgbb_key, "name": file_name}
-            files = {"image": image_bytes}
-
-            response = requests.post(upload_url, data=payload, files=files)
-            result = response.json()
-
-            if result.get("success"):
-              photo_url = result["data"]["url"]
-
-              try:
-                db = get_sheets_connection()
-                sheet = db.worksheet("Vouchers")
-                cell = sheet.find(st.session_state.candidate_email)
-                if cell:
-                  sheet.update_cell(cell.row, 4, photo_url)
-              except Exception:
-                pass
-
-              # 啟動休息倒數，並強制清除 camera_input 暫存
-              st.session_state.on_break = True
-              st.session_state.break_start_time = time.time()
-              if "exam_camera_input" in st.session_state:
-                del st.session_state["exam_camera_input"]
-              st.rerun()
-            else:
-              error_msg = result.get("error", {}).get(
-                  "message", "Unknown error"
-              )
-              st.error(
-                  f"Upload failed: {error_msg}. Please try again."
-                  f" ({MAX_ATTEMPTS - st.session_state.photo_attempts}"
-                  " attempts left)"
-              )
-              st.rerun()
-
-          except Exception as e:
-            st.error(
-                f"An unexpected error occurred: {e}."
-                f" ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts"
-                " left)"
-            )
-            st.rerun()
-
-# ==========================================
-# 休息時間與 5 分鐘倒數計時畫面 (Break Screen)
-# ==========================================
-elif (
-    st.session_state.authenticated
-    and st.session_state.exam_step == 2
-    and st.session_state.on_break
-):
-  st.markdown(
-      "<h2 style='text-align: center;'>☕ Mandatory Rest Break</h2>",
-      unsafe_allow_html=True,
-  )
-  st.write(
-      "<p style='text-align: center;'>Your photo has been successfully"
-      " verified. Take a brief break before your core examination begins. The"
-      " exam will start automatically when the timer expires.</p>",
-      unsafe_allow_html=True,
-  )
-  st.write("---")
-
-  TOTAL_SECONDS = 5 * 60  # 5 分鐘
-  elapsed = int(time.time() - st.session_state.break_start_time)
-  remaining = TOTAL_SECONDS - elapsed
-
-  if remaining <= 0:
-    st.session_state.on_break = False
-    st.session_state.exam_step = 3
-    st.rerun()
-
-  mins, secs = divmod(remaining, 60)
-  st.markdown(
-      f"<h1 style='text-align: center; font-size: 70px; color:"
-      f" #0066cc;'>⏳ {mins:02d}:{secs:02d}</h1>",
-      unsafe_allow_html=True,
-  )
-
-  if 20 <= remaining <= 30:
-    st.warning(
-        "⚠️ **Warning:** Only 30 seconds remaining before the core examination"
-        " starts automatically!"
-    )
-
-  st.markdown("<br>", unsafe_allow_html=True)
-
-  col1, col2, col3 = st.columns([1, 2, 1])
-  with col2:
-    if st.button(
-        "🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"
-    ):
+    if remaining <= 0:
       st.session_state.on_break = False
       st.session_state.exam_step = 3
       st.rerun()
 
-  time.sleep(1)
-  st.rerun()
+    mins, secs = divmod(remaining, 60)
+    st.markdown(
+        f"<h1 style='text-align: center; font-size: 70px; color: #0066cc;'>⏳ {mins:02d}:{secs:02d}</h1>",
+        unsafe_allow_html=True,
+    )
+
+    if 20 <= remaining <= 30:
+      st.warning("⚠️ **Warning:** Only 30 seconds remaining before the core examination starts automatically!")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+      if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
+        st.session_state.on_break = False
+        st.session_state.exam_step = 3
+        st.rerun()
+
+    time.sleep(1)
+    st.rerun()
+
+  # 否則，顯示拍照驗證畫面
+  else:
+    st.markdown("### Step 3: Candidate Photo Verification")
+    st.write(
+        f"Candidate: **{st.session_state.candidate_name}**"
+        f" ({st.session_state.candidate_email})"
+    )
+
+    if "photo_attempts" not in st.session_state:
+      st.session_state.photo_attempts = 0
+
+    MAX_ATTEMPTS = 3
+    remaining_attempts = MAX_ATTEMPTS - st.session_state.photo_attempts
+
+    if remaining_attempts <= 0:
+      st.error(
+          "❌ You have exceeded the maximum allowed photo verification attempts"
+          f" ({MAX_ATTEMPTS}/{MAX_ATTEMPTS}). Your session is locked. Please"
+          " contact the administrator."
+      )
+    else:
+      st.write("Please take a photo for identity verification records prior to starting the exam.")
+
+      photo_file = st.camera_input("Capture Your Photo", key="exam_camera_input")
+
+      if photo_file is not None:
+        st.success("✅ Photo captured successfully!")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if st.button("🚀 Proceed to Next Step", key="proceed_btn"):
+          st.session_state.photo_attempts += 1
+
+          with st.spinner("Uploading verification photo to secure storage and proceeding..."):
+            try:
+              import requests
+
+              imgbb_key = st.secrets["imgbb"]["api_key"]
+              upload_url = "https://api.imgbb.com/1/upload"
+
+              image_bytes = photo_file.getvalue()
+              voucher_code = st.session_state.get("voucher_code", "EXAM")
+              file_name = f"{voucher_code}-Verified"
+
+              payload = {"key": imgbb_key, "name": file_name}
+              files = {"image": image_bytes}
+
+              response = requests.post(upload_url, data=payload, files=files)
+              result = response.json()
+
+              if result.get("success"):
+                photo_url = result["data"]["url"]
+
+                try:
+                  db = get_sheets_connection()
+                  sheet = db.worksheet("Vouchers")
+                  cell = sheet.find(st.session_state.candidate_email)
+                  if cell:
+                    sheet.update_cell(cell.row, 4, photo_url)
+                except Exception:
+                  pass
+
+                # 啟動休息倒數，並切換狀態
+                st.session_state.on_break = True
+                st.session_state.break_start_time = time.time()
+                st.rerun()
+              else:
+                error_msg = result.get("error", {}).get("message", "Unknown error")
+                st.error(
+                    f"Upload failed: {error_msg}. Please try again."
+                    f" ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)"
+                )
+                st.rerun()
+
+            except Exception as e:
+              st.error(
+                  f"An unexpected error occurred: {e}."
+                  f" ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)"
+              )
+              st.rerun()
 # ==========================================
 # Step 3 - 核心問答模組 (開發中)
 # ==========================================
