@@ -239,7 +239,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
 
   st.write("---")
 # ==========================================
-# Step 2 - 考生拍照驗證頁面 (Candidate Photo via ImgBB)
+# Step 2 - 考生拍照驗證頁面 (With 3-Attempt Limit)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 2:
   st.markdown("### Step 3: Candidate Photo Verification")
@@ -247,76 +247,87 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
       f"Candidate: **{st.session_state.candidate_name}**"
       f" ({st.session_state.candidate_email})"
   )
-  st.write(
-      "Please take a photo for identity verification records prior to starting"
-      " the exam."
-  )
 
-  photo_file = st.camera_input("Capture Your Photo")
+  # 初始化嘗試次數計算器
+  if "photo_attempts" not in st.session_state:
+    st.session_state.photo_attempts = 0
 
-  if photo_file is not None:
-    st.success("✅ Photo captured successfully!")
-    st.markdown("<br>", unsafe_allow_html=True)
+  MAX_ATTEMPTS = 3
+  remaining_attempts = MAX_ATTEMPTS - st.session_state.photo_attempts
 
-    if st.button("🚀 Proceed to Core Examination"):
-      with st.spinner(
-          "Uploading verification photo to secure storage and proceeding..."
-      ):
-        try:
-          import requests
+  # 檢查是否超過最大嘗試次數
+  if remaining_attempts <= 0:
+    st.error(
+        "❌ You have exceeded the maximum allowed photo verification attempts"
+        f" ({MAX_ATTEMPTS}/{MAX_ATTEMPTS}). Your session is locked. Please"
+        " contact the administrator."
+    )
+  else:
+    st.write(
+        "Please take a photo for identity verification records prior to"
+        f" starting the exam. \n\n*Attempts remaining: {remaining_attempts}"
+        f" out of {MAX_ATTEMPTS}*"
+    )
 
-          # 取得 ImgBB API Key
-          imgbb_key = st.secrets["imgbb"]["api_key"]
-          upload_url = "https://api.imgbb.com/1/upload"
+    photo_file = st.camera_input("Capture Your Photo")
 
-          # 讀取相機檔案內容
-          image_bytes = photo_file.getvalue()
+    if photo_file is not None:
+      st.success("✅ Photo captured successfully!")
+      st.markdown("<br>", unsafe_allow_html=True)
 
-          # 設定檔名
-          import datetime
+      if st.button("🚀 Proceed to Core Examination"):
+        # 每次點擊送出即計算一次嘗試
+        st.session_state.photo_attempts += 1
 
-          timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-          file_name = (
-              f"{st.session_state.candidate_last_name}_"
-              f"{st.session_state.candidate_first_name}_{timestamp}"
-          )
+        with st.spinner(
+            "Uploading verification photo to secure storage and proceeding..."
+        ):
+          try:
+            import requests
 
-          # 發送 POST 請求至 ImgBB
-          payload = {"key": imgbb_key, "name": file_name}
-          files = {"image": image_bytes}
+            imgbb_key = st.secrets["imgbb"]["api_key"]
+            upload_url = "https://api.imgbb.com/1/upload"
 
-          response = requests.post(upload_url, data=payload, files=files)
-          result = response.json()
+            image_bytes = photo_file.getvalue()
 
-          if result.get("success"):
-            photo_url = result["data"]["url"]
+            import datetime
 
-            # 選填：如果你想把這個圖片網址同步寫回 Google Sheets 對應考生的紀錄中
-            try:
-              cell = sheet.find(st.session_state.candidate_email)
-              if cell:
-                row_num = cell.row
-                # 假設你想把網址記錄在某一欄（例如第 4 欄）
-                sheet.update_cell(row_num, 4, photo_url)
-            except Exception:
-              pass  # 就算寫入 Sheets 失敗也不影響考生進入考試
-
-            st.session_state.exam_step = 3  # 進入正式考試
-            st.rerun()
-          else:
-            error_msg = result.get("error", {}).get(
-                "message", "Unknown error"
-            )
-            st.error(
-                f"Failed to upload photo to ImgBB: {error_msg}. Please contact"
-                " administrator."
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_name = (
+                f"{st.session_state.candidate_last_name}_"
+                f"{st.session_state.candidate_first_name}_{timestamp}"
             )
 
-        except Exception as e:
-          st.error(
-              f"An unexpected error occurred during photo upload: {e}. Please"
-              " contact administrator."
-          )
+            payload = {"key": imgbb_key, "name": file_name}
+            files = {"image": image_bytes}
+
+            response = requests.post(upload_url, data=payload, files=files)
+            result = response.json()
+
+            if result.get("success"):
+              photo_url = result["data"]["url"]
+
+              # 選填：同步寫入 Google Sheets 紀錄
+              try:
+                cell = sheet.find(st.session_state.candidate_email)
+                if cell:
+                  sheet.update_cell(cell.row, 4, photo_url)
+              except Exception:
+                pass
+
+              st.session_state.exam_step = 3  # 進入正式考試
+              st.rerun()
+            else:
+              error_msg = result.get("error", {}).get(
+                  "message", "Unknown error"
+              )
+              st.error(
+                  f"Upload failed: {error_msg}. Please try again"
+                  f" ({remaining_attempts - 1} attempts left)."
+              )
+
+          except Exception as e:
+            st.error(f"An unexpected error occurred during upload: {e}")
 # ==========================================
 # Step 3 - 核心問答模組 (開發中)
 # ==========================================
