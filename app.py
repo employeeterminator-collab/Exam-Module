@@ -1,3 +1,6 @@
+import base64
+import datetime
+import time
 import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
@@ -36,6 +39,8 @@ if "authenticated" not in st.session_state:
   st.session_state.authenticated = False
 if "candidate_email" not in st.session_state:
   st.session_state.candidate_email = ""
+if "voucher_code" not in st.session_state:
+  st.session_state.voucher_code = ""
 if "candidate_first_name" not in st.session_state:
   st.session_state.candidate_first_name = ""
 if "candidate_last_name" not in st.session_state:
@@ -45,9 +50,11 @@ if "candidate_japanese_name" not in st.session_state:
 if "candidate_name" not in st.session_state:
   st.session_state.candidate_name = ""
 if "exam_step" not in st.session_state:
-  st.session_state.exam_step = (
-      0  # 0: 驗證登入, 1: 身分核對與須知, 2: 考生拍照驗證, 3: 正式考試, 4: 完成
-  )
+  st.session_state.exam_step = 0
+if "on_break" not in st.session_state:
+  st.session_state.on_break = False
+if "break_start_time" not in st.session_state:
+  st.session_state.break_start_time = None
 
 
 # 3. Google Sheets 連線函式
@@ -95,7 +102,6 @@ if not st.session_state.authenticated:
     submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
 
     if submitted:
-      # 檢查是否為空值或單純填入空白
       if (
           not email_input
           or not voucher_input
@@ -115,10 +121,6 @@ if not st.session_state.authenticated:
             r_email = str(record.get("AssignedEmail", "")).strip()
             r_status = str(record.get("Status", "")).strip()
 
-            # 嚴格邏輯檢查：
-            # 1. VoucherCode 必須相符
-            # 2. AssignedEmail 不能為空，且必須與輸入相符
-            # 3. Status 必須嚴格等於 "Used" (代表已透過 exam1 註冊並鎖定)
             if (
                 r_voucher == voucher_input.strip()
                 and r_email != ""
@@ -137,7 +139,7 @@ if not st.session_state.authenticated:
               st.session_state.candidate_last_name = l_name
               st.session_state.candidate_japanese_name = j_name
               st.session_state.candidate_name = f"{f_name} {l_name}".strip()
-              st.session_state.exam_step = 1  # 進入身分核對與須知頁面
+              st.session_state.exam_step = 1
               st.rerun()
 
           if not matched:
@@ -162,7 +164,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
   st.markdown("### Step 1: Candidate Information Verification")
   st.write("Please carefully verify your registered information below:")
 
-  # 顯示核對資訊（不含 Voucher code）
   st.markdown(f"""
     - **1. Last Name:** {st.session_state.candidate_last_name}
     - **2. First Name:** {st.session_state.candidate_first_name}
@@ -175,7 +176,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
       " exam now and contact administrator."
   )
 
-  # 在當前畫面/視窗直接跳轉至聯絡頁面
   st.markdown(
       """
         <div style="text-align: left; margin-top: 10px; margin-bottom: 20px;">
@@ -199,8 +199,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
   st.markdown("### Step 2: Examination Rules & Instructions")
   st.write("Please read the following rules carefully before starting:")
 
-  # 從 examinstruction.txt 讀取考試規則
-  # 從 examinstruction.txt 讀取考試規則
   try:
     with open("examinstruction.txt", "r", encoding="utf-8") as f:
       exam_instructions = f.read()
@@ -211,7 +209,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
         " Ensure you click the submit button before time expires."
     )
 
-  # 使用高對比、清晰舒適的自訂捲軸文字框
   st.markdown(
       f"""
       <div style="
@@ -228,35 +225,37 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
           box-shadow: inset 0 1px 2px rgba(0,0,0,0.075);
       ">
       {exam_instructions}
-    
   """,
       unsafe_allow_html=True,
   )
 
   st.markdown("<br>", unsafe_allow_html=True)
   if st.button("🚀 I Understand and Agree"):
-    st.session_state.exam_step = 2  # 進入拍照驗證頁面
+    st.session_state.exam_step = 2
     st.rerun()
 
   st.write("---")
+
 # ==========================================
-# Step 2 - 考生拍照驗證頁面 (Fixed Voucher & Strict Attempt Lock)
+# Step 2 - 考生拍照驗證頁面
 # ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 2:
+elif (
+    st.session_state.authenticated
+    and st.session_state.exam_step == 2
+    and not st.session_state.on_break
+):
   st.markdown("### Step 3: Candidate Photo Verification")
   st.write(
       f"Candidate: **{st.session_state.candidate_name}**"
       f" ({st.session_state.candidate_email})"
   )
 
-  # 初始化嘗試次數
   if "photo_attempts" not in st.session_state:
     st.session_state.photo_attempts = 0
 
   MAX_ATTEMPTS = 3
   remaining_attempts = MAX_ATTEMPTS - st.session_state.photo_attempts
 
-  # 如果次數用完，徹底鎖定畫面，不顯示相機
   if remaining_attempts <= 0:
     st.error(
         "❌ You have exceeded the maximum allowed photo verification attempts"
@@ -266,6 +265,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
   else:
     st.write(
         "Please take a photo for identity verification records prior to"
+        " starting the exam."
     )
 
     photo_file = st.camera_input("Capture Your Photo")
@@ -274,8 +274,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
       st.success("✅ Photo captured successfully!")
       st.markdown("<br>", unsafe_allow_html=True)
 
-      if st.button("🚀 Proceed to Core Examination"):
-        # 增加一次嘗試次數
+      if st.button("🚀 Proceed to Rest Break"):
         st.session_state.photo_attempts += 1
 
         with st.spinner(
@@ -288,8 +287,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
             upload_url = "https://api.imgbb.com/1/upload"
 
             image_bytes = photo_file.getvalue()
-
-           # 直接讀取已儲存的 voucher_code
             voucher_code = st.session_state.get("voucher_code", "EXAM")
             file_name = f"{voucher_code}-Verified"
 
@@ -302,15 +299,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
             if result.get("success"):
               photo_url = result["data"]["url"]
 
-              # 同步寫入 Google Sheets 紀錄
               try:
+                db = get_sheets_connection()
+                sheet = db.worksheet("Vouchers")  # 或對應的資料表
                 cell = sheet.find(st.session_state.candidate_email)
                 if cell:
                   sheet.update_cell(cell.row, 4, photo_url)
               except Exception:
                 pass
 
-              st.session_state.exam_step = 3  # 進入正式考試
+              # 啟動 5 分鐘休息倒數計時狀態
+              st.session_state.on_break = True
+              st.session_state.break_start_time = time.time()
               st.rerun()
             else:
               error_msg = result.get("error", {}).get(
@@ -321,7 +321,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                   f" ({MAX_ATTEMPTS - st.session_state.photo_attempts}"
                   " attempts left)"
               )
-              st.rerun()  # 重新整理以更新剩餘次數顯示
+              st.rerun()
 
           except Exception as e:
             st.error(
@@ -330,6 +330,65 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                 " left)"
             )
             st.rerun()
+
+# ==========================================
+# 休息時間與 5 分鐘倒數計時畫面 (Break Screen)
+# ==========================================
+elif (
+    st.session_state.authenticated
+    and st.session_state.exam_step == 2
+    and st.session_state.on_break
+):
+  st.markdown(
+      "<h2 style='text-align: center;'>☕ Mandatory Rest Break</h2>",
+      unsafe_allow_html=True,
+  )
+  st.write(
+      "<p style='text-align: center;'>Your photo has been successfully"
+      " verified. Take a brief break before your core examination begins. The"
+      " exam will start automatically when the timer expires.</p>",
+      unsafe_allow_html=True,
+  )
+  st.write("---")
+
+  TOTAL_SECONDS = 5 * 60  # 5 分鐘
+  elapsed = int(time.time() - st.session_state.break_start_time)
+  remaining = TOTAL_SECONDS - elapsed
+
+  # 時間到自動進入考試
+  if remaining <= 0:
+    st.session_state.on_break = False
+    st.session_state.exam_step = 3
+    st.rerun()
+
+  # 顯示倒數計時器
+  mins, secs = divmod(remaining, 60)
+  st.markdown(
+      f"<h1 style='text-align: center; font-size: 70px; color:"
+      f" #0066cc;'>⏳ {mins:02d}:{secs:02d}</h1>",
+      unsafe_allow_html=True,
+  )
+
+  # 當剩餘時間在 20 到 30 秒之間時（維持出現 10 秒），顯示 30 秒警告
+  if 20 <= remaining <= 30:
+    st.warning(
+        "⚠️ **Warning:** Only 30 seconds remaining before the core examination"
+        " starts automatically!"
+    )
+
+  st.markdown("<br>", unsafe_allow_html=True)
+
+  col1, col2, col3 = st.columns([1, 2, 1])
+  with col2:
+    if st.button("🚀 Start Exam Now", use_container_width=True):
+      st.session_state.on_break = False
+      st.session_state.exam_step = 3
+      st.rerun()
+
+  # 每秒自動重新整理畫面以更新倒數時鐘
+  time.sleep(1)
+  st.rerun()
+
 # ==========================================
 # Step 3 - 核心問答模組 (開發中)
 # ==========================================
