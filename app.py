@@ -52,35 +52,7 @@ def get_sheets_connection():
 # ==========================================
 # 畫面邏輯：Step 0 - 考生身分驗證與憑證確認
 # ==========================================
-if not st.session_state.authenticated:
-  st.markdown(
-      "<h1 style='text-align: center;'>Shisa Kanko-Shi Examination Portal</h1>",
-      unsafe_allow_html=True,
-  )
-  st.markdown(
-      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling"
-      " Specialist)</h3>",
-      unsafe_allow_html=True,
-  )
-  st.write("---")
-
-  st.markdown("### Candidate Authentication")
-  st.write(
-      "Please enter your registered Email and Voucher Code to enter the"
-      " examination room."
-  )
-
-  with st.form("auth_form"):
-    email_input = st.text_input(
-        "Registered Email Address", placeholder="e.g., candidate@example.com"
-    )
-    voucher_input = st.text_input(
-        "Voucher Code", type="password", placeholder="Enter your voucher code"
-    )
-
-    submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
-
-    if submitted:
+if submitted:
       if not email_input or not voucher_input:
         st.error("Please enter both your Email and Voucher Code.")
       else:
@@ -92,42 +64,20 @@ if not st.session_state.authenticated:
 
           matched = False
           for record in records:
-            # 將紀錄的 Key 全部轉為小寫並去除空格，達到極高容錯率
-            norm_record = {
-                str(k).strip().lower(): str(v).strip()
-                for k, v in record.items()
-            }
+            # 直接對應你試算表上的精確欄位名稱
+            r_voucher = str(record.get("VoucherCode", "")).strip()
+            r_email = str(record.get("AssignedEmail", "")).strip()
+            r_status = str(record.get("Status", "")).strip()
 
-            # 尋找各種可能的欄位名稱變體
-            r_voucher = (
-                norm_record.get("VoucherCode")
-                or norm_record.get("voucherCode")
-                or norm_record.get("voucher")
-                or ""
-            )
-            r_email = (
-                norm_record.get("AssignedEmail")
-                or norm_record.get("assignedemail")
-                or ""
-            )
-
-            # 進行比對
+            # 比對 VoucherCode、AssignedEmail，並確保狀態已被鎖定為 Used (可選但更安全)
             if (
                 r_voucher == voucher_input.strip()
                 and r_email.lower() == email_input.strip().lower()
             ):
               matched = True
-              # 抓取姓名 (相容 FirstName / First Name)
-              f_name = (
-                  norm_record.get("firstname")
-                  or norm_record.get("first name")
-                  or ""
-              )
-              l_name = (
-                  norm_record.get("lastname")
-                  or norm_record.get("last name")
-                  or ""
-              )
+              # 精確抓取試算表上的英文姓名欄位
+              f_name = str(record.get("EnglishFirstName", "")).strip()
+              l_name = str(record.get("EnglishLastName", "")).strip()
 
               st.session_state.authenticated = True
               st.session_state.candidate_email = email_input
@@ -143,7 +93,6 @@ if not st.session_state.authenticated:
 
         except Exception as e:
           st.error(f"Connection error: {e}")
-
 # ==========================================
 # 畫面邏輯：Step 1 - 考試須知與守則
 # ==========================================
