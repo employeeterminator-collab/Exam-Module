@@ -23,16 +23,22 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# 2. 初始化 Session State (確保資料在點擊時不會遺失)
+# 2. 初始化 Session State
 if "authenticated" not in st.session_state:
   st.session_state.authenticated = False
 if "candidate_email" not in st.session_state:
   st.session_state.candidate_email = ""
+if "candidate_first_name" not in st.session_state:
+  st.session_state.candidate_first_name = ""
+if "candidate_last_name" not in st.session_state:
+  st.session_state.candidate_last_name = ""
+if "candidate_japanese_name" not in st.session_state:
+  st.session_state.candidate_japanese_name = ""
 if "candidate_name" not in st.session_state:
   st.session_state.candidate_name = ""
 if "exam_step" not in st.session_state:
   st.session_state.exam_step = (
-      0  # 0: 驗證登入, 1: 考試須知, 2: 正式考試, 3: 完成交卷
+      0  # 0: 驗證登入, 1: 身分核對與須知, 2: 考生拍照驗證, 3: 正式考試, 4: 完成
   )
 
 
@@ -50,7 +56,7 @@ def get_sheets_connection():
 
 
 # ==========================================
-# 畫面邏輯：Step 0 - 考生身分驗證與憑證確認
+# Step 0 - 考生身分驗證與憑證確認
 # ==========================================
 if not st.session_state.authenticated:
   st.markdown(
@@ -85,14 +91,12 @@ if not st.session_state.authenticated:
         st.error("Please enter both your Email and Voucher Code.")
       else:
         try:
-          # 連線 Google Sheets 檢查 Vouchers 分頁
           db = get_sheets_connection()
           vouchers_sheet = db.worksheet("Vouchers")
           records = vouchers_sheet.get_all_records()
 
           matched = False
           for record in records:
-            # 依據試算表精確欄位進行比對 (VoucherCode, AssignedEmail)[cite: 4]
             r_voucher = str(record.get("VoucherCode", "")).strip()
             r_email = str(record.get("AssignedEmail", "")).strip()
 
@@ -101,14 +105,17 @@ if not st.session_state.authenticated:
                 and r_email.lower() == email_input.strip().lower()
             ):
               matched = True
-              # 依據試算表精確欄位抓取姓名 (EnglishFirstName, EnglishLastName)[cite: 4]
               f_name = str(record.get("EnglishFirstName", "")).strip()
               l_name = str(record.get("EnglishLastName", "")).strip()
+              j_name = str(record.get("JapaneseName", "")).strip()
 
               st.session_state.authenticated = True
               st.session_state.candidate_email = email_input
+              st.session_state.candidate_first_name = f_name
+              st.session_state.candidate_last_name = l_name
+              st.session_state.candidate_japanese_name = j_name
               st.session_state.candidate_name = f"{f_name} {l_name}".strip()
-              st.session_state.exam_step = 1  # 進入考試須知
+              st.session_state.exam_step = 1  # 進入身分核對與須知頁面
               st.rerun()
 
           if not matched:
@@ -121,30 +128,84 @@ if not st.session_state.authenticated:
           st.error(f"Connection error: {e}")
 
 # ==========================================
-# 畫面邏輯：Step 1 - 考試須知與守則
+# Step 1 - 身分核對與考試須知
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 1:
-  st.markdown(f"### Welcome, {st.session_state.candidate_name}!")
+  st.markdown(
+      f"### Welcome, {st.session_state.candidate_first_name}"
+      f" {st.session_state.candidate_last_name}!"
+  )
+  st.write("---")
+
+  st.markdown("### Step 1: Candidate Information Verification")
+  st.write("Please carefully verify your registered information below:")
+
+  # 顯示核對資訊（不含 Voucher code）
+  st.markdown(f"""
+    - **1. Last Name:** {st.session_state.candidate_last_name}
+    - **2. First Name:** {st.session_state.candidate_first_name}
+    - **3. Japanese Name:** {st.session_state.candidate_japanese_name}
+    - **4. Email Address:** {st.session_state.candidate_email}
+    """)
+
+  st.warning(
+      "⚠️ If the above information is incorrect or missing, please end the"
+      " exam now and contact administrator."
+  )
+  st.link_button(
+      "🚪 Quit and Contact Administrator", "https://shisakanko.org/contact"
+  )
+
+  st.write("---")
   st.markdown("### Step 2: Examination Rules & Instructions")
   st.write("Please read the following rules carefully before starting:")
 
-  st.info(
-      "1. **Time Limit**: Once started, the timer cannot be paused.\n2."
-      " **Anti-Cheat**: Do not switch browser tabs or close the window; doing"
-      " so may invalidate your exam.\n3. **Submission**: Ensure you click the"
-      " 'Submit Exam' button on the final page before time expires."
-  )
+  # 從 examinstruction.txt 讀取考試規則
+  try:
+    with open("examinstruction.txt", "r", encoding="utf-8") as f:
+      exam_instructions = f.read()
+  except FileNotFoundError:
+    exam_instructions = (
+        "1. Time Limit: Once started, the timer cannot be paused.\n2. Anti-Cheat:"
+        " Do not switch browser tabs or close the window.\n3. Submission:"
+        " Ensure you click the submit button before time expires."
+    )
+
+  st.info(exam_instructions)
 
   st.markdown("<br>", unsafe_allow_html=True)
-  if st.button("🚀 I Understand and Agree. Start Exam Now"):
-    st.session_state.exam_step = 2
+  if st.button("🚀 I Understand and Agree"):
+    st.session_state.exam_step = 2  # 進入拍照驗證頁面
     st.rerun()
 
 # ==========================================
-# 畫面邏輯：Step 2 - 核心問答模組 (開發中)
+# Step 2 - 考生拍照驗證頁面 (Candidate Photo)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 2:
-  st.markdown("### Step 3: Shisa Kanko-Shi Core Examination")
+  st.markdown("### Step 3: Candidate Photo Verification")
+  st.write(
+      f"Candidate: **{st.session_state.candidate_name}**"
+      f" ({st.session_state.candidate_email})"
+  )
+  st.write(
+      "Please take a photo for identity verification records prior to starting"
+      " the exam."
+  )
+
+  photo_file = st.camera_input("Capture Your Photo")
+
+  if photo_file is not None:
+    st.success("✅ Photo captured successfully!")
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🚀 Proceed to Core Examination"):
+      st.session_state.exam_step = 3  # 進入正式考試
+      st.rerun()
+
+# ==========================================
+# Step 3 - 核心問答模組 (開發中)
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 3:
+  st.markdown("### Step 4: Shisa Kanko-Shi Core Examination")
   st.write(
       f"Candidate: **{st.session_state.candidate_name}**"
       f" ({st.session_state.candidate_email})"
@@ -154,13 +215,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
   st.info("Exam questionnaire interface is under construction...")
 
   if st.button("Test Submit Exam"):
-    st.session_state.exam_step = 3
+    st.session_state.exam_step = 4
     st.rerun()
 
 # ==========================================
-# 畫面邏輯：Step 3 - 交卷與完成畫面
+# Step 4 - 交卷與完成畫面
 # ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 3:
+elif st.session_state.authenticated and st.session_state.exam_step == 4:
   st.markdown(
       "<h2 style='text-align: center;'>🎉 Exam Completed!</h2>",
       unsafe_allow_html=True,
