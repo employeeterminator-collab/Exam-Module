@@ -298,7 +298,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                   voucher_code = value.strip()
                   break
 
-file_name = f"{voucher_code}-Verified"
+            file_name = f"{voucher_code}-Verified"
 
             payload = {"key": imgbb_key, "name": file_name}
             files = {"image": image_bytes}
