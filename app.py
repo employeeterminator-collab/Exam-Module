@@ -193,7 +193,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
         " Ensure you click the submit button before time expires."
     )
 
-  st.info(exam_instructions)
+  # 使用唯讀的 text_area 來提供帶捲軸且完全保留格式的文字框
+  st.text_area(
+      "Examination Instructions & Guidelines",
+      value=exam_instructions,
+      height=200,  # 可依喜好調整高度 (像素)
+      disabled=True,
+  )
 
   st.markdown("<br>", unsafe_allow_html=True)
   if st.button("🚀 I Understand and Agree"):
