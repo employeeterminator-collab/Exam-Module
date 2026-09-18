@@ -52,9 +52,35 @@ def get_sheets_connection():
 # ==========================================
 # 畫面邏輯：Step 0 - 考生身分驗證與憑證確認
 # ==========================================
+if not st.session_state.authenticated:
+  st.markdown(
+      "<h1 style='text-align: center;'>Shisa Kanko-Shi Examination Portal</h1>",
+      unsafe_allow_html=True,
+  )
+  st.markdown(
+      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling"
+      " Specialist)</h3>",
+      unsafe_allow_html=True,
+  )
+  st.write("---")
 
-submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
-if submitted:
+  st.markdown("### Candidate Authentication")
+  st.write(
+      "Please enter your registered Email and Voucher Code to enter the"
+      " examination room."
+  )
+
+  with st.form("auth_form"):
+    email_input = st.text_input(
+        "Registered Email Address", placeholder="e.g., candidate@example.com"
+    )
+    voucher_input = st.text_input(
+        "Voucher Code", type="password", placeholder="Enter your voucher code"
+    )
+
+    submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
+
+    if submitted:
       if not email_input or not voucher_input:
         st.error("Please enter both your Email and Voucher Code.")
       else:
@@ -66,18 +92,16 @@ if submitted:
 
           matched = False
           for record in records:
-            # 直接對應你試算表上的精確欄位名稱
+            # 依據試算表精確欄位進行比對 (VoucherCode, AssignedEmail)[cite: 4]
             r_voucher = str(record.get("VoucherCode", "")).strip()
             r_email = str(record.get("AssignedEmail", "")).strip()
-            r_status = str(record.get("Status", "")).strip()
 
-            # 比對 VoucherCode、AssignedEmail，並確保狀態已被鎖定為 Used (可選但更安全)
             if (
                 r_voucher == voucher_input.strip()
                 and r_email.lower() == email_input.strip().lower()
             ):
               matched = True
-              # 精確抓取試算表上的英文姓名欄位
+              # 依據試算表精確欄位抓取姓名 (EnglishFirstName, EnglishLastName)[cite: 4]
               f_name = str(record.get("EnglishFirstName", "")).strip()
               l_name = str(record.get("EnglishLastName", "")).strip()
 
@@ -95,6 +119,7 @@ if submitted:
 
         except Exception as e:
           st.error(f"Connection error: {e}")
+
 # ==========================================
 # 畫面邏輯：Step 1 - 考試須知與守則
 # ==========================================
@@ -126,7 +151,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
   )
   st.write("---")
 
-  # 這裡接下來會放入題目與計時器邏輯
   st.info("Exam questionnaire interface is under construction...")
 
   if st.button("Test Submit Exam"):
