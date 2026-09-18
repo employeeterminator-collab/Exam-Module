@@ -239,10 +239,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
 
   st.write("---")
 # ==========================================
-# Step 2 - 考生拍照驗證頁面 (Candidate Photo)
-# ==========================================
-# ==========================================
-# Step 2 - 考生拍照驗證頁面 (Candidate Photo)
+# Step 2 - 考生拍照驗證頁面 (Candidate Photo via ImgBB)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 2:
   st.markdown("### Step 3: Candidate Photo Verification")
@@ -262,62 +259,64 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
     st.markdown("<br>", unsafe_allow_html=True)
 
     if st.button("🚀 Proceed to Core Examination"):
-      with st.spinner("Saving verification photo and proceeding..."):
+      with st.spinner(
+          "Uploading verification photo to secure storage and proceeding..."
+      ):
         try:
-          # 連線至 Google Drive API
-          scope = [
-              "https://spreadsheets.google.com/feeds",
-              "https://www.googleapis.com/auth/drive",
-          ]
-          creds_dict = dict(st.secrets["gcp_service_account"])
-          creds = Credentials.from_service_account_info(
-              creds_dict, scopes=scope
-          )
+          import requests
 
-          # 初始化 Google Drive 服務
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaIoBaseUpload
+          # 取得 ImgBB API Key
+          imgbb_key = st.secrets["imgbb"]["api_key"]
+          upload_url = "https://api.imgbb.com/1/upload"
 
-          service = build("drive", "v3", credentials=creds)
+          # 讀取相機檔案內容
+          image_bytes = photo_file.getvalue()
 
-          folder_id = st.secrets["drive"]["photo_folder_id"]
-
-          # 以考生姓名與時間命名檔案（確保不重複）
+          # 設定檔名
           import datetime
 
           timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-          safe_name = (
+          file_name = (
               f"{st.session_state.candidate_last_name}_"
-              f"{st.session_state.candidate_first_name}_{timestamp}.jpg"
+              f"{st.session_state.candidate_first_name}_{timestamp}"
           )
 
-          file_metadata = {"name": safe_name, "parents": [folder_id]}
+          # 發送 POST 請求至 ImgBB
+          payload = {"key": imgbb_key, "name": file_name}
+          files = {"image": image_bytes}
 
-          media = MediaIoBaseUpload(
-              photo_file, mimetype="image/jpeg", resumable=True
-          )
+          response = requests.post(upload_url, data=payload, files=files)
+          result = response.json()
 
-          # 上傳檔案至指定 Google Drive 資料夾（支援共用與配額對應）
-          file = (
-              service.files()
-              .create(
-                  body=file_metadata,
-                  media_body=media,
-                  fields="id",
-                  supportsAllDrives=True,
-              )
-              .execute()
-          )
+          if result.get("success"):
+            photo_url = result["data"]["url"]
 
-          st.session_state.exam_step = 3  # 進入正式考試
-          st.rerun()
+            # 選填：如果你想把這個圖片網址同步寫回 Google Sheets 對應考生的紀錄中
+            try:
+              cell = sheet.find(st.session_state.candidate_email)
+              if cell:
+                row_num = cell.row
+                # 假設你想把網址記錄在某一欄（例如第 4 欄）
+                sheet.update_cell(row_num, 4, photo_url)
+            except Exception:
+              pass  # 就算寫入 Sheets 失敗也不影響考生進入考試
+
+            st.session_state.exam_step = 3  # 進入正式考試
+            st.rerun()
+          else:
+            error_msg = result.get("error", {}).get(
+                "message", "Unknown error"
+            )
+            st.error(
+                f"Failed to upload photo to ImgBB: {error_msg}. Please contact"
+                " administrator."
+            )
 
         except Exception as e:
           st.error(
-              f"Failed to upload verification photo to Drive: {e}. Please"
+              f"An unexpected error occurred during photo upload: {e}. Please"
               " contact administrator."
           )
-
 # ==========================================
 # Step 3 - 核心問答模組 (開發中)
 # ==========================================
