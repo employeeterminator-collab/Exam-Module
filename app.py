@@ -241,6 +241,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
 # ==========================================
 # Step 2 - 考生拍照驗證頁面 (Candidate Photo)
 # ==========================================
+# ==========================================
+# Step 2 - 考生拍照驗證頁面 (Candidate Photo)
+# ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 2:
   st.markdown("### Step 3: Candidate Photo Verification")
   st.write(
@@ -257,9 +260,58 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
   if photo_file is not None:
     st.success("✅ Photo captured successfully!")
     st.markdown("<br>", unsafe_allow_html=True)
+
     if st.button("🚀 Proceed to Core Examination"):
-      st.session_state.exam_step = 3  # 進入正式考試
-      st.rerun()
+      with st.spinner("Saving verification photo and proceeding..."):
+        try:
+          # 連線至 Google Drive API
+          scope = [
+              "https://spreadsheets.google.com/feeds",
+              "https://www.googleapis.com/auth/drive",
+          ]
+          creds_dict = dict(st.secrets["gcp_service_account"])
+          creds = Credentials.from_service_account_info(
+              creds_dict, scopes=scope
+          )
+
+          # 初始化 Google Drive 服務
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaIoBaseUpload
+
+          service = build("drive", "v3", credentials=creds)
+
+          folder_id = st.secrets["drive"]["photo_folder_id"]
+
+          # 以考生姓名與時間命名檔案（確保不重複）
+          import datetime
+
+          timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+          safe_name = (
+              f"{st.session_state.candidate_last_name}_"
+              f"{st.session_state.candidate_first_name}_{timestamp}.jpg"
+          )
+
+          file_metadata = {"name": safe_name, "parents": [folder_id]}
+
+          media = MediaIoBaseUpload(
+              photo_file, mimetype="image/jpeg", resumable=True
+          )
+
+          # 上傳檔案至指定 Google Drive 資料夾
+          file = (
+              service.files()
+              .create(body=file_metadata, media_body=media, fields="id")
+              .execute()
+          )
+
+          st.session_state.exam_step = 3  # 進入正式考試
+          st.rerun()
+
+        except Exception as e:
+          st.error(
+              f"Failed to upload verification photo to Drive: {e}. Please"
+              " contact administrator."
+          )
 
 # ==========================================
 # Step 3 - 核心問答模組 (開發中)
