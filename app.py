@@ -2,6 +2,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
 
+# 1. 頁面基本設定
+st.set_page_config(
+    page_title="Shisa Kanko-Shi Examination Portal",
+    page_icon="🛡️",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
+
 # 隱藏 Streamlit 預設選單、頁尾與標題的錨點連結符號
 hide_streamlit_style = """
     <style>
@@ -19,28 +27,6 @@ hide_streamlit_style = """
     h1 a, h2 a, h3 a, h4 a {
         display: none !important;
     }
-    </style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
-
-# 1. 頁面基本設定
-st.set_page_config(
-    page_title="Shisa Kanko-Shi Examination Portal",
-    page_icon="🛡️",
-    layout="centered",
-    initial_sidebar_state="collapsed",
-)
-
-# 隱藏 Streamlit 預設選單與頁尾
-hide_streamlit_style = """
-    <style>
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    [data-testid="stToolbar"] {display: none !important; visibility: hidden !important;}
-    [data-testid="stDecoration"] {display: none !important; visibility: hidden !important;}
-    [data-testid="stStatusWidget"] {display: none !important; visibility: hidden !important;}
     </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -193,12 +179,26 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
         " Ensure you click the submit button before time expires."
     )
 
-  # 使用唯讀的 text_area 來提供帶捲軸且完全保留格式的文字框
-  st.text_area(
-      "Examination Instructions & Guidelines",
-      value=exam_instructions,
-      height=200,  # 可依喜好調整高度 (像素)
-      disabled=True,
+  # 使用高對比、清晰舒適的自訂捲軸文字框
+  st.markdown(
+      f"""
+      <div style="
+          background-color: #ffffff;
+          color: #212529;
+          border: 1px solid #ced4da;
+          border-radius: 6px;
+          padding: 15px;
+          height: 200px;
+          overflow-y: auto;
+          white-space: pre-line;
+          font-size: 15px;
+          line-height: 1.6;
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.075);
+      ">
+      {exam_instructions}
+      </div>
+  """,
+      unsafe_allow_html=True,
   )
 
   st.markdown("<br>", unsafe_allow_html=True)
