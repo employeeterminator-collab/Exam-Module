@@ -180,13 +180,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
         <div style="text-align: left; margin-top: 10px; margin-bottom: 20px;">
             <a href="https://shisakanko.org/contact" target="_top" style="
                 display: inline-block;
-                background-color: #ff4b4b;
-                color: white;
+                background-color: #ffffff;
+                color: #212529;
+                border: 1px solid #ced4da;
                 padding: 10px 20px;
                 text-decoration: none;
                 border-radius: 4px;
                 font-weight: 600;
                 font-family: sans-serif;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
             ">🚪 Quit and Contact Administrator</a>
         </div>
     """,
