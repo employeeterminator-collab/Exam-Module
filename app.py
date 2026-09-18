@@ -268,13 +268,14 @@ elif (
         " starting the exam."
     )
 
-    photo_file = st.camera_input("Capture Your Photo")
+    photo_file = st.camera_input("Capture Your Photo", key="exam_camera_input")
 
+    # 只有當真的拍了照片，且還沒按過送出時，才顯示送出按鈕
     if photo_file is not None:
       st.success("✅ Photo captured successfully!")
       st.markdown("<br>", unsafe_allow_html=True)
 
-      if st.button("🚀 Proceed to Next Step"):
+      if st.button("🚀 Proceed to Next Step", key="proceed_btn"):
         st.session_state.photo_attempts += 1
 
         with st.spinner(
@@ -301,16 +302,18 @@ elif (
 
               try:
                 db = get_sheets_connection()
-                sheet = db.worksheet("Vouchers")  # 或對應的資料表
+                sheet = db.worksheet("Vouchers")
                 cell = sheet.find(st.session_state.candidate_email)
                 if cell:
                   sheet.update_cell(cell.row, 4, photo_url)
               except Exception:
                 pass
 
-              # 啟動 5 分鐘休息倒數計時狀態
+              # 啟動休息倒數，並強制清除 camera_input 暫存
               st.session_state.on_break = True
               st.session_state.break_start_time = time.time()
+              if "exam_camera_input" in st.session_state:
+                del st.session_state["exam_camera_input"]
               st.rerun()
             else:
               error_msg = result.get("error", {}).get(
@@ -345,7 +348,7 @@ elif (
   )
   st.write(
       "<p style='text-align: center;'>Your photo has been successfully"
-      " verified.\n Take a brief break before your core examination begins. \nThe"
+      " verified. Take a brief break before your core examination begins. The"
       " exam will start automatically when the timer expires.</p>",
       unsafe_allow_html=True,
   )
@@ -355,13 +358,11 @@ elif (
   elapsed = int(time.time() - st.session_state.break_start_time)
   remaining = TOTAL_SECONDS - elapsed
 
-  # 時間到自動進入考試
   if remaining <= 0:
     st.session_state.on_break = False
     st.session_state.exam_step = 3
     st.rerun()
 
-  # 顯示倒數計時器
   mins, secs = divmod(remaining, 60)
   st.markdown(
       f"<h1 style='text-align: center; font-size: 70px; color:"
@@ -369,7 +370,6 @@ elif (
       unsafe_allow_html=True,
   )
 
-  # 當剩餘時間在 20 到 30 秒之間時（維持出現 10 秒），顯示 30 秒警告
   if 20 <= remaining <= 30:
     st.warning(
         "⚠️ **Warning:** Only 30 seconds remaining before the core examination"
@@ -380,15 +380,15 @@ elif (
 
   col1, col2, col3 = st.columns([1, 2, 1])
   with col2:
-    if st.button("🚀 Start Exam Now", use_container_width=True):
+    if st.button(
+        "🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"
+    ):
       st.session_state.on_break = False
       st.session_state.exam_step = 3
       st.rerun()
 
-  # 每秒自動重新整理畫面以更新倒數時鐘
   time.sleep(1)
   st.rerun()
-
 # ==========================================
 # Step 3 - 核心問答模組 (開發中)
 # ==========================================
