@@ -182,6 +182,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
   st.write("Please read the following rules carefully before starting:")
 
   # 從 examinstruction.txt 讀取考試規則
+  # 從 examinstruction.txt 讀取考試規則
   try:
     with open("examinstruction.txt", "r", encoding="utf-8") as f:
       exam_instructions = f.read()
@@ -192,14 +193,32 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
         " Ensure you click the submit button before time expires."
     )
 
-  # 使用帶有捲軸且背景乾淨的純文字顯示（避免 HTML 標籤誤植問題）
-  st.text(exam_instructions)
+  # 使用高對比、清晰舒適的自訂捲軸文字框
+  st.markdown(
+      f"""
+      <div style="
+          background-color: #ffffff;
+          color: #212529;
+          border: 1px solid #ced4da;
+          border-radius: 6px;
+          padding: 15px;
+          height: 200px;
+          overflow-y: auto;
+          white-space: pre-line;
+          font-size: 15px;
+          line-height: 1.6;
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.075);
+      ">
+      {exam_instructions}
+    
+  """,
+      unsafe_allow_html=True,
+  )
 
   st.markdown("<br>", unsafe_allow_html=True)
   if st.button("🚀 I Understand and Agree"):
     st.session_state.exam_step = 2  # 進入拍照驗證頁面
     st.rerun()
-
 # ==========================================
 # Step 2 - 考生拍照驗證頁面 (Candidate Photo)
 # ==========================================
