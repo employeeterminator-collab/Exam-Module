@@ -239,7 +239,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
 
   st.write("---")
 # ==========================================
-# Step 2 - 考生拍照驗證頁面 (With 3-Attempt Limit)
+# Step 2 - 考生拍照驗證頁面 (With Voucher Filename & Attempt Limit)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 2:
   st.markdown("### Step 3: Candidate Photo Verification")
@@ -265,8 +265,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
   else:
     st.write(
         "Please take a photo for identity verification records prior to"
-        f" starting the exam. \n\n*Attempts remaining: {remaining_attempts}"
-        f" out of {MAX_ATTEMPTS}*"
+        f" starting the exam. \n\n*Submission attempts remaining:"
+        f" {remaining_attempts} out of {MAX_ATTEMPTS}*"
     )
 
     photo_file = st.camera_input("Capture Your Photo")
@@ -290,13 +290,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
             image_bytes = photo_file.getvalue()
 
-            import datetime
-
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_name = (
-                f"{st.session_state.candidate_last_name}_"
-                f"{st.session_state.candidate_first_name}_{timestamp}"
-            )
+            # 檔案名稱改為：Voucher Code + "Verified"
+            voucher_code = st.session_state.get("voucher", "EXAM")
+            file_name = f"{voucher_code}Verified"
 
             payload = {"key": imgbb_key, "name": file_name}
             files = {"image": image_bytes}
@@ -307,7 +303,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
             if result.get("success"):
               photo_url = result["data"]["url"]
 
-              # 選填：同步寫入 Google Sheets 紀錄
+              # 同步寫入 Google Sheets 紀錄
               try:
                 cell = sheet.find(st.session_state.candidate_email)
                 if cell:
@@ -321,13 +317,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               error_msg = result.get("error", {}).get(
                   "message", "Unknown error"
               )
+              current_remaining = MAX_ATTEMPTS - st.session_state.photo_attempts
               st.error(
-                  f"Upload failed: {error_msg}. Please try again"
-                  f" ({remaining_attempts - 1} attempts left)."
+                  f"Upload failed: {error_msg}. Please try again."
+                  f" ({current_remaining} attempts left)"
               )
 
           except Exception as e:
-            st.error(f"An unexpected error occurred during upload: {e}")
+            current_remaining = MAX_ATTEMPTS - st.session_state.photo_attempts
+            st.error(
+                f"An unexpected error occurred: {e}. ({current_remaining}"
+                " attempts left)"
+            )
 # ==========================================
 # Step 3 - 核心問答模組 (開發中)
 # ==========================================
