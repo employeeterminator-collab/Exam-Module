@@ -52,6 +52,8 @@ def get_sheets_connection():
 # ==========================================
 # 畫面邏輯：Step 0 - 考生身分驗證與憑證確認
 # ==========================================
+
+submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
 if submitted:
       if not email_input or not voucher_input:
         st.error("Please enter both your Email and Voucher Code.")
