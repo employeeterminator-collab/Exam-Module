@@ -52,33 +52,7 @@ def get_sheets_connection():
 # ==========================================
 # 畫面邏輯：Step 0 - 考生身分驗證與憑證確認
 # ==========================================
-if not st.session_state.authenticated:
-  st.markdown(
-      "<h1 style='text-align: center;'>Shisa Kanko-Shi Examination Portal</h1>",
-      unsafe_allow_html=True,
-  )
-  st.markdown(
-      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling"
-      " Specialist)</h3>",
-      unsafe_allow_html=True,
-  )
-  st.write("---")
-
-  st.markdown("### Candidate Authentication")
-  st.write(
-      "Please enter your registered Email and Voucher Code to enter the"
-      " examination room."
-  )
-
-  with st.form("auth_form"):
-    email_input = st.text_input(
-        "Registered Email Address", placeholder="e.g., candidate@example.com"
-    )
-    voucher_input = st.text_input(
-        "Voucher Code", type="password", placeholder="Enter your voucher code"
-    )
-
-    submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
+submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
 
     if submitted:
       if not email_input or not voucher_input:
@@ -92,19 +66,46 @@ if not st.session_state.authenticated:
 
           matched = False
           for record in records:
-            # 檢查 VoucherCode 與 Email 是否匹配，且狀態應為 Used (已由 exam1 鎖定)
+            # 將紀錄的 Key 全部轉為小寫並去除空格，達到極高容錯率
+            norm_record = {
+                str(k).strip().lower(): str(v).strip()
+                for k, v in record.items()
+            }
+
+            # 尋找各種可能的欄位名稱變體
+            r_voucher = (
+                norm_record.get("vouchercode")
+                or norm_record.get("voucher code")
+                or norm_record.get("voucher")
+                or ""
+            )
+            r_email = (
+                norm_record.get("email")
+                or norm_record.get("email address")
+                or ""
+            )
+
+            # 進行比對
             if (
-                str(record.get("VoucherCode")).strip() == voucher_input.strip()
-                and str(record.get("Email")).strip().lower()
-                == email_input.strip().lower()
+                r_voucher == voucher_input.strip()
+                and r_email.lower() == email_input.strip().lower()
             ):
               matched = True
-              # 記錄考生資料到 session state
+              # 抓取姓名 (相容 FirstName / First Name)
+              f_name = (
+                  norm_record.get("firstname")
+                  or norm_record.get("first name")
+                  or ""
+              )
+              l_name = (
+                  norm_record.get("lastname")
+                  or norm_record.get("last name")
+                  or ""
+              )
+
               st.session_state.authenticated = True
               st.session_state.candidate_email = email_input
-              st.session_state.candidate_name = (
-                  f"{record.get('FirstName', '')} {record.get('LastName', '')}"
-              )
+              st.session_state.candidate_name = f"{f_name} {l_name}".strip()
               st.session_state.exam_step = 1  # 進入考試須知
               st.rerun()
 
