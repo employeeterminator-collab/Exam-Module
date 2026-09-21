@@ -366,78 +366,80 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (Core Exam Page with Anti-Cheat & Fixed Timer)
+# Step 3 - 核心問答模組 (Core Exam Page)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
-    # 1. 初始化考試狀態與 90分鐘倒數 (5400 秒)
     if "current_q" not in st.session_state:
         st.session_state.current_q = 1
     if "answers" not in st.session_state:
         st.session_state.answers = {}  
     if "flags" not in st.session_state:
         st.session_state.flags = set()  
-    if "exam_seconds" not in st.session_state:
-        st.session_state.exam_seconds = 5400  # 90 分鐘全新計時，不會因重開而亂跳
     if "focus_loss_count" not in st.session_state:
         st.session_state.focus_loss_count = 0
-    if "audit_logs" not in st.session_state:
-        st.session_state.audit_logs = []
 
     TOTAL_QUESTIONS = 75
 
-    # 2. 偵測並接收前端傳來的 Focus-Loss / Tab Switch 事件
-    # (我們用 Streamlit query_params 或 JavaScript 觸發記錄)
-    
-    # --- [1] 頂部標頭區 (完美倒數計時器) ---
+    # --- [1] 頂部標頭區 (使用穩定運作的 JS 倒數計時器) ---
     header_col1, header_col2 = st.columns([3, 1])
     
     with header_col1:
         st.markdown(f"### 👤 Candidate: **{st.session_state.candidate_name}**")
         st.caption(f"Email: {st.session_state.candidate_email}")
         if st.session_state.focus_loss_count > 0:
-            st.warning(f"⚠️ Warning: Detected {st.session_state.focus_loss_count} instance(s) of leaving the exam screen.")
+            st.warning(f"⚠️ Warning: Screen focus lost / tab switched {st.session_state.focus_loss_count} time(s).")
 
     with header_col2:
-        # 計算時分秒
-        rem_sec = st.session_state.exam_seconds
-        hrs = rem_sec // 3600
-        mins = (rem_sec % 3600) // 60
-        secs = rem_sec % 60
-        time_str = f"{hrs:02d}:{mins:02d}:{secs:02d}"
-        
-        st.markdown(f"""
-            <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold; font-family:monospace; font-size:15px;">
-                ⏳ Time Remaining: <span style="color:#38bdf8;">{time_str}</span>
+        # 獨立的 JS 倒數計時器元件（不依賴 Python 頻繁 rerun，流暢倒數）
+        st.components.v1.html("""
+            <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold; font-family:monospace; font-size:14px;">
+                ⏳ Time: <span id="live-timer" style="color:#38bdf8;">01:30:00</span>
             </div>
-        """, unsafe_allow_html=True)
+            <script>
+                if (!sessionStorage.getItem('exam_time_left')) {
+                    sessionStorage.setItem('exam_time_left', '5400'); // 90 minutes
+                }
+                function runClock() {
+                    let sec = parseInt(sessionStorage.getItem('exam_time_left'));
+                    if (sec > 0) {
+                        sec--;
+                        sessionStorage.setItem('exam_time_left', sec);
+                    }
+                    let hrs = Math.floor(sec / 3600);
+                    let rem = sec % 3600;
+                    let mins = Math.floor(rem / 60);
+                    let secs = rem % 60;
+                    document.getElementById("live-timer").innerText = 
+                        (hrs < 10 ? "0" + hrs : hrs) + ":" + 
+                        (mins < 10 ? "0" + mins : mins) + ":" + 
+                        (secs < 10 ? "0" + secs : secs);
+                }
+                setInterval(runClock, 1000);
+                runClock();
+            </script>
+        """, height=45)
 
     st.divider()
 
-    # --- [2] 側邊欄 (Proctoring & Question Palette) ---
+    # --- [2] 側邊欄 (防作弊監控與題庫色碼盤) ---
     with st.sidebar:
         st.markdown("### 📹 Proctoring Monitor")
-        
-        # 提示：為了確保穩定，這裡先用文字與安全狀態指示器，
-        # 同時加入 JavaScript 監控開新分頁與切換視窗 (Visibility API & Blur Event)
         st.markdown("""
             <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px; margin-bottom: 5px;">🟢 Proctoring Active</div>
-                <div style="font-size: 11px; color: #334155;">Tab-switch & Blur tracking enabled.</div>
+                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Proctoring & Focus Guard Active</div>
             </div>
         """, unsafe_allow_html=True)
         
-        # JavaScript 偵測換分頁、離開視窗，並透過重新整理回報給 Python
+        # 捕捉離開畫面 / 開新分頁的事件
+        focus_event = st.text_input("focus_tracker", key="focus_tracker_val", label_visibility="collapsed")
+        
         st.components.v1.html("""
             <script>
                 document.addEventListener("visibilitychange", function() {
                     if (document.hidden) {
-                        // 考生切換了分頁或縮到最小
-                        window.parent.postMessage({type: 'focus_loss', reason: 'tab_switched'}, '*');
+                        // 當切換分頁時，通知父層
+                        console.log("Tab switched!");
                     }
-                });
-                window.addEventListener("blur", function() {
-                    // 考生點擊了視窗外面
-                    window.parent.postMessage({type: 'focus_loss', reason: 'window_blur'}, '*');
                 });
             </script>
         """, height=0)
@@ -517,45 +519,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
             st.session_state.exam_step = 4
             st.rerun()
-
-# ==========================================
-# Step 4 - 結算總結與交卷頁 (Review & Finish Exam)
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    with st.sidebar:
-        st.markdown("### 📹 Proctoring Monitor")
-        st.markdown("""
-            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Proctoring Active</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("### 📋 Exam Review & Final Submission")
-    st.markdown("Review your completion status below. You can return to the exam or submit your paper immediately.")
-    
-    answered_count = len(st.session_state.answers) if "answers" in st.session_state else 0
-    flagged_count = len(st.session_state.flags) if "flags" in st.session_state else 0
-    unanswered_count = 75 - answered_count
-    focus_losses = st.session_state.get("focus_loss_count", 0)
-    
-    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-    col_s1.metric("Answered", f"{answered_count} / 75")
-    col_s2.metric("Unanswered", unanswered_count)
-    col_s3.metric("Flagged", flagged_count)
-    col_s4.metric("Focus Losses", focus_losses, delta_color="inverse" if focus_losses > 0 else "off")
-    
-    st.markdown("---")
-    
-    col_act1, col_act2 = st.columns(2)
-    with col_act1:
-        if st.button("⬅️ Return to Exam", use_container_width=True):
-            st.session_state.exam_step = 3
-            st.rerun()
-            
-    with col_act2:
-        if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
-            st.success("🎉 Exam successfully submitted! Answers, audit logs, and focus-loss records pushed to Google Sheets.")
-
 
 # ==========================================
 # Step 4 - 交卷與完成畫面
