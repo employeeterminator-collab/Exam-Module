@@ -433,9 +433,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     })
                     .catch(err => {
                         console.error("Webcam access denied:", err);
+                        alert("Please allow camera access in your browser settings.");
                     });
             </script>
-        """, height=160)
+        """, height=160, scrolling=False)
         
         st.markdown("---")
         st.markdown("### 🗺️ Question Palette (1–75)")
