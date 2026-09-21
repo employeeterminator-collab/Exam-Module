@@ -380,7 +380,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (候選人資訊 | 清晰計時器 | 實況相機鏡頭) ---
+    # --- [1] 頂部標頭區 (修正高度讓綠色相機框完整顯示) ---
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
@@ -390,10 +390,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.warning(f"⚠️ Focus lost / Tab switched: {st.session_state.focus_loss_count} time(s)")
 
     with header_col2:
-        # 優化後的清晰倒數計時器
+        # 清晰倒數計時器（高度配合調整至 90px）
         st.components.v1.html("""
-            <div style="background-color:#1e293b; color:#f8fafc; padding:10px; border-radius:8px; text-align:center; font-family:monospace; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px; font-weight: bold;">⏳ TIME REMAINING</div>
+            <div style="background-color:#1e293b; color:#f8fafc; padding:12px 10px; border-radius:8px; text-align:center; font-family:monospace; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px; font-weight: bold;">⏳ TIME REMAINING</div>
                 <div id="live-timer" style="color:#38bdf8; font-size:16px; font-weight:bold;">01:30:00</div>
             </div>
             <script>
@@ -418,14 +418,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(runClock, 1000);
                 runClock();
             </script>
-        """, height=70)
+        """, height=90)
 
     with header_col3:
-        # 依照你的手繪位置，加入即時相機預覽框
+        # 完整顯示的綠色相機預覽框（調整 height 及 video 大小避免過界）
         st.components.v1.html("""
-            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 1px;">🟢 LIVE PROCTOR</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 100px; object-fit: cover; border-radius: 4px; background: #000;"></video>
+            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
+                <div style="color: #15803d; font-weight: bold; font-size: 9px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
+                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 56px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
             </div>
             <script>
                 async function initCam() {
@@ -438,10 +438,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 }
                 initCam();
             </script>
-        """, height=70)
+        """, height=90)
 
     st.divider()
 
+    
     # --- [2] 側邊欄 (題庫導覽與防作弊監控) ---
     with st.sidebar:
         st.markdown("### 📹 Security Status")
