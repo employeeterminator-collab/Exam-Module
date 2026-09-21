@@ -366,7 +366,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (Core Exam Page)
+# Step 3 - 核心問答模組 (Core Exam Page with Bottom Warning Banner)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "current_q" not in st.session_state:
@@ -380,19 +380,19 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (修正高度讓綠色相機框完整顯示) ---
+    # --- [1] 頂部標頭區 (時與相機預覽框) ---
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
         st.markdown(f"### 👤 Candidate: **{st.session_state.candidate_name}**")
         st.caption(f"Email: {st.session_state.candidate_email}")
         if st.session_state.focus_loss_count > 0:
-            st.warning(f"⚠️ Focus lost / Tab switched: {st.session_state.focus_loss_count} time(s)")
+            st.warning(f"⚠️ Total violations recorded: {st.session_state.focus_loss_count}")
 
     with header_col2:
-        # 清晰倒數計時器（高度配合調整至 90px）
+        # 倒數計時器
         st.components.v1.html("""
-            <div style="background-color:#1e293b; color:#f8fafc; padding:12px 10px; border-radius:8px; text-align:center; font-family:monospace; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="background-color:#1e293b; color:#f8fafc; padding:20px 10px; border-radius:8px; text-align:center; font-family:monospace; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
                 <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px; font-weight: bold;">⏳ TIME REMAINING</div>
                 <div id="live-timer" style="color:#38bdf8; font-size:16px; font-weight:bold;">01:30:00</div>
             </div>
@@ -418,14 +418,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(runClock, 1000);
                 runClock();
             </script>
-        """, height=100)
+        """, height=110)
 
     with header_col3:
-        # 完整顯示的綠色相機預覽框（調整 height 及 video 大小避免過界）
+        # 綠色相機預覽框
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
-                <div style="color: #15803d; font-weight: bold; font-size: 9px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 90px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
+                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
+                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 72px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
             </div>
             <script>
                 async function initCam() {
@@ -438,31 +438,76 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 }
                 initCam();
             </script>
-        """, height=100)
+        """, height=110)
+
+    # --- [防作弊底部公告欄與監控 Script] ---
+    st.components.v1.html("""
+        <!-- 底部警告公告欄樣式 -->
+        <div id="cheat-warning-bar" style="
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #dc2626;
+            color: white;
+            text-align: center;
+            padding: 14px;
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 15px;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+            z-index: 999999;
+            letter-spacing: 0.5px;
+        ">
+            🚨 INAPPROPRIATE MOVEMENT DETECTED: Tab switch, screen blur, or cursor out of bounds! Please return to the exam immediately.
+        </div>
+
+        <script>
+            const warningBar = document.getElementById('cheat-warning-bar');
+            let hideTimeout;
+
+            function triggerWarning(reason) {
+                warningBar.style.display = 'block';
+                
+                // 5秒後自動隱館警告欄，或者可以設定為持續顯示直到點擊
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(() => {
+                    warningBar.style.display = 'none';
+                }, 6000);
+            }
+
+            // 1. 偵測切換分頁 (Visibility API)
+            document.addEventListener("visibilitychange", function() {
+                if (document.hidden) {
+                    triggerWarning('tab_switched');
+                }
+            });
+
+            // 2. 偵測視窗失去焦點 (Window Blur)
+            window.addEventListener("blur", function() {
+                triggerWarning('window_blur');
+            });
+
+            // 3. 偵測滑鼠游標移出網頁視窗上方 (Mouse Leave Screen)
+            document.addEventListener("mouseleave", function(e) {
+                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+                    triggerWarning('cursor_out');
+                }
+            });
+        </script>
+    """, height=0)
 
     st.divider()
 
-    
-    # --- [2] 側邊欄 (題庫導覽與防作弊監控) ---
+    # --- [2] 側邊欄 (題庫導覽與防作弊狀態) ---
     with st.sidebar:
         st.markdown("### 📹 Security Status")
         st.markdown("""
             <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
+                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus & Anti-Cheat Guard Active</div>
             </div>
         """, unsafe_allow_html=True)
-        
-        # 偵測切換分頁 / 離開畫面的 JavaScript
-        st.components.v1.html("""
-            <script>
-                document.addEventListener("visibilitychange", function() {
-                    if (document.hidden) {
-                        // 當考生切換分頁時，可在 console 記錄或發送通知
-                        console.warn("Candidate switched tab or minimized window.");
-                    }
-                });
-            </script>
-        """, height=0)
 
         st.markdown("---")
         st.markdown("### 🗺️ Question Palette (1–75)")
@@ -539,36 +584,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
             st.session_state.exam_step = 4
             st.rerun()
-
-# ==========================================
-# Step 4 - 結算總結與交卷頁 (Review & Finish Exam)
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    st.markdown("### 📋 Exam Review & Final Submission")
-    st.markdown("Review your completion status below before submitting your final paper.")
-    
-    answered_count = len(st.session_state.answers) if "answers" in st.session_state else 0
-    flagged_count = len(st.session_state.flags) if "flags" in st.session_state else 0
-    unanswered_count = 75 - answered_count
-    focus_losses = st.session_state.get("focus_loss_count", 0)
-    
-    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-    col_s1.metric("Answered", f"{answered_count} / 75")
-    col_s2.metric("Unanswered", unanswered_count)
-    col_s3.metric("Flagged", flagged_count)
-    col_s4.metric("Focus Losses", focus_losses, delta_color="inverse" if focus_losses > 0 else "off")
-    
-    st.markdown("---")
-    
-    col_act1, col_act2 = st.columns(2)
-    with col_act1:
-        if st.button("⬅️ Return to Exam", use_container_width=True):
-            st.session_state.exam_step = 3
-            st.rerun()
-            
-    with col_act2:
-        if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
-            st.success("🎉 Exam successfully submitted! Answers and audit logs pushed to Google Sheets.")
 
 # ==========================================
 # Step 4 - 交卷與完成畫面
