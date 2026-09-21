@@ -377,7 +377,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (用 LocalStorage 確保計時器跨 Rerun 不會歸零) ---
+    # --- [1] 頂部標頭區 (修正高度讓計時器完整顯示) ---
     header_col1, header_col2 = st.columns([3, 1])
     
     with header_col1:
@@ -385,8 +385,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.caption(f"Email: {st.session_state.candidate_email}")
 
     with header_col2:
+        # 高度從 45 提升至 65，確保數字完美顯示不被切開
         components.html("""
-            <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold; font-family:monospace; font-size:14px;">
+            <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold; font-family:monospace; font-size:15px;">
                 ⏳ Time: <span id="timer" style="color:#38bdf8;">01:30:00</span>
             </div>
             <script>
@@ -411,32 +412,17 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(updateTimer, 1000);
                 updateTimer();
             </script>
-        """, height=45)
+        """, height=65)
 
     st.divider()
 
-    # --- [2] 側邊欄 (真實 Webcam 串流與題庫色碼盤) ---
+    # --- [2] 側邊欄 (Webcam 採用 Streamlit 原生相機輸入，或強制賦權的 HTML) ---
     with st.sidebar:
         st.markdown("### 📹 Proctoring Monitor")
         
-        # 真實調用瀏覽器 Webcam 的 HTML/JS 元件
-        components.html("""
-            <div style="border: 2px dashed #22c55e; padding: 5px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px; margin-bottom: 3px;">🟢 Status: Secure & Active</div>
-                <video id="webcam" autoplay playsinline muted style="width: 100%; height: 110px; object-fit: cover; border-radius: 4px; background: #000;"></video>
-            </div>
-            <script>
-                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                    .then(stream => {
-                        const video = document.getElementById('webcam');
-                        video.srcObject = stream;
-                    })
-                    .catch(err => {
-                        console.error("Webcam access denied:", err);
-                        alert("Please allow camera access in your browser settings.");
-                    });
-            </script>
-        """, height=160, scrolling=False)
+        # 這裡改用 Streamlit 官方內置的 camera_input，保證 100% 穩定出畫面而不受 iframe 限制
+        # 考生點擊鏡頭後即可見到自己實時影像
+        camera_feed = st.camera_input("Proctoring Active Feed", label_visibility="collapsed")
         
         st.markdown("---")
         st.markdown("### 🗺️ Question Palette (1–75)")
@@ -520,22 +506,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     with st.sidebar:
         st.markdown("### 📹 Proctoring Monitor")
-        components.html("""
-            <div style="border: 2px dashed #22c55e; padding: 5px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px; margin-bottom: 3px;">🟢 Status: Secure & Active</div>
-                <video id="webcam" autoplay playsinline muted style="width: 100%; height: 110px; object-fit: cover; border-radius: 4px; background: #000;"></video>
-            </div>
-            <script>
-                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                    .then(stream => {
-                        const video = document.getElementById('webcam');
-                        video.srcObject = stream;
-                    })
-                    .catch(err => {
-                        console.error("Webcam access denied:", err);
-                    });
-            </script>
-        """, height=160)
+        st.camera_input("Proctoring Active Feed", label_visibility="collapsed")
 
     st.markdown("### 📋 Exam Review & Final Submission")
     st.markdown("Review your completion status below. You can return to the exam or submit your paper immediately regardless of unanswered items.")
@@ -558,10 +529,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
             st.rerun()
             
     with col_act2:
-        # 強制交卷按鈕 (無論答幾多題都可以直接提交)
         if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
             st.success("🎉 Exam successfully submitted! Audit logs and answers pushed to Google Sheets.")
-
 # ==========================================
 # Step 4 - 交卷與完成畫面
 # ==========================================
