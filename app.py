@@ -366,7 +366,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (Fixed Bottom Banner via st.markdown)
+# Step 3 - 核心問答模組 (Body-Injected Anti-Cheat Banner)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "current_q" not in st.session_state:
@@ -527,62 +527,66 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.exam_step = 4
             st.rerun()
 
-    # --- [4] 底部固定警告橫幅 (透過 st.markdown 直接渲染到主頁面 DOM，完美置底) ---
-    st.markdown("""
-        <div id="fixed-bottom-warning" style="
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100vw;
-            background-color: #dc2626;
-            color: white;
-            text-align: center;
-            padding: 12px 20px;
-            font-family: sans-serif;
-            font-weight: bold;
-            font-size: 14px;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
-            z-index: 999999;
-            display: none;
-            box-sizing: border-box;
-        ">
-            🚨 WARNING: Inappropriate movement detected! Tab switch, screen blur, or cursor out of bounds. Please remain focused on the exam.
-        </div>
-
+    # --- [4] 底部固定警告橫幅 (透過 JS 動態注入至 document.body，繞過 Streamlit 限制) ---
+    st.components.v1.html("""
         <script>
-            const warningBanner = document.getElementById('fixed-bottom-warning');
-            let bannerTimer;
+            // 確保只建立一次 Banner
+            if (!parent.document.getElementById('global-warning-banner')) {
+                const banner = parent.document.createElement('div');
+                banner.id = 'global-warning-banner';
+                banner.style.cssText = `
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    width: 100vw;
+                    background-color: #dc2626;
+                    color: white;
+                    text-align: center;
+                    padding: 14px 20px;
+                    font-family: sans-serif;
+                    font-weight: bold;
+                    font-size: 15px;
+                    box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
+                    z-index: 2147483647;
+                    display: none;
+                    box-sizing: border-box;
+                `;
+                banner.innerHTML = "🚨 WARNING: Inappropriate movement detected! Tab switch, screen blur, or cursor out of bounds. Please remain focused on the exam.";
+                parent.document.body.appendChild(banner);
+            }
 
-            function showWarning() {
-                if (warningBanner) {
-                    warningBanner.style.display = 'block';
+            let bannerTimer;
+            function triggerGlobalWarning() {
+                const b = parent.document.getElementById('global-warning-banner');
+                if (b) {
+                    b.style.display = 'block';
                     clearTimeout(bannerTimer);
                     bannerTimer = setTimeout(() => {
-                        warningBanner.style.display = 'none';
-                    }, 7000); // 顯示 7 秒後自動隱藏
+                        b.style.display = 'none';
+                    }, 8000); // 顯示 8 秒後自動隱藏
                 }
             }
 
-            // 1. 偵測開新分頁 / 最小化
-            document.addEventListener("visibilitychange", function() {
-                if (document.hidden) {
-                    showWarning();
+            // 1. 偵測開新分頁 / 隱藏畫面
+            parent.document.addEventListener("visibilitychange", function() {
+                if (parent.document.hidden) {
+                    triggerGlobalWarning();
                 }
             });
 
             // 2. 偵測視窗失去焦點
-            window.addEventListener("blur", function() {
-                showWarning();
+            parent.window.addEventListener("blur", function() {
+                triggerGlobalWarning();
             });
 
-            // 3. 偵測滑鼠移出畫面頂部或邊界
-            document.addEventListener("mouseleave", function(e) {
-                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
-                    showWarning();
+            // 3. 偵測滑鼠移出畫面邊界
+            parent.document.addEventListener("mouseleave", function(e) {
+                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
+                    triggerGlobalWarning();
                 }
             });
         </script>
-    """, unsafe_allow_html=True)
+    """, height=0)
 # ==========================================
 # Step 4 - 交卷與完成畫面
 # ==========================================
