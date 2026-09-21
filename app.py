@@ -425,7 +425,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
                 <div style="color: #15803d; font-weight: bold; font-size: 9px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 100px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
+                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 90px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
             </div>
             <script>
                 async function initCam() {
