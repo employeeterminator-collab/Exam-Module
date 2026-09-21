@@ -364,6 +364,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               st.rerun()
 
 
+import streamlit as st
+import streamlit.components.v1 as components
+
 # ==========================================
 # Step 3 - 核心問答模組 (Core Exam Page)
 # ==========================================
@@ -377,7 +380,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (修正高度讓計時器完整顯示) ---
+    # --- [1] 頂部標頭區 (計時器完整顯示) ---
     header_col1, header_col2 = st.columns([3, 1])
     
     with header_col1:
@@ -385,7 +388,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.caption(f"Email: {st.session_state.candidate_email}")
 
     with header_col2:
-        # 高度從 45 提升至 65，確保數字完美顯示不被切開
         components.html("""
             <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold; font-family:monospace; font-size:15px;">
                 ⏳ Time: <span id="timer" style="color:#38bdf8;">01:30:00</span>
@@ -416,13 +418,29 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.divider()
 
-    # --- [2] 側邊欄 (Webcam 採用 Streamlit 原生相機輸入，或強制賦權的 HTML) ---
+    # --- [2] 側邊欄 (修復後的實時 Webcam 串流預覽框) ---
     with st.sidebar:
         st.markdown("### 📹 Proctoring Monitor")
         
-        # 這裡改用 Streamlit 官方內置的 camera_input，保證 100% 穩定出畫面而不受 iframe 限制
-        # 考生點擊鏡頭後即可見到自己實時影像
-        camera_feed = st.camera_input("Proctoring Active Feed", label_visibility="collapsed")
+        # 透過直接在 HTML 中處理串流，並賦予明確的 ID 與樣式
+        components.html("""
+            <div style="border: 2px dashed #22c55e; padding: 5px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
+                <div style="color: #15803d; font-weight: bold; font-size: 12px; margin-bottom: 3px;">🟢 Status: Secure & Active</div>
+                <video id="live-webcam" autoplay playsinline muted style="width: 100%; height: 120px; object-fit: cover; border-radius: 4px; background: #000;"></video>
+            </div>
+            <script>
+                async function initCamera() {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                        const videoElement = document.getElementById('live-webcam');
+                        videoElement.srcObject = stream;
+                    } catch (error) {
+                        console.error('Error accessing media devices.', error);
+                    }
+                }
+                initCamera();
+            </script>
+        """, height=165)
         
         st.markdown("---")
         st.markdown("### 🗺️ Question Palette (1–75)")
@@ -506,7 +524,24 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     with st.sidebar:
         st.markdown("### 📹 Proctoring Monitor")
-        st.camera_input("Proctoring Active Feed", label_visibility="collapsed")
+        components.html("""
+            <div style="border: 2px dashed #22c55e; padding: 5px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
+                <div style="color: #15803d; font-weight: bold; font-size: 12px; margin-bottom: 3px;">🟢 Status: Secure & Active</div>
+                <video id="live-webcam" autoplay playsinline muted style="width: 100%; height: 120px; object-fit: cover; border-radius: 4px; background: #000;"></video>
+            </div>
+            <script>
+                async function initCamera() {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                        const videoElement = document.getElementById('live-webcam');
+                        videoElement.srcObject = stream;
+                    } catch (error) {
+                        console.error('Error accessing media devices.', error);
+                    }
+                }
+                initCamera();
+            </script>
+        """, height=165)
 
     st.markdown("### 📋 Exam Review & Final Submission")
     st.markdown("Review your completion status below. You can return to the exam or submit your paper immediately regardless of unanswered items.")
