@@ -362,21 +362,147 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               )
               st.rerun()
 # ==========================================
-# Step 3 - 核心問答模組 (開發中)
+# Step 3 - 核心問答模組 (Core Exam Page)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
-  st.markdown("### Step 4: Shisa Kanko-Shi Core Examination")
-  st.write(
-      f"Candidate: **{st.session_state.candidate_name}**"
-      f" ({st.session_state.candidate_email})"
-  )
-  st.write("---")
+    # 初始化考試內部的 session 狀態
+    if "current_q" not in st.session_state:
+        st.session_state.current_q = 1
+    if "answers" not in st.session_state:
+        st.session_state.answers = {}  # {q_num: selected_option}
+    if "flags" not in st.session_state:
+        st.session_state.flags = set()  # {q_num}
 
-  st.info("Exam questionnaire interface is under construction...")
+    TOTAL_QUESTIONS = 75
 
-  if st.button("Test Submit Exam"):
-    st.session_state.exam_step = 4
-    st.rerun()
+    # --- [1] 頂部標頭區 (Top Header Area) ---
+    header_col1, header_col2 = st.columns([3, 1])
+    
+    with header_col1:
+        st.markdown(f"### 👤 Candidate: **{st.session_state.candidate_name}**")
+        st.caption(f"Email: {st.session_state.candidate_email}")
+
+    with header_col2:
+        # 黏性/動態倒數計時器
+        st.markdown("""
+            <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold;">
+                ⏳ Time Remaining: <span style="color:#38bdf8;">89:45</span>
+            </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # --- [2] 側邊欄 (Sidebar: Webcam & Question Palette) ---
+    with st.sidebar:
+        st.markdown("### 📹 Proctoring Monitor")
+        st.markdown("""
+            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
+                <div style="color: #15803d; font-weight: bold; font-size: 13px; margin-bottom: 5px;">🟢 Status: Secure & Active</div>
+                <div style="background-color: #000; color: #fff; height: 110px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 11px;">
+                    [ Live Webcam Feed ]
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.markdown("### 🗺️ Question Palette (1–75)")
+        st.markdown("<small>🟢 Answered | ⚪ Unanswered | ⭐ Flagged</small>", unsafe_allow_html=True)
+        
+        # 建立 1-75 題的網格導航 (每行 5 粒)
+        cols_per_row = 5
+        for i in range(1, TOTAL_QUESTIONS + 1, cols_per_row):
+            cols = st.columns(cols_per_row)
+            for j in range(cols_per_row):
+                q_num = i + j
+                if q_num <= TOTAL_QUESTIONS:
+                    label = f"⭐{q_num}" if q_num in st.session_state.flags else f"{q_num}"
+                    if cols[j].button(label, key=f"pal_{q_num}", use_container_width=True):
+                        st.session_state.current_q = q_num
+                        st.rerun()
+
+    # --- [3] 主畫面區域 (Main Content Area) ---
+    q_idx = st.session_state.current_q
+
+    st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
+    st.progress(q_idx / TOTAL_QUESTIONS)
+
+    # 模擬題目內容（稍後可對接獨立 Google Sheet 題庫）
+    st.markdown(f"""
+    > **Scenario / Question Text for Q{q_idx}:**  
+    > According to the Shisa Kanko (Pointing and Calling) safety protocols, what is the primary cognitive benefit of executing a physical point paired with a verbal command during a critical operational check?
+    """)
+
+    options = [
+        "A. It reduces muscular fatigue during long shifts.",
+        "B. It enhances consciousness and reduces operational errors by synchronizing brain and sensory alertness.",
+        "C. It replaces the need for standard digital logging.",
+        "D. It is purely ceremonial and has no measurable safety impact."
+    ]
+
+    current_answer = st.session_state.answers.get(q_idx, None)
+    selected = st.radio(
+        "Select your answer:", 
+        options, 
+        index=options.index(current_answer) if current_answer in options else None, 
+        key=f"q_radio_{q_idx}"
+    )
+
+    if selected:
+        st.session_state.answers[q_idx] = selected
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 操作按鈕列：⭐ Flag, Previous, Next
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
+
+    with col_btn1:
+        is_flagged = q_idx in st.session_state.flags
+        flag_label = "⭐ Unflag Question" if is_flagged else "⭐ Flag for Review"
+        if st.button(flag_label, use_container_width=True):
+            if is_flagged:
+                st.session_state.flags.remove(q_idx)
+            else:
+                st.session_state.flags.add(q_idx)
+            st.rerun()
+
+    with col_btn2:
+        if st.button("⬅️ Previous", use_container_width=True, disabled=(q_idx == 1)):
+            st.session_state.current_q -= 1
+            st.rerun()
+
+    with col_btn3:
+        if st.button("Next ➡️", use_container_width=True, disabled=(q_idx == TOTAL_QUESTIONS)):
+            st.session_state.current_q += 1
+            st.rerun()
+
+    st.markdown("---")
+
+    # --- [4] 底部導航欄 (Bottom Bar) ---
+    b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
+    with b_col2:
+        if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
+            st.session_state.exam_step = 4  # 切換至下一步 (交卷總結頁)
+            st.rerun()
+
+# ==========================================
+# Step 4 - 結算總結頁 (預留接續)
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 4:
+    st.markdown("### Step 4: Exam Summary & Final Submission")
+    
+    answered_count = len(st.session_state.answers) if "answers" in st.session_state else 0
+    flagged_count = len(st.session_state.flags) if "flags" in st.session_state else 0
+    unanswered_count = 75 - answered_count
+    
+    col_s1, col_s2, col_s3 = st.columns(3)
+    col_s1.metric("Answered", f"{answered_count} / 75")
+    col_s2.metric("Unanswered", unanswered_count)
+    col_s3.metric("Flagged", flagged_count)
+    
+    st.markdown("---")
+    if st.button("⬅️ Return to Exam"):
+        st.session_state.exam_step = 3
+        st.rerun()
 
 # ==========================================
 # Step 4 - 交卷與完成畫面
