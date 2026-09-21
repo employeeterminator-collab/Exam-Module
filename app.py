@@ -438,7 +438,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 }
                 initCam();
             </script>
-        """, height=90)
+        """, height=140)
 
     st.divider()
 
