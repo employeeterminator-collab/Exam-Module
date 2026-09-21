@@ -366,7 +366,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (Anti-Cheat Banner Fix)
+# Step 3 - 核心問答模組 (Fixed Bottom Banner via st.markdown)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "current_q" not in st.session_state:
@@ -379,30 +379,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.session_state.focus_loss_count = 0
 
     TOTAL_QUESTIONS = 75
-
-    # --- 偵測瀏覽器焦點與切換分頁的前端通訊元件 ---
-    # 利用 JavaScript 監聽 blur / visibilitychange，如果發生，就重新整理頁面並在 Python 記錄違規次數
-    st.components.v1.html("""
-        <script>
-            function reportViolation() {
-                // 如果 sessionStorage 記錄左剛剛已經警告過，就避免無限洗版
-                if (!sessionStorage.getItem('violation_reported')) {
-                    sessionStorage.setItem('violation_reported', 'true');
-                    // 透過重新整理或觸發父層來計數
-                }
-            }
-
-            document.addEventListener("visibilitychange", function() {
-                if (document.hidden) {
-                    alert("🚨 WARNING: Inappropriate movement detected! You have switched tabs or left the exam screen.");
-                }
-            });
-
-            window.addEventListener("blur", function() {
-                alert("🚨 WARNING: Inappropriate movement detected! Your mouse or window lost focus.");
-            });
-        </script>
-    """, height=0)
 
     # --- [1] 頂部標頭區 (候選人資訊、時鐘、相機) ---
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
@@ -550,6 +526,63 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
             st.session_state.exam_step = 4
             st.rerun()
+
+    # --- [4] 底部固定警告橫幅 (透過 st.markdown 直接渲染到主頁面 DOM，完美置底) ---
+    st.markdown("""
+        <div id="fixed-bottom-warning" style="
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100vw;
+            background-color: #dc2626;
+            color: white;
+            text-align: center;
+            padding: 12px 20px;
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+            z-index: 999999;
+            display: none;
+            box-sizing: border-box;
+        ">
+            🚨 WARNING: Inappropriate movement detected! Tab switch, screen blur, or cursor out of bounds. Please remain focused on the exam.
+        </div>
+
+        <script>
+            const warningBanner = document.getElementById('fixed-bottom-warning');
+            let bannerTimer;
+
+            function showWarning() {
+                if (warningBanner) {
+                    warningBanner.style.display = 'block';
+                    clearTimeout(bannerTimer);
+                    bannerTimer = setTimeout(() => {
+                        warningBanner.style.display = 'none';
+                    }, 7000); // 顯示 7 秒後自動隱藏
+                }
+            }
+
+            // 1. 偵測開新分頁 / 最小化
+            document.addEventListener("visibilitychange", function() {
+                if (document.hidden) {
+                    showWarning();
+                }
+            });
+
+            // 2. 偵測視窗失去焦點
+            window.addEventListener("blur", function() {
+                showWarning();
+            });
+
+            // 3. 偵測滑鼠移出畫面頂部或邊界
+            document.addEventListener("mouseleave", function(e) {
+                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+                    showWarning();
+                }
+            });
+        </script>
+    """, unsafe_allow_html=True)
 # ==========================================
 # Step 4 - 交卷與完成畫面
 # ==========================================
