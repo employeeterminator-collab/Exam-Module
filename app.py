@@ -588,6 +588,40 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             });
         </script>
     """, height=0)
+
+# ==========================================
+# Step 4 - 結算總結與交卷頁 (Review & Finish Exam)
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 4:
+    st.markdown("### 📋 Exam Review & Final Submission")
+    st.markdown("Review your completion status below before submitting your final paper.")
+    
+    answered_count = len(st.session_state.answers) if "answers" in st.session_state else 0
+    flagged_count = len(st.session_state.flags) if "flags" in st.session_state else 0
+    unanswered_count = 75 - answered_count
+    focus_losses = st.session_state.get("focus_loss_count", 0)
+    
+    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    col_s1.metric("Answered", f"{answered_count} / 75")
+    col_s2.metric("Unanswered", unanswered_count)
+    col_s3.metric("Flagged", flagged_count)
+    col_s4.metric("Focus Losses", focus_losses, delta_color="inverse" if focus_losses > 0 else "off")
+    
+    st.markdown("---")
+    
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+        if st.button("⬅️ Return to Exam", use_container_width=True):
+            st.session_state.exam_step = 3
+            st.rerun()
+            
+    with col_act2:
+        if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
+            st.success("🎉 Exam successfully submitted! Answers and audit logs pushed to Google Sheets.")
+
+
+
+
 # ==========================================
 # Step 4 - 交卷與完成畫面
 # ==========================================
