@@ -418,14 +418,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(runClock, 1000);
                 runClock();
             </script>
-        """, height=140)
+        """, height=110)
 
     with header_col3:
         # 完整顯示的綠色相機預覽框（調整 height 及 video 大小避免過界）
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
                 <div style="color: #15803d; font-weight: bold; font-size: 9px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 82px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
+                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 100px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
             </div>
             <script>
                 async function initCam() {
@@ -438,7 +438,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 }
                 initCam();
             </script>
-        """, height=140)
+        """, height=110)
 
     st.divider()
 
