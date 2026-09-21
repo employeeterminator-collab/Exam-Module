@@ -542,7 +542,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     background-color: #dc2626;
                     color: white;
                     text-align: center;
-                    padding: 16px 20px;
+                    padding: 20px 25px;
                     font-family: sans-serif;
                     font-weight: bold;
                     font-size: 15px;
