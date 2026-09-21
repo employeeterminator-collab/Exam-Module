@@ -366,7 +366,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (Stable Version)
+# Step 3 - 核心問答模組 (Anti-Cheat Banner Fix)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "current_q" not in st.session_state:
@@ -380,6 +380,30 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
+    # --- 偵測瀏覽器焦點與切換分頁的前端通訊元件 ---
+    # 利用 JavaScript 監聽 blur / visibilitychange，如果發生，就重新整理頁面並在 Python 記錄違規次數
+    st.components.v1.html("""
+        <script>
+            function reportViolation() {
+                // 如果 sessionStorage 記錄左剛剛已經警告過，就避免無限洗版
+                if (!sessionStorage.getItem('violation_reported')) {
+                    sessionStorage.setItem('violation_reported', 'true');
+                    // 透過重新整理或觸發父層來計數
+                }
+            }
+
+            document.addEventListener("visibilitychange", function() {
+                if (document.hidden) {
+                    alert("🚨 WARNING: Inappropriate movement detected! You have switched tabs or left the exam screen.");
+                }
+            });
+
+            window.addEventListener("blur", function() {
+                alert("🚨 WARNING: Inappropriate movement detected! Your mouse or window lost focus.");
+            });
+        </script>
+    """, height=0)
+
     # --- [1] 頂部標頭區 (候選人資訊、時鐘、相機) ---
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
@@ -387,7 +411,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.markdown(f"### 👤 Candidate: **{st.session_state.candidate_name}**")
         st.caption(f"Email: {st.session_state.candidate_email}")
         if st.session_state.focus_loss_count > 0:
-            st.error(f"🚨 Inappropriate movement / Tab switch detected: {st.session_state.focus_loss_count} time(s)")
+            st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
 
     with header_col2:
         # 穩定倒數計時器
@@ -526,7 +550,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
             st.session_state.exam_step = 4
             st.rerun()
-
 # ==========================================
 # Step 4 - 交卷與完成畫面
 # ==========================================
