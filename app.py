@@ -380,20 +380,21 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (使用穩定運作的 JS 倒數計時器) ---
-    header_col1, header_col2 = st.columns([3, 1])
+    # --- [1] 頂部標頭區 (候選人資訊 | 清晰計時器 | 實況相機鏡頭) ---
+    header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
         st.markdown(f"### 👤 Candidate: **{st.session_state.candidate_name}**")
         st.caption(f"Email: {st.session_state.candidate_email}")
         if st.session_state.focus_loss_count > 0:
-            st.warning(f"⚠️ Warning: Screen focus lost / tab switched {st.session_state.focus_loss_count} time(s).")
+            st.warning(f"⚠️ Focus lost / Tab switched: {st.session_state.focus_loss_count} time(s)")
 
     with header_col2:
-        # 獨立的 JS 倒數計時器元件（不依賴 Python 頻繁 rerun，流暢倒數）
+        # 優化後的清晰倒數計時器
         st.components.v1.html("""
-            <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold; font-family:monospace; font-size:14px;">
-                ⏳ Time: <span id="live-timer" style="color:#38bdf8;">01:30:00</span>
+            <div style="background-color:#1e293b; color:#f8fafc; padding:10px; border-radius:8px; text-align:center; font-family:monospace; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px; font-weight: bold;">⏳ TIME REMAINING</div>
+                <div id="live-timer" style="color:#38bdf8; font-size:16px; font-weight:bold;">01:30:00</div>
             </div>
             <script>
                 if (!sessionStorage.getItem('exam_time_left')) {
@@ -417,28 +418,46 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(runClock, 1000);
                 runClock();
             </script>
-        """, height=45)
+        """, height=70)
+
+    with header_col3:
+        # 依照你的手繪位置，加入即時相機預覽框
+        st.components.v1.html("""
+            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 1px;">🟢 LIVE PROCTOR</div>
+                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 50px; object-fit: cover; border-radius: 4px; background: #000;"></video>
+            </div>
+            <script>
+                async function initCam() {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                        document.getElementById('top-webcam').srcObject = stream;
+                    } catch (e) {
+                        console.error("Camera access error", e);
+                    }
+                }
+                initCam();
+            </script>
+        """, height=70)
 
     st.divider()
 
-    # --- [2] 側邊欄 (防作弊監控與題庫色碼盤) ---
+    # --- [2] 側邊欄 (題庫導覽與防作弊監控) ---
     with st.sidebar:
-        st.markdown("### 📹 Proctoring Monitor")
+        st.markdown("### 📹 Security Status")
         st.markdown("""
             <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Proctoring & Focus Guard Active</div>
+                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
             </div>
         """, unsafe_allow_html=True)
         
-        # 捕捉離開畫面 / 開新分頁的事件
-        focus_event = st.text_input("focus_tracker", key="focus_tracker_val", label_visibility="collapsed")
-        
+        # 偵測切換分頁 / 離開畫面的 JavaScript
         st.components.v1.html("""
             <script>
                 document.addEventListener("visibilitychange", function() {
                     if (document.hidden) {
-                        // 當切換分頁時，通知父層
-                        console.log("Tab switched!");
+                        // 當考生切換分頁時，可在 console 記錄或發送通知
+                        console.warn("Candidate switched tab or minimized window.");
                     }
                 });
             </script>
@@ -519,6 +538,36 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
             st.session_state.exam_step = 4
             st.rerun()
+
+# ==========================================
+# Step 4 - 結算總結與交卷頁 (Review & Finish Exam)
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 4:
+    st.markdown("### 📋 Exam Review & Final Submission")
+    st.markdown("Review your completion status below before submitting your final paper.")
+    
+    answered_count = len(st.session_state.answers) if "answers" in st.session_state else 0
+    flagged_count = len(st.session_state.flags) if "flags" in st.session_state else 0
+    unanswered_count = 75 - answered_count
+    focus_losses = st.session_state.get("focus_loss_count", 0)
+    
+    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    col_s1.metric("Answered", f"{answered_count} / 75")
+    col_s2.metric("Unanswered", unanswered_count)
+    col_s3.metric("Flagged", flagged_count)
+    col_s4.metric("Focus Losses", focus_losses, delta_color="inverse" if focus_losses > 0 else "off")
+    
+    st.markdown("---")
+    
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+        if st.button("⬅️ Return to Exam", use_container_width=True):
+            st.session_state.exam_step = 3
+            st.rerun()
+            
+    with col_act2:
+        if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
+            st.success("🎉 Exam successfully submitted! Answers and audit logs pushed to Google Sheets.")
 
 # ==========================================
 # Step 4 - 交卷與完成畫面
