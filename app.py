@@ -365,169 +365,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 
-# ==========================================
-# Step 3 - 核心問答模組 (Body-Injected Anti-Cheat Banner)
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 3:
-    if "current_q" not in st.session_state:
-        st.session_state.current_q = 1
-    if "answers" not in st.session_state:
-        st.session_state.answers = {}  
-    if "flags" not in st.session_state:
-        st.session_state.flags = set()  
-    if "focus_loss_count" not in st.session_state:
-        st.session_state.focus_loss_count = 0
-
-    TOTAL_QUESTIONS = 75
-
-    # --- [1] 頂部標頭區 (候選人資訊、時鐘、相機) ---
-    header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
-    
-    with header_col1:
-        st.markdown(f"### 👤 Candidate: **{st.session_state.candidate_name}**")
-        st.caption(f"Email: {st.session_state.candidate_email}")
-        if st.session_state.focus_loss_count > 0:
-            st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
-
-    with header_col2:
-        # 穩定倒數計時器
-        st.components.v1.html("""
-            <div style="background-color:#1e293b; color:#f8fafc; padding:20px 10px; border-radius:8px; text-align:center; font-family:monospace; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
-                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px; font-weight: bold;">⏳ TIME REMAINING</div>
-                <div id="live-timer" style="color:#38bdf8; font-size:16px; font-weight:bold;">01:30:00</div>
-            </div>
-            <script>
-                if (!sessionStorage.getItem('exam_time_left')) {
-                    sessionStorage.setItem('exam_time_left', '5400');
-                }
-                function runClock() {
-                    let sec = parseInt(sessionStorage.getItem('exam_time_left'));
-                    if (sec > 0) {
-                        sec--;
-                        sessionStorage.setItem('exam_time_left', sec);
-                    }
-                    let hrs = Math.floor(sec / 3600);
-                    let rem = sec % 3600;
-                    let mins = Math.floor(rem / 60);
-                    let secs = rem % 60;
-                    document.getElementById("live-timer").innerText = 
-                        (hrs < 10 ? "0" + hrs : hrs) + ":" + 
-                        (mins < 10 ? "0" + mins : mins) + ":" + 
-                        (secs < 10 ? "0" + secs : secs);
-                }
-                setInterval(runClock, 1000);
-                runClock();
-            </script>
-        """, height=110)
-
-    with header_col3:
-        # 放大 20% 的綠色相機預覽框
-        st.components.v1.html("""
-            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
-                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 72px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
-            </div>
-            <script>
-                async function initCam() {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                        document.getElementById('top-webcam').srcObject = stream;
-                    } catch (e) {
-                        console.error("Camera access error", e);
-                    }
-                }
-                initCam();
-            </script>
-        """, height=110)
-
-    st.divider()
-
-    # --- [2] 側邊欄 (防作弊與導覽) ---
-    with st.sidebar:
-        st.markdown("### 📹 Security Status")
-        st.markdown("""
-            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown("### 🗺️ Question Palette (1–75)")
-        st.markdown("<small>🟢 Answered | ⚪ Unanswered | ⭐ Flagged</small>", unsafe_allow_html=True)
-        
-        cols_per_row = 5
-        for i in range(1, TOTAL_QUESTIONS + 1, cols_per_row):
-            cols = st.columns(cols_per_row)
-            for j in range(cols_per_row):
-                q_num = i + j
-                if q_num <= TOTAL_QUESTIONS:
-                    label = f"⭐{q_num}" if q_num in st.session_state.flags else f"{q_num}"
-                    if cols[j].button(label, key=f"pal_{q_num}", use_container_width=True):
-                        st.session_state.current_q = q_num
-                        st.rerun()
-
-    # --- [3] 主畫面區域 (Main Content Area) ---
-    q_idx = st.session_state.current_q
-
-    st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
-    st.progress(q_idx / TOTAL_QUESTIONS)
-
-    st.markdown(f"""
-    > **Scenario / Question Text for Q{q_idx}:**  
-    > According to the Shisa Kanko (Pointing and Calling) safety protocols, what is the primary cognitive benefit of executing a physical point paired with a verbal command during a critical operational check?
-    """)
-
-    options = [
-        "A. It reduces muscular fatigue during long shifts.",
-        "B. It enhances consciousness and reduces operational errors by synchronizing brain and sensory alertness.",
-        "C. It replaces the need for standard digital logging.",
-        "D. It is purely ceremonial and has no measurable safety impact."
-    ]
-
-    current_answer = st.session_state.answers.get(q_idx, None)
-    selected = st.radio(
-        "Select your answer:", 
-        options, 
-        index=options.index(current_answer) if current_answer in options else None, 
-        key=f"q_radio_{q_idx}"
-    )
-
-    if selected:
-        st.session_state.answers[q_idx] = selected
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-
-    with col_btn1:
-        is_flagged = q_idx in st.session_state.flags
-        flag_label = "⭐ Unflag Question" if is_flagged else "⭐ Flag for Review"
-        if st.button(flag_label, use_container_width=True):
-            if is_flagged:
-                st.session_state.flags.remove(q_idx)
-            else:
-                st.session_state.flags.add(q_idx)
-            st.rerun()
-
-    with col_btn2:
-        if st.button("⬅️ Previous", use_container_width=True, disabled=(q_idx == 1)):
-            st.session_state.current_q -= 1
-            st.rerun()
-
-    with col_btn3:
-        if st.button("Next ➡️", use_container_width=True, disabled=(q_idx == TOTAL_QUESTIONS)):
-            st.session_state.current_q += 1
-            st.rerun()
-
-    st.markdown("---")
-
-    b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
-    with b_col2:
-        if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
-            st.session_state.exam_step = 4
-            st.rerun()
-
-    # --- [4] 底部固定警告橫幅 (透過 JS 動態注入至 document.body，繞過 Streamlit 限制) ---
+# --- [4] 底部固定警告橫幅 (完美置中與不重疊修正) ---
     st.components.v1.html("""
         <script>
             // 確保只建立一次 Banner
@@ -542,10 +380,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     background-color: #dc2626;
                     color: white;
                     text-align: center;
-                    padding: 14px 20px;
+                    padding: 16px 20px;
                     font-family: sans-serif;
                     font-weight: bold;
                     font-size: 15px;
+                    line-height: 1.4;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
                     z-index: 2147483647;
                     display: none;
@@ -587,6 +426,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             });
         </script>
     """, height=0)
+      
 # ==========================================
 # Step 4 - 交卷與完成畫面
 # ==========================================
