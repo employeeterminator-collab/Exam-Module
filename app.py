@@ -4,6 +4,7 @@ import time
 import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
+import streamlit.components.v1 as components
 
 # 1. 頁面基本設定
 st.set_page_config(
@@ -361,21 +362,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                   f" ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)"
               )
               st.rerun()
+
+
 # ==========================================
 # Step 3 - 核心問答模組 (Core Exam Page)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
-    # 初始化考試內部的 session 狀態
     if "current_q" not in st.session_state:
         st.session_state.current_q = 1
     if "answers" not in st.session_state:
-        st.session_state.answers = {}  # {q_num: selected_option}
+        st.session_state.answers = {}  
     if "flags" not in st.session_state:
-        st.session_state.flags = set()  # {q_num}
+        st.session_state.flags = set()  
 
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (Top Header Area with Live JS Countdown Timer) ---
+    # --- [1] 頂部標頭區 (用 LocalStorage 確保計時器跨 Rerun 不會歸零) ---
     header_col1, header_col2 = st.columns([3, 1])
     
     with header_col1:
@@ -383,54 +385,62 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.caption(f"Email: {st.session_state.candidate_email}")
 
     with header_col2:
-        # 動態倒數計時器 (使用 JS 實作即時倒數 90 分鐘 = 5400 秒)
-        st.markdown("""
-            <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold;">
-                ⏳ Time Remaining: <span id="countdown" style="color:#38bdf8;">01:30:00</span>
+        components.html("""
+            <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold; font-family:monospace; font-size:14px;">
+                ⏳ Time: <span id="timer" style="color:#38bdf8;">01:30:00</span>
             </div>
             <script>
-                if (typeof window.examSeconds === 'undefined') {
-                    window.examSeconds = 5400; // 90 minutes
+                if (!localStorage.getItem('exam_seconds')) {
+                    localStorage.setItem('exam_seconds', '5400'); // 90 mins
                 }
                 function updateTimer() {
-                    var el = document.getElementById("countdown");
-                    if (!el) return;
-                    var hrs = Math.floor(window.examSeconds / 3600);
-                    var rem = window.examSeconds % 3600;
+                    var sec = parseInt(localStorage.getItem('exam_seconds'));
+                    if (sec > 0) {
+                        sec--;
+                        localStorage.setItem('exam_seconds', sec);
+                    }
+                    var hrs = Math.floor(sec / 3600);
+                    var rem = sec % 3600;
                     var mins = Math.floor(rem / 60);
                     var secs = rem % 60;
-                    el.innerHTML = 
+                    document.getElementById("timer").innerText = 
                         (hrs < 10 ? "0" + hrs : hrs) + ":" + 
                         (mins < 10 ? "0" + mins : mins) + ":" + 
                         (secs < 10 ? "0" + secs : secs);
-                    if (window.examSeconds > 0) {
-                        window.examSeconds--;
-                    }
                 }
-                if (window.examTimerInterval) { clearInterval(window.examTimerInterval); }
-                window.examTimerInterval = setInterval(updateTimer, 1000);
+                setInterval(updateTimer, 1000);
+                updateTimer();
             </script>
-        """, unsafe_allow_html=True)
+        """, height=45)
 
     st.divider()
 
-    # --- [2] 側邊欄 (Sidebar: Webcam & Question Palette) ---
+    # --- [2] 側邊欄 (真實 Webcam 串流與題庫色碼盤) ---
     with st.sidebar:
         st.markdown("### 📹 Proctoring Monitor")
-        st.markdown("""
-            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 13px; margin-bottom: 5px;">🟢 Status: Secure & Active</div>
-                <div style="background-color: #000; color: #fff; height: 110px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 11px;">
-                    [ Live Webcam Feed ]
-                </div>
+        
+        # 真實調用瀏覽器 Webcam 的 HTML/JS 元件
+        components.html("""
+            <div style="border: 2px dashed #22c55e; padding: 5px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
+                <div style="color: #15803d; font-weight: bold; font-size: 12px; margin-bottom: 3px;">🟢 Status: Secure & Active</div>
+                <video id="webcam" autoplay playsinline muted style="width: 100%; height: 110px; object-fit: cover; border-radius: 4px; background: #000;"></video>
             </div>
-        """, unsafe_allow_html=True)
+            <script>
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(stream => {
+                        const video = document.getElementById('webcam');
+                        video.srcObject = stream;
+                    })
+                    .catch(err => {
+                        console.error("Webcam access denied:", err);
+                    });
+            </script>
+        """, height=160)
         
         st.markdown("---")
         st.markdown("### 🗺️ Question Palette (1–75)")
         st.markdown("<small>🟢 Answered | ⚪ Unanswered | ⭐ Flagged</small>", unsafe_allow_html=True)
         
-        # 建立 1-75 題的網格導航 (每行 5 粒)
         cols_per_row = 5
         for i in range(1, TOTAL_QUESTIONS + 1, cols_per_row):
             cols = st.columns(cols_per_row)
@@ -473,7 +483,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 操作按鈕列：⭐ Flag, Previous, Next
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
 
     with col_btn1:
@@ -498,28 +507,34 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.markdown("---")
 
-    # --- [4] 底部導航欄 (Bottom Bar) ---
     b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
     with b_col2:
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
-            st.session_state.exam_step = 4  # 切換至總結交卷頁
+            st.session_state.exam_step = 4
             st.rerun()
 
 # ==========================================
 # Step 4 - 結算總結與交卷頁 (Review & Finish Exam)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    # 確保結算頁面也保留 Webcam 監控
     with st.sidebar:
         st.markdown("### 📹 Proctoring Monitor")
-        st.markdown("""
-            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 13px; margin-bottom: 5px;">🟢 Status: Secure & Active</div>
-                <div style="background-color: #000; color: #fff; height: 110px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 11px;">
-                    [ Live Webcam Feed ]
-                </div>
+        components.html("""
+            <div style="border: 2px dashed #22c55e; padding: 5px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
+                <div style="color: #15803d; font-weight: bold; font-size: 12px; margin-bottom: 3px;">🟢 Status: Secure & Active</div>
+                <video id="webcam" autoplay playsinline muted style="width: 100%; height: 110px; object-fit: cover; border-radius: 4px; background: #000;"></video>
             </div>
-        """, unsafe_allow_html=True)
+            <script>
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(stream => {
+                        const video = document.getElementById('webcam');
+                        video.srcObject = stream;
+                    })
+                    .catch(err => {
+                        console.error("Webcam access denied:", err);
+                    });
+            </script>
+        """, height=160)
 
     st.markdown("### 📋 Exam Review & Final Submission")
     st.markdown("Review your completion status below. You can return to the exam or submit your paper immediately regardless of unanswered items.")
@@ -542,10 +557,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
             st.rerun()
             
     with col_act2:
-        # 強制交卷按鈕 (無論答幾多題都可以直接按下去完成交卷)
+        # 強制交卷按鈕 (無論答幾多題都可以直接提交)
         if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
             st.success("🎉 Exam successfully submitted! Audit logs and answers pushed to Google Sheets.")
-            # 這裡之後可以加入清空 session 或導向完成畫面的邏輯
 
 # ==========================================
 # Step 4 - 交卷與完成畫面
