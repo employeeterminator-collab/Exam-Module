@@ -546,7 +546,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     font-family: sans-serif;
                     font-weight: bold;
                     font-size: 15px;
-                    line-height: 1.4;
+                    line-height: 2.4;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
                     z-index: 2147483647;
                     display: none;
