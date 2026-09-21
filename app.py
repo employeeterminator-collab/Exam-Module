@@ -527,7 +527,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.exam_step = 4
             st.rerun()
 
-    # --- [4] 底部固定警告橫幅 (透過 JS 動態注入至 document.body，繞過 Streamlit 限制) ---
+  # --- [4] 底部固定警告橫幅 (完美置中與不重疊修正) ---
     st.components.v1.html("""
         <script>
             // 確保只建立一次 Banner
@@ -542,10 +542,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     background-color: #dc2626;
                     color: white;
                     text-align: center;
-                    padding: 14px 20px;
+                    padding: 16px 20px;
                     font-family: sans-serif;
                     font-weight: bold;
                     font-size: 15px;
+                    line-height: 1.4;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
                     z-index: 2147483647;
                     display: none;
