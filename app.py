@@ -418,7 +418,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(runClock, 1000);
                 runClock();
             </script>
-        """, height=110)
+        """, height=100)
 
     with header_col3:
         # 完整顯示的綠色相機預覽框（調整 height 及 video 大小避免過界）
@@ -438,7 +438,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 }
                 initCam();
             </script>
-        """, height=110)
+        """, height=100)
 
     st.divider()
 
