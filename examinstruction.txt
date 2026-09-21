@@ -1,6 +1,5 @@
 CERTIFIED POINTING-AND-CALLING SPECIALIST (CPCS)
 EXAM AGREEMENT, CODE OF CONDUCT, AND INSTRUCTIONS
-
 1. INTRODUCTION AND PURPOSE
 This Exam Agreement ("Agreement") governs your participation in the Certified Pointing-and-Calling Specialist (CPCS / Shisa Kanko-Shi) examination administered by the Shisa Kanko Promotion Institute. By accessing, launching, or beginning the examination, you formally acknowledge, understand, and agree to abide by all terms, conditions, policies, and instructions outlined herein. Failure to comply may result in the immediate termination of your exam, invalidation of your result, and revocation of eligibility for certification.
 
@@ -44,5 +43,7 @@ By proceeding to start the examination, you certify that:
 You are the registered candidate whose name appears on the exam registration.
 
 You have read, understood, and agree to all terms outlined in this Agreement.
+
+You understand that violation of this Agreement carries strict academic, professional, and legal consequences.
 
 You understand that violation of this Agreement carries strict academic, professional, and legal consequences.
