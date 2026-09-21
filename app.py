@@ -366,7 +366,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (Core Exam Page with Bottom Warning Banner)
+# Step 3 - 核心問答模組 (Stable Version)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "current_q" not in st.session_state:
@@ -380,17 +380,17 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (時與相機預覽框) ---
+    # --- [1] 頂部標頭區 (候選人資訊、時鐘、相機) ---
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
         st.markdown(f"### 👤 Candidate: **{st.session_state.candidate_name}**")
         st.caption(f"Email: {st.session_state.candidate_email}")
         if st.session_state.focus_loss_count > 0:
-            st.warning(f"⚠️ Total violations recorded: {st.session_state.focus_loss_count}")
+            st.error(f"🚨 Inappropriate movement / Tab switch detected: {st.session_state.focus_loss_count} time(s)")
 
     with header_col2:
-        # 倒數計時器
+        # 穩定倒數計時器
         st.components.v1.html("""
             <div style="background-color:#1e293b; color:#f8fafc; padding:20px 10px; border-radius:8px; text-align:center; font-family:monospace; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
                 <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px; font-weight: bold;">⏳ TIME REMAINING</div>
@@ -398,7 +398,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             </div>
             <script>
                 if (!sessionStorage.getItem('exam_time_left')) {
-                    sessionStorage.setItem('exam_time_left', '5400'); // 90 minutes
+                    sessionStorage.setItem('exam_time_left', '5400');
                 }
                 function runClock() {
                     let sec = parseInt(sessionStorage.getItem('exam_time_left'));
@@ -421,7 +421,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         """, height=110)
 
     with header_col3:
-        # 綠色相機預覽框
+        # 放大 20% 的綠色相機預覽框
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
                 <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
@@ -440,72 +440,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             </script>
         """, height=110)
 
-    # --- [防作弊底部公告欄與監控 Script] ---
-    st.components.v1.html("""
-        <!-- 底部警告公告欄樣式 -->
-        <div id="cheat-warning-bar" style="
-            display: none;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: #dc2626;
-            color: white;
-            text-align: center;
-            padding: 14px;
-            font-family: sans-serif;
-            font-weight: bold;
-            font-size: 15px;
-            box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
-            z-index: 999999;
-            letter-spacing: 0.5px;
-        ">
-            🚨 INAPPROPRIATE MOVEMENT DETECTED: Tab switch, screen blur, or cursor out of bounds! Please return to the exam immediately.
-        </div>
-
-        <script>
-            const warningBar = document.getElementById('cheat-warning-bar');
-            let hideTimeout;
-
-            function triggerWarning(reason) {
-                warningBar.style.display = 'block';
-                
-                // 5秒後自動隱館警告欄，或者可以設定為持續顯示直到點擊
-                clearTimeout(hideTimeout);
-                hideTimeout = setTimeout(() => {
-                    warningBar.style.display = 'none';
-                }, 6000);
-            }
-
-            // 1. 偵測切換分頁 (Visibility API)
-            document.addEventListener("visibilitychange", function() {
-                if (document.hidden) {
-                    triggerWarning('tab_switched');
-                }
-            });
-
-            // 2. 偵測視窗失去焦點 (Window Blur)
-            window.addEventListener("blur", function() {
-                triggerWarning('window_blur');
-            });
-
-            // 3. 偵測滑鼠游標移出網頁視窗上方 (Mouse Leave Screen)
-            document.addEventListener("mouseleave", function(e) {
-                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
-                    triggerWarning('cursor_out');
-                }
-            });
-        </script>
-    """, height=0)
-
     st.divider()
 
-    # --- [2] 側邊欄 (題庫導覽與防作弊狀態) ---
+    # --- [2] 側邊欄 (防作弊與導覽) ---
     with st.sidebar:
         st.markdown("### 📹 Security Status")
         st.markdown("""
             <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus & Anti-Cheat Guard Active</div>
+                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
             </div>
         """, unsafe_allow_html=True)
 
