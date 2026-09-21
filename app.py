@@ -364,10 +364,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               st.rerun()
 
 
- 
-
-import streamlit as st
-import time
 
 # ==========================================
 # Step 3 - 核心問答模組 (Core Exam Page with Anti-Cheat & Fixed Timer)
