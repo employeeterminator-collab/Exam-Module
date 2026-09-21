@@ -536,9 +536,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 banner.id = 'global-warning-banner';
                 banner.style.cssText = `
                     position: fixed;
-                    bottom: 0;
-                    left: 0;
-                    width: 100vw;
+                    bottom: 35;
+                    left: 10;
+                    width: 80vw;
                     background-color: #dc2626;
                     color: white;
                     text-align: center;
@@ -546,6 +546,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     font-family: sans-serif;
                     font-weight: bold;
                     font-size: 15px;
+                    border-radius: 8px;
                     line-height: 2.4;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
                     z-index: 2147483647;
