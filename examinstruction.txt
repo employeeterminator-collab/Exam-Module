@@ -2,11 +2,9 @@ CERTIFIED POINTING-AND-CALLING SPECIALIST (CPCS)
 EXAM AGREEMENT, CODE OF CONDUCT, AND INSTRUCTIONS
 
 1. INTRODUCTION AND PURPOSE
-
 This Exam Agreement ("Agreement") governs your participation in the Certified Pointing-and-Calling Specialist (CPCS / Shisa Kanko-Shi) examination administered by the Shisa Kanko Promotion Institute. By accessing, launching, or beginning the examination, you formally acknowledge, understand, and agree to abide by all terms, conditions, policies, and instructions outlined herein. Failure to comply may result in the immediate termination of your exam, invalidation of your result, and revocation of eligibility for certification.
 
 2. CORE EXAMINATION PARAMETERS
-
 Exam Duration: Exactly 90 minutes from the moment you officially launch the test interface. A digital timer will be displayed on your screen. The exam will auto-submit when time expires.
 
 Question Format & Volume: The examination consists of 75 multiple-choice and scenario-based questions covering industrial safety methodologies, hazard perception, and Shisa Kanko application protocols.
@@ -14,7 +12,6 @@ Question Format & Volume: The examination consists of 75 multiple-choice and sce
 Passing Score & Result Indication: A minimum score of 70% (correctly answering at least 53 out of 75 questions) is required to successfully pass the exam and earn the CPCS credential. Upon completion, candidates will receive a direct indication of Pass or Fail only. Exact numerical score values will not be displayed or disclosed to the candidate.
 
 3. MANDATORY PROCTORING AND BIOMETRIC CONSENT
-
 Camera Activation & Identification: You explicitly agree and consent to the activation and active utilization of your computer’s webcam for identity verification prior to the exam and continuous monitoring/recording during the duration of the exam.
 
 Identity Check: You must present a valid, government-issued photo identification to the camera prior to commencing the test to verify your identity against your candidate registration profile.
@@ -22,7 +19,6 @@ Identity Check: You must present a valid, government-issued photo identification
 Proctoring Compliance: Your face must remain fully visible within the camera frame at all times. Leaving the camera view, covering the lens, or having unauthorized individuals enter your testing space will trigger automated proctoring flags and potential exam termination.
 
 4. DATA PRIVACY, RETENTION, AND DESTRUCTION
-
 Data Collection: Video and photographic data captured via your webcam during the exam session are collected solely for identity verification and exam integrity enforcement.
 
 Standard Destruction Window: All pictures, video recordings, and biometric monitoring data taken during the exam will be securely and permanently destroyed within 15 days following the conclusion of the examination date.
@@ -30,23 +26,19 @@ Standard Destruction Window: All pictures, video recordings, and biometric monit
 Investigation Exception: If potential academic dishonesty, proxy testing, or fraud is detected during or after the exam, the data retention period will be extended as necessary to support a formal investigation. In the event that data retention is extended due to a suspected violation, the candidate will be formally notified.
 
 5. CONFIDENTIALITY, NON-DISCLOSURE, AND INTELLECTUAL PROPERTY
-
 Strict Non-Disclosure (No Release of Questions): The CPCS examination is proprietary and confidential material protected by copyright and trade secret laws. You are strictly prohibited from recording, copying, taking screenshots, photographing, memorizing, transcribing, or disclosing any exam questions, answers, scenarios, or format details in any form (digital, verbal, written, or via social media) to any third party.
 
 Confidentiality and Integrity: You agree to maintain the absolute integrity of the testing process. Any attempt to compromise the security of the exam items—including soliciting or sharing exam content with past, present, or future candidates—constitutes a severe breach of professional ethics and will result in legal action, lifetime disqualification, and revocation of any awarded credentials.
 
 6. RETAKE POLICY
-
 No Cool-Off Period: There is no mandatory waiting or cooling-off period between exam attempts. Candidates who do not achieve a passing result are eligible to retake the examination immediately, provided they have purchased and registered a valid exam voucher for the new attempt.
 
 7. RESULT FINALITY AND QUESTION INQUIRY POLICY
-
 Exam Score Finality: Overall exam results and scoring outcomes are final and not challengeable.
 
 Specific Question Inquiries: While overall scores cannot be contested, candidates may formally submit an inquiry regarding the wording, technical accuracy, or validity of a specific exam question through the official candidate support channel within 5 business days of their exam date. All inquiries are reviewed by the examination board, but final determinations rest solely with the Institute.
 
 8. CANDIDATE ACKNOWLEDGEMENT AND ACCEPTANCE
-
 By proceeding to start the examination, you certify that:
 
 You are the registered candidate whose name appears on the exam registration.
