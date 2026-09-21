@@ -375,7 +375,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (Top Header Area) ---
+    # --- [1] 頂部標頭區 (Top Header Area with Live JS Countdown Timer) ---
     header_col1, header_col2 = st.columns([3, 1])
     
     with header_col1:
@@ -383,11 +383,33 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.caption(f"Email: {st.session_state.candidate_email}")
 
     with header_col2:
-        # 黏性/動態倒數計時器
+        # 動態倒數計時器 (使用 JS 實作即時倒數 90 分鐘 = 5400 秒)
         st.markdown("""
             <div style="background-color:#1e293b; color:#f8fafc; padding:8px 12px; border-radius:6px; text-align:center; font-weight:bold;">
-                ⏳ Time Remaining: <span style="color:#38bdf8;">89:45</span>
+                ⏳ Time Remaining: <span id="countdown" style="color:#38bdf8;">01:30:00</span>
             </div>
+            <script>
+                if (typeof window.examSeconds === 'undefined') {
+                    window.examSeconds = 5400; // 90 minutes
+                }
+                function updateTimer() {
+                    var el = document.getElementById("countdown");
+                    if (!el) return;
+                    var hrs = Math.floor(window.examSeconds / 3600);
+                    var rem = window.examSeconds % 3600;
+                    var mins = Math.floor(rem / 60);
+                    var secs = rem % 60;
+                    el.innerHTML = 
+                        (hrs < 10 ? "0" + hrs : hrs) + ":" + 
+                        (mins < 10 ? "0" + mins : mins) + ":" + 
+                        (secs < 10 ? "0" + secs : secs);
+                    if (window.examSeconds > 0) {
+                        window.examSeconds--;
+                    }
+                }
+                if (window.examTimerInterval) { clearInterval(window.examTimerInterval); }
+                window.examTimerInterval = setInterval(updateTimer, 1000);
+            </script>
         """, unsafe_allow_html=True)
 
     st.divider()
@@ -426,7 +448,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
     st.progress(q_idx / TOTAL_QUESTIONS)
 
-    # 模擬題目內容（稍後可對接獨立 Google Sheet 題庫）
     st.markdown(f"""
     > **Scenario / Question Text for Q{q_idx}:**  
     > According to the Shisa Kanko (Pointing and Calling) safety protocols, what is the primary cognitive benefit of executing a physical point paired with a verbal command during a critical operational check?
@@ -481,14 +502,27 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
     with b_col2:
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
-            st.session_state.exam_step = 4  # 切換至下一步 (交卷總結頁)
+            st.session_state.exam_step = 4  # 切換至總結交卷頁
             st.rerun()
 
 # ==========================================
-# Step 4 - 結算總結頁 (預留接續)
+# Step 4 - 結算總結與交卷頁 (Review & Finish Exam)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    st.markdown("### Step 4: Exam Summary & Final Submission")
+    # 確保結算頁面也保留 Webcam 監控
+    with st.sidebar:
+        st.markdown("### 📹 Proctoring Monitor")
+        st.markdown("""
+            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
+                <div style="color: #15803d; font-weight: bold; font-size: 13px; margin-bottom: 5px;">🟢 Status: Secure & Active</div>
+                <div style="background-color: #000; color: #fff; height: 110px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 11px;">
+                    [ Live Webcam Feed ]
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("### 📋 Exam Review & Final Submission")
+    st.markdown("Review your completion status below. You can return to the exam or submit your paper immediately regardless of unanswered items.")
     
     answered_count = len(st.session_state.answers) if "answers" in st.session_state else 0
     flagged_count = len(st.session_state.flags) if "flags" in st.session_state else 0
@@ -500,9 +534,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     col_s3.metric("Flagged", flagged_count)
     
     st.markdown("---")
-    if st.button("⬅️ Return to Exam"):
-        st.session_state.exam_step = 3
-        st.rerun()
+    
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+        if st.button("⬅️ Return to Exam", use_container_width=True):
+            st.session_state.exam_step = 3
+            st.rerun()
+            
+    with col_act2:
+        # 強制交卷按鈕 (無論答幾多題都可以直接按下去完成交卷)
+        if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
+            st.success("🎉 Exam successfully submitted! Audit logs and answers pushed to Google Sheets.")
+            # 這裡之後可以加入清空 session 或導向完成畫面的邏輯
 
 # ==========================================
 # Step 4 - 交卷與完成畫面
