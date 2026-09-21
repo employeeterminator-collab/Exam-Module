@@ -364,8 +364,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               st.rerun()
 
 
-import streamlit as st
-import streamlit.components.v1 as components
+ 
 
 # ==========================================
 # Step 3 - 核心問答模組 (Core Exam Page)
@@ -566,6 +565,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     with col_act2:
         if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
             st.success("🎉 Exam successfully submitted! Audit logs and answers pushed to Google Sheets.")
+
+
 # ==========================================
 # Step 4 - 交卷與完成畫面
 # ==========================================
