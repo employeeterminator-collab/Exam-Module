@@ -536,19 +536,19 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 banner.id = 'global-warning-banner';
                 banner.style.cssText = `
                     position: fixed;
-                    bottom: 35;
-                    left: 10;
-                    width: 80vw;
+                    bottom: 45;
+                    left: 10vw;
+                    width: 90vw;
                     background-color: #dc2626;
                     color: white;
                     text-align: center;
-                    padding: 20px 25px;
+                    padding: 14px 25px;
                     font-family: sans-serif;
                     font-weight: bold;
                     font-size: 15px;
-                    border-radius: 8px;
+                    border-radius: 10px;
                     line-height: 2.4;
-                    box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
                     z-index: 2147483647;
                     display: none;
                     box-sizing: border-box;
