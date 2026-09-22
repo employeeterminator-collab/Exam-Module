@@ -368,6 +368,74 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 # ==========================================
 # Step 3 - 核心問答模組 (Body-Injected Anti-Cheat Banner)
 # ==========================================
+
+# ==========================================
+# Step 3 啟動時的全螢幕強制確認層
+# ==========================================
+if st.session_state.authenticated and st.session_state.exam_step == 3:
+    
+    # 檢查是否已經啟動全螢幕控制與防作弊監控
+    st.components.v1.html("""
+        <div id="fs-overlay" style="
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 2147483646;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        ">
+            <div style="background: #1e293b; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 500px; width: 100%;">
+                <h2 style="color: #38bdf8; margin-top: 0;">🔒 Secure Exam Environment</h2>
+                <p style="color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
+                    To maintain academic integrity, this exam must be taken in <b>Fullscreen Mode</b>. Exiting fullscreen or switching tabs will trigger security warnings.
+                </p>
+                <button id="fs-btn" style="
+                    background-color: #2563eb;
+                    color: white;
+                    border: none;
+                    padding: 14px 28px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    width: 100%;
+                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+                ">🖥️ Enter Fullscreen & Begin Exam</button>
+            </div>
+        </div>
+
+        <script>
+            const overlay = document.getElementById('fs-overlay');
+            const btn = document.getElementById('fs-btn');
+
+            btn.addEventListener('click', function() {
+                const elem = parent.document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
+                // 點擊後隱藏遮罩，進入考試
+                overlay.style.display = 'none';
+            });
+
+            // 隨時監控是否按左上角 Esc 離開全螢幕
+            parent.document.addEventListener("fullscreenchange", function() {
+                if (!parent.document.fullscreenElement) {
+                    overlay.style.display = 'flex'; // 離開全螢幕就重新鎖定遮罩提示
+                }
+            });
+        </script>
+    """, height=0)
+
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "current_q" not in st.session_state:
         st.session_state.current_q = 1
