@@ -501,7 +501,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     # ... (其餘程式碼)
 
     
-    EXAM_DURATION_SECONDS = 3600
+    EXAM_DURATION_SECONDS = 5400
     # --- [2] 注入頂部防作弊監控 Banner (純淨執行，絕不干擾計時器) ---
     st.components.v1.html("""
         <script>
@@ -591,7 +591,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if committed_str and str(committed_str).strip() != "":
                     committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
                     elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
-                    remaining_seconds = max(0, 3600 - elapsed_seconds)
+                    remaining_seconds = max(0, 5400 - elapsed_seconds)
         except Exception as e:
             print(f"Error calculating remaining time: {e}")
 
@@ -599,7 +599,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         timer_html = """
             <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
                 <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px; margin-bottom: 4px;">⏳ TIME REMAINING</div>
-                <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:00:00</div>
+                <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
             </div>
             <script>
                 const STORAGE_KEY = 'exam_end_time_VOUCHER_PLACEHOLDER';
