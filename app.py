@@ -80,7 +80,7 @@ def update_voucher_committed(voucher_code):
         if cell:
             current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             # 假設 Committed 欄位在第 10 欄 (Column J)
-            
+            sheet.update_cell(cell.row, 10, current_time)
     except Exception as e:
         print(f"Failed to update Committed time: {e}")
 
@@ -355,6 +355,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
     with col2:
       if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
         update_voucher_committed(st.session_state.voucher_code)
+          
         st.session_state.on_break = False
         st.session_state.exam_step = 3
         st.rerun()
