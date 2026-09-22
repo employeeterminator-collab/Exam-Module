@@ -818,108 +818,84 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     """, height=0)
 
 # ==========================================
-# Step 4 - 結算總結與交卷頁 (Review & Finish Exam)
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    st.markdown("### 📋 Exam Review & Final Submission")
-    st.markdown("Review your completion status below before submitting your final paper.")
-    
-    answered_count = len(st.session_state.answers) if "answers" in st.session_state else 0
-    flagged_count = len(st.session_state.flags) if "flags" in st.session_state else 0
-    unanswered_count = 75 - answered_count
-    focus_losses = st.session_state.get("focus_loss_count", 0)
-    
-    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-    col_s1.metric("Answered", f"{answered_count} / 75")
-    col_s2.metric("Unanswered", unanswered_count)
-    col_s3.metric("Flagged", flagged_count)
-    col_s4.metric("Focus Losses", focus_losses, delta_color="inverse" if focus_losses > 0 else "off")
-    
-    st.markdown("---")
-    
-    col_act1, col_act2 = st.columns(2)
-    with col_act1:
-        if st.button("⬅️ Return to Exam", use_container_width=True):
-            st.session_state.exam_step = 3
-            st.rerun()
-            
-    with col_act2:
-        if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
-            try:
-                answered_count = len(st.session_state.get("answers", {}))
-                focus_losses = st.session_state.get("focus_loss_count", 0)
-                
-                db = get_sheets_connection()
-                sheet = db.worksheet("Vouchers")
-                cell = sheet.find(st.session_state.voucher_code)
-                if cell:
-                    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    # 🎯 單一且絕對正確的寫入：一次搞定 Column 12 與 Column 13
-                    sheet.update_cell(cell.row, 12, current_time)  # Column 12: ExamEndTime
-                    sheet.update_cell(cell.row, 13, "Submitted")   # Column 13: ExamStatus
-                    
-                    # 如果有其他欄位要寫入（例如 Warning Count 存在 Column 11 或其他），可以在這裡一併處理
-                    # sheet.update_cell(cell.row, 11, focus_losses) 
-
-                print("Exam successfully submitted and columns 12 & 13 updated.")
-            except Exception as e:
-                print(f"Error on manual submit: {e}")
-            
-            st.session_state.exam_submitted = True
-            st.success("🎉 Exam successfully submitted and recorded to Google Sheets!")
-            time.sleep(1)
-            st.rerun()
-
-
-# ==========================================
-# Step 4 - 結算總結與交卷 / 完成畫面
+# Step 4 - 考試結果與結算頁面 (Pass / Fail & Result Page)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     
-    # 檢查是否已經完成過或已提交，如果還沒提交過，在這裡執行一次最終寫入 Google Sheets
-    if "exam_submitted" not in st.session_state:
-        st.session_state.exam_submitted = True
-        
-        # 1. 計算答題統計
-        answered_count = len(st.session_state.get("answers", {}))
-        focus_losses = st.session_state.get("focus_loss_count", 0)
-        
-        # 2. 呼叫更新函式，寫入交卷時間與狀態 (假設預設狀態為 Pending / Submitted)
+    # 確保寫入 Google Sheets 的動作在整個 Session 中只執行一次，防止雙重寫入或覆蓋
+    if not st.session_state.get("exam_sheets_updated", False):
         try:
-            update_exam_end_time(st.session_state.voucher_code, "Submitted")
-            # 如果你有評分機制或寫入分數的需求，也可以在這裡呼叫 finalize_exam_submission
-            finalize_exam_submission(
-                voucher_code=st.session_state.voucher_code,
-                warning_count=focus_losses,
-                exam_status="Pending Review", # 或 Pass/Fail
-                explanation=f"Answered {answered_count}/75 questions."
-            )
+            answered_count = len(st.session_state.get("answers", {}))
+            focus_losses = st.session_state.get("focus_loss_count", 0)
+            
+            # 💡 範例評分邏輯：假設總題數 75 題，你可以比對答案算出正確題數
+            # 這裡示範如何計算分數與判定 Pass / Fail（可根據你的答題對照表調整）
+            correct_count = 0
+            user_answers = st.session_state.get("answers", {})
+            correct_answer_key = st.session_state.get("correct_answers", {}) # 假設你有正確答案字典
+            
+            for q_idx, user_ans in user_answers.items():
+                if correct_answer_key.get(q_idx) == user_ans:
+                    correct_count += 1
+            
+            # 若沒有設定對照表，這裡先以答對率或預設邏輯為例（例如答對幾題及格，門檻可自行調整）
+            passing_score_percentage = 70.0 # 70% 及格
+            score_percentage = (correct_count / 75.0) * 100 if 75 > 0 else 0
+            
+            final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
+            
+            # 連線 Google Sheets 寫入資料
+            db = get_sheets_connection()
+            sheet = db.worksheet("Vouchers")
+            cell = sheet.find(st.session_state.voucher_code)
+            if cell:
+                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                # 1. 寫入交卷時間到 Column 12 (ExamEndTime)
+                sheet.update_cell(cell.row, 12, current_time) 
+                
+                # 2. 寫入 Pass 或 Fail 狀態到 Column 13 (ExamStatus)
+                sheet.update_cell(cell.row, 13, final_status)
+            
+            # 鎖定標記，避免重複寫入
+            st.session_state.exam_sheets_updated = True
+            st.session_state.exam_final_status = final_status
+            st.session_state.exam_correct_count = correct_count
+            
         except Exception as e:
-            print(f"Error finalizing exam on submission: {e}")
+            print(f"Error updating exam result to Google Sheets: {e}")
 
-    # --- 畫面呈現 ---
-    st.markdown("<h2 style='text-align: center;'>🎉 Examination Submitted Successfully</h2>", unsafe_allow_html=True)
+    # --- 畫面呈現：Exam Result Page ---
+    st.markdown("<h2 style='text-align: center;'>📋 Examination Result & Summary</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    st.markdown(
-        f"Thank you, **{st.session_state.get('candidate_name', 'Candidate')}** "
-        f"({st.session_state.get('candidate_email', '')}). "
-        "Your examination responses, audit logs, and proctoring records have been securely recorded to the database."
-    )
+    # 取得存在 session 中的最終狀態
+    status = st.session_state.get("exam_final_status", "Submitted")
+    correct_cnt = st.session_state.get("exam_correct_count", 0)
+    answered_cnt = len(st.session_state.get("answers", {}))
+    focus_warnings = st.session_state.get("focus_loss_count", 0)
     
-    # 顯示總結數據卡片
-    col_r1, col_r2, col_r3 = st.columns(3)
-    col_r1.metric("Questions Answered", f"{len(st.session_state.get('answers', {}))} / 75")
-    col_r2.metric("Focus Warnings", st.session_state.get("focus_loss_count", 0))
-    col_r3.metric("Final Status", "Submitted")
+    # 呈現大大的 Pass / Fail 狀態提醒框
+    if status == "Pass":
+        st.success("🎉 **CONGRATULATIONS! You have PASSED the examination.**")
+    else:
+        st.error("❌ **EXAMINATION RESULT: FAIL.** You did not meet the passing criteria.")
+        
+    st.write(f"Candidate: **{st.session_state.get('candidate_name', 'Candidate')}** ({st.session_state.get('candidate_email', '')})")
+    
+    # 數據指標看板
+    col_res1, col_res2, col_res3, col_res4 = st.columns(4)
+    col_res1.metric("Final Status", status)
+    col_res2.metric("Questions Answered", f"{answered_cnt} / 75")
+    col_res3.metric("Focus Warnings", focus_warnings)
+    col_res4.metric("Exam Outcome", "Completed")
     
     st.markdown("---")
-    st.warning("⚠️ **Important:** Your session is now closed. You may safely close this browser tab or window.")
+    st.info("💡 Your results and timestamps have been securely recorded in the official examination database (Google Sheets).")
     
-    # 安全登出/返回首頁按鈕
+    # 離開按鈕
     if st.button("🚪 Exit Examination Portal", use_container_width=True):
-        # 清除 Session State 確保安全性
+        # 清除所有 Session 狀態，安全登出
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
