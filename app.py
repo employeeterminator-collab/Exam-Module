@@ -380,7 +380,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         
         # 透過 st.components.v1.html 處理全螢幕觸發，並用 Streamlit callback 或重新整理狀態
         # 這裡我們利用 JavaScript 觸發全螢幕後，透過更改一個 hidden 的按鈕或直接重新整理來切換狀態
-#        st.components.v1.html("""
+            st.components.v1.html("""
 #            <div style="font-family: sans-serif; margin-top: 20px;">
 #                <button id="fs-btn" style="
 #                    background-color: #2563eb; 
@@ -413,7 +413,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     }, 300);
                 });
             </script>
-  #      """, height=120)
+         """, height=120)
         
         # 額外提供一個備用按鈕，萬一 JS 重新載入有延遲時讓 Python 端也能同步狀態
      #   if st.button("✅ I am in Fullscreen. Proceed to Exam ➔", use_container_width=True):
