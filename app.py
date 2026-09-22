@@ -527,7 +527,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.exam_step = 4
             st.rerun()
 
-  # --- [4] 底部固定警告橫幅 (完美置中與不重疊修正) ---
+# --- [4] 底部固定警告橫幅 (改為向上浮動置中卡片，徹底解決遮擋問題) ---
     st.components.v1.html("""
         <script>
             // 確保只建立一次 Banner
@@ -536,19 +536,21 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 banner.id = 'global-warning-banner';
                 banner.style.cssText = `
                     position: fixed;
-                    bottom: 45;
-                    left: 10vw;
-                    width: 90vw;
+                    bottom: 90px;                  /* 大幅向上推高，徹底避開底部邊界與工作列 */
+                    left: 50%;                     /* 橫向置中 */
+                    transform: translateX(-50%);   /* 完美置中校正 */
+                    width: 85%;
+                    max-width: 650px;              /* 限制最大寬度，保持精美外觀 */
                     background-color: #dc2626;
                     color: white;
                     text-align: center;
-                    padding: 14px 25px;
+                    padding: 16px 24px;
                     font-family: sans-serif;
                     font-weight: bold;
-                    font-size: 15px;
-                    border-radius: 10px;
-                    line-height: 2.4;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                    font-size: 14px;
+                    line-height: 1.5;
+                    border-radius: 10px;           /* 圓角外觀 */
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
                     z-index: 2147483647;
                     display: none;
                     box-sizing: border-box;
