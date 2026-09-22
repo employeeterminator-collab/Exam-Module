@@ -580,19 +580,37 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
 
    
-    with header_col2:
-        st.components.v1.html("""
+   with header_col2:
+        # 🟢 透過 Python 計算真實剩餘秒數（以 60 分鐘/3600秒 為基準，配合 Committed 時間）
+        remaining_seconds = 3600
+        try:
+            db = get_sheets_connection()
+            sheet = db.worksheet("Vouchers")
+            cell = sheet.find(st.session_state.voucher_code)
+            if cell:
+                committed_str = sheet.cell(cell.row, 10).value # Column 10 是 Committed
+                if committed_str and str(committed_str).strip() != "":
+                    committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
+                    elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
+                    remaining_seconds = max(0, 3600 - elapsed_seconds)
+        except Exception as e:
+            print(f"Error calculating remaining time: {e}")
+
+        # 將 Python 計算好的剩餘秒數安全傳遞給前端 JS
+        timer_html = f"""
             <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
                 <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px; margin-bottom: 4px;">⏳ TIME REMAINING</div>
                 <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:00:00</div>
             </div>
             <script>
-                const STORAGE_KEY = 'exam_end_time_shisa';
+                // 🟢 使用獨特的 Voucher Code 作為 Key，確保不同使用者換人登入時絕不共用計時器
+                const STORAGE_KEY = 'exam_end_time_{st.session_state.voucher_code}';
                 let endTime = parent.sessionStorage.getItem(STORAGE_KEY);
                 
-                // 🟢 修正：如果沒有記錄結束時間，或者舊的結束時間已經過期（小於當前時間），自動重設為全新的 60 分鐘
-                if (!endTime || Number(endTime) < Date.now()) {
-                    endTime = Date.now() + (3600 * 1000);
+                // 如果沒有紀錄，或者距離後端計算的剩餘時間有落差，則以伺服器/資料庫的精準剩餘秒數初始化
+                const serverRemaining = {remaining_seconds};
+                if (!endTime || Math.abs(Number(endTime) - (Date.now() + serverRemaining * 1000)) > 5000) {
+                    endTime = Date.now() + (serverRemaining * 1000);
                     parent.sessionStorage.setItem(STORAGE_KEY, endTime);
                 }
 
@@ -611,11 +629,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     }
                 }
 
-                // 立即更新一次，然後每秒執行
                 updateCountdown();
                 setInterval(updateCountdown, 1000);
             </script>
-        """, height=75)
+        """
+        st.components.v1.html(timer_html, height=75)
            
     with header_col3:
         # 放大 20% 的綠色相機預覽框
