@@ -276,6 +276,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
       if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
+        
         st.session_state.on_break = False
         st.session_state.exam_step = 3
         st.rerun()
@@ -363,11 +364,114 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               )
               st.rerun()
 
+# ==========================================
+# Step 3 - 核心問答模組 (含全螢幕前置解鎖屏)
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
+    # 1. 初始化全螢幕解鎖狀態
+    if "fullscreen_ready" not in st.session_state:
+        st.session_state.fullscreen_ready = False
+
+    # 2. 如果還沒解鎖全螢幕，只顯示獨立的全螢幕引導畫面
+    if not st.session_state.fullscreen_ready:
+        st.markdown("### 🖥️ Secure Exam Display")
+        st.info("💡 **Exam Tip:** For the best proctored experience, press **F11** on your keyboard to enter fullscreen mode.")
+        
+        # 透過 st.components.v1.html 處理全螢幕觸發，並用 Streamlit callback 或重新整理狀態
+        # 這裡我們利用 JavaScript 觸發全螢幕後，透過更改一個 hidden 的按鈕或直接重新整理來切換狀態
+        st.components.v1.html("""
+            <div style="font-family: sans-serif; margin-top: 20px;">
+                <button id="fs-btn" style="
+                    background-color: #2563eb; 
+                    color: white; 
+                    border: none; 
+                    padding: 16px 24px; 
+                    font-size: 16px; 
+                    font-weight: bold; 
+                    border-radius: 8px; 
+                    cursor: pointer;
+                    width: 100%;
+                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+                ">🖥️ Click Here to Enter Fullscreen Mode</button>
+            </div>
+
+            <script>
+                document.getElementById('fs-btn').addEventListener('click', function() {
+                    const elem = parent.document.documentElement;
+                    if (elem.requestFullscreen) {
+                        elem.requestFullscreen();
+                    } else if (elem.webkitRequestFullscreen) {
+                        elem.webkitRequestFullscreen();
+                    } else if (elem.msRequestFullscreen) {
+                        elem.msRequestFullscreen();
+                    }
+                    
+                    // 點擊後通知 Python 端解鎖下一步 (利用 window.location 重新載入並帶參數或直接 rerunning)
+                    setTimeout(() => {
+                        parent.window.location.reload();
+                    }, 300);
+                });
+            </script>
+        """, height=120)
+        
+        # 額外提供一個備用按鈕，萬一 JS 重新載入有延遲時讓 Python 端也能同步狀態
+        if st.button("✅ I am in Fullscreen. Proceed to Exam ➔", use_container_width=True):
+            st.session_state.fullscreen_ready = True
+            st.rerun()
+            
+        # 停止往下執行，直到解鎖為止
+        st.stop()
+
+    # =========================================================
+    # 3. 考生已經進入全螢幕！以下是真正的考試核心介面
+    # =========================================================
+    
+    # 初始化 Step 3 變數
+    if "current_q" not in st.session_state:
+        st.session_state.current_q = 1
+    if "answers" not in st.session_state:
+        st.session_state.answers = {}  
+    if "flags" not in st.session_state:
+        st.session_state.flags = set()  
+    if "focus_loss_count" not in st.session_state:
+        st.session_state.focus_loss_count = 0
+
+    # 注入頂部防作弊警告 Banner
+    st.components.v1.html("""
+        <script>
+            if (!parent.document.getElementById('global-warning-banner')) {
+                const banner = parent.document.createElement('div');
+                banner.id = 'global-warning-banner';
+                banner.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100vw;
+                    background-color: #dc2626; color: white; text-align: center; 
+                    padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
+                    font-size: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                    z-index: 2147483647; display: none; box-sizing: border-box;
+                `;
+                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
+                parent.document.body.appendChild(banner);
+            }
+            let bannerTimer;
+            function triggerGlobalWarning() {
+                const b = parent.document.getElementById('global-warning-banner');
+                if (b) {
+                    b.style.display = 'block';
+                    clearTimeout(bannerTimer);
+                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
+                }
+            }
+            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
+            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
+        </script>
+    """, height=0)
+
+    # 接下來接你原本的標頭區、時鐘、題目導航與 75 題內容...
 # ==========================================
 # Step 3 - 核心問答模組
 # ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 3:
+
 
     # --- [1] 初始化 Step 3 變數 ---
     if "current_q" not in st.session_state:
@@ -379,37 +483,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "focus_loss_count" not in st.session_state:
         st.session_state.focus_loss_count = 0
 
-    # --- [2] 放置全螢幕切換按鈕 ---
-    st.markdown("### 🖥️ Secure Exam Display")
-    st.components.v1.html("""
-        <div style="font-family: sans-serif; margin-bottom: 15px;">
-            <button id="fs-btn" style="
-                background-color: #2563eb; 
-                color: white; 
-                border: none; 
-                padding: 12px 24px; 
-                font-size: 15px; 
-                font-weight: bold; 
-                border-radius: 6px; 
-                cursor: pointer;
-                box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
-                width: 100%;
-            ">🖥️ Click Here to Enter Fullscreen Mode</button>
-        </div>
-
-        <script>
-            document.getElementById('fs-btn').addEventListener('click', function() {
-                const elem = parent.document.documentElement;
-                if (elem.requestFullscreen) {
-                    elem.requestFullscreen();
-                } else if (elem.webkitRequestFullscreen) {
-                    elem.webkitRequestFullscreen();
-                } else if (elem.msRequestFullscreen) {
-                    elem.msRequestFullscreen();
-                }
-            });
-        </script>
-    """, height=65)
+    
 
     # --- [3] 接下來接你原本的計時器與題目介面 ---
     TOTAL_QUESTIONS = 75
@@ -479,8 +553,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
 
-    # --- [3] 考場實用提示 (建議考生按 F11 進入全螢幕) ---
-    st.info("💡 **Exam Tip:** For the best proctored experience, press **F11** on your keyboard to enter fullscreen mode.")
+
 
     TOTAL_QUESTIONS = 75
 
