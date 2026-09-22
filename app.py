@@ -341,7 +341,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                   sheet = db.worksheet("Vouchers")
                   cell = sheet.find(st.session_state.candidate_email)
                   if cell:
-                    sheet.update_cell(cell.row, 4, photo_url)
+                    sheet.update_cell(cell.row, 9, photo_url)
                 except Exception:
                   pass
 
