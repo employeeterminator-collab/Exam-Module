@@ -57,8 +57,9 @@ if "on_break" not in st.session_state:
 if "break_start_time" not in st.session_state:
   st.session_state.break_start_time = None
 
-
-# 3. Google Sheets 連線函式
+# ==========================================
+# 3. Google Sheets 連線與資料庫輔助函式
+# ==========================================
 def get_sheets_connection():
   scope = [
       "https://spreadsheets.google.com/feeds",
@@ -69,6 +70,51 @@ def get_sheets_connection():
   client = gspread.authorize(creds)
   sheet = client.open("ShisaKanko_Exam_Database")
   return sheet
+
+
+# 🟢 【新加入】記錄第一次開始考試的時間 (Committed)
+def update_voucher_committed(voucher_code):
+    try:
+        db = get_sheets_connection()
+        sheet = db.worksheet("Vouchers")
+        cell = sheet.find(voucher_code)
+        if cell:
+            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # 假設 Committed 欄位在第 10 欄 (Column J)
+            sheet.update_cell(cell.row, 10, current_time)
+    except Exception as e:
+        print(f"Failed to update Committed time: {e}")
+
+
+# 🟢 【新加入】記錄單次違規事件到 ViolationLogs Tab
+def log_violation_to_sheet(voucher_code):
+    try:
+        db = get_sheets_connection()
+        logs_sheet = db.worksheet("ViolationLogs")
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 寫入新的一行：[Voucher, Offended Timestamp]
+        logs_sheet.append_row([voucher_code, current_time])
+    except Exception as e:
+        print(f"Failed to log violation: {e}")
+
+
+# 🟢 【新加入】完成考試時更新狀態 (CompletedExam, WarningCount, ExamStatus, CandidateExplanation)
+def finalize_exam_submission(voucher_code, warning_count, exam_status, explanation=""):
+    try:
+        db = get_sheets_connection()
+        sheet = db.worksheet("Vouchers")
+        cell = sheet.find(voucher_code)
+        if cell:
+            completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 請根據你的 Google Sheets 實際欄位順序調整：
+            # 假設 Column J: CompletedExam, Column K: WarningCount, Column L: ExamStatus, Column M: CandidateExplanation
+            sheet.update_cell(cell.row, 10, completed_time)  # CompletedExam 時間
+            sheet.update_cell(cell.row, 11, warning_count)   # WarningCount
+            sheet.update_cell(cell.row, 12, exam_status)     # ExamStatus (Pass / Fail / Pending)
+            sheet.update_cell(cell.row, 13, explanation)     # CandidateExplanation
+    except Exception as e:
+        print(f"Failed to finalize exam submission: {e}")
 
 
 # ==========================================
