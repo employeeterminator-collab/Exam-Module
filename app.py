@@ -850,7 +850,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     if unanswered_count > 0:
         st.warning(f"⚠️ You currently have **{unanswered_count}** unanswered question(s). You can still return to answer them.")
     if flagged_count > 0:
-        st.info(📤 f"📌 You have flagged **{flagged_count}** question(s) for review.")
+        # 🟢 修正此處：移除了原本卡在裡面的多餘 📤 字元
+        st.info(f"📌 You have flagged **{flagged_count}** question(s) for review.")
         
     st.write("---")
     
@@ -864,7 +865,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
             
     with col_act2:
         if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
-            # 點擊後直接推進到結算與評分頁面（假設我們將評分結算頁設為 Step 5）
+            # 點擊後推進到結算與評分頁面 (Step 5)
             st.session_state.exam_step = 5 
             st.rerun()
 
