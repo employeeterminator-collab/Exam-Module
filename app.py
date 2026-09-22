@@ -873,7 +873,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
 # ==========================================
 # Step 4 - 考試結果與結算頁面 (Pass / Fail & Result Page)
 # ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 4:
+elif st.session_state.authenticated and st.session_state.exam_step == 5:
     
     # 確保寫入 Google Sheets 的動作在整個 Session 中只執行一次，防止雙重寫入或覆蓋
     if not st.session_state.get("exam_sheets_updated", False):
