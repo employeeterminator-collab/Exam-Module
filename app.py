@@ -380,6 +380,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "focus_loss_count" not in st.session_state:
         st.session_state.focus_loss_count = 0
 
+    EXAM_DURATION_SECONDS = 3600
     # --- [2] 注入頂部防作弊監控 Banner (純淨執行，絕不干擾計時器) ---
     st.components.v1.html("""
         <script>
@@ -459,36 +460,36 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
 
     with header_col2:
-        # 穩定倒數計時器
-        st.components.v1.html("""
-            <div style="background-color:#1e293b; color:#f8fafc; padding:20px 10px; border-radius:8px; text-align:center; font-family:monospace; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
-                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px; font-weight: bold;">⏳ TIME REMAINING</div>
-                <div id="live-timer" style="color:#38bdf8; font-size:16px; font-weight:bold;">01:30:00</div>
+       with header_col2:
+        st.markdown("""
+            <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white;">
+                <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px;">⏳ TIME REMAINING</div>
+                <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:00:00</div>
             </div>
             <script>
-                if (!sessionStorage.getItem('exam_time_left')) {
-                    sessionStorage.setItem('exam_time_left', '5400');
-                }
-                function runClock() {
-                    let sec = parseInt(sessionStorage.getItem('exam_time_left'));
-                    if (sec > 0) {
-                        sec--;
-                        sessionStorage.setItem('exam_time_left', sec);
+                // 專門更新自訂計時器 UI 的前端腳本
+                if (!window.timerIntervalStarted) {
+                    window.timerIntervalStarted = true;
+                    const STORAGE_KEY = 'exam_end_time_shisa';
+                    let endTime = sessionStorage.getItem(STORAGE_KEY);
+                    if (!endTime) {
+                        endTime = Date.now() + (3600 * 1000);
+                        sessionStorage.setItem(STORAGE_KEY, endTime);
                     }
-                    let hrs = Math.floor(sec / 3600);
-                    let rem = sec % 3600;
-                    let mins = Math.floor(rem / 60);
-                    let secs = rem % 60;
-                    document.getElementById("live-timer").innerText = 
-                        (hrs < 10 ? "0" + hrs : hrs) + ":" + 
-                        (mins < 10 ? "0" + mins : mins) + ":" + 
-                        (secs < 10 ? "0" + secs : secs);
+                    setInterval(() => {
+                        const now = Date.now();
+                        let timeLeft = Math.floor((endTime - now) / 1000);
+                        if (timeLeft < 0) timeLeft = 0;
+                        const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
+                        const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
+                        const s = String(timeLeft % 60).padStart(2, '0');
+                        const target = document.getElementById('native-js-timer');
+                        if (target) target.innerText = `${h}:${m}:${s}`;
+                    }, 1000);
                 }
-                setInterval(runClock, 1000);
-                runClock();
             </script>
-        """, height=110)
-
+        """, unsafe_allow_html=True)
+           
     with header_col3:
         # 放大 20% 的綠色相機預覽框
         st.components.v1.html("""
