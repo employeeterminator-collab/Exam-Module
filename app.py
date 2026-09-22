@@ -460,7 +460,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
 
    
-       with header_col2:
+    with header_col2:
         st.markdown("""
             <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white;">
                 <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px;">⏳ TIME REMAINING</div>
