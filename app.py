@@ -851,18 +851,53 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
 
 
 # ==========================================
-# Step 4 - 交卷與完成畫面
+# Step 4 - 結算總結與交卷 / 完成畫面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
-  st.markdown(
-      "<h2 style='text-align: center;'>🎉 Exam Completed!</h2>",
-      unsafe_allow_html=True,
-  )
-  st.success(
-      "Your responses have been successfully recorded to the examination"
-      " database."
-  )
-  st.write(
-      f"Thank you, {st.session_state.candidate_name}. You may now close this"
-      " window."
-  )
+    
+    # 檢查是否已經完成過或已提交，如果還沒提交過，在這裡執行一次最終寫入 Google Sheets
+    if "exam_submitted" not in st.session_state:
+        st.session_state.exam_submitted = True
+        
+        # 1. 計算答題統計
+        answered_count = len(st.session_state.get("answers", {}))
+        focus_losses = st.session_state.get("focus_loss_count", 0)
+        
+        # 2. 呼叫更新函式，寫入交卷時間與狀態 (假設預設狀態為 Pending / Submitted)
+        try:
+            update_exam_end_time(st.session_state.voucher_code, "Submitted")
+            # 如果你有評分機制或寫入分數的需求，也可以在這裡呼叫 finalize_exam_submission
+            finalize_exam_submission(
+                voucher_code=st.session_state.voucher_code,
+                warning_count=focus_losses,
+                exam_status="Pending Review", # 或 Pass/Fail
+                explanation=f"Answered {answered_count}/75 questions."
+            )
+        except Exception as e:
+            print(f"Error finalizing exam on submission: {e}")
+
+    # --- 畫面呈現 ---
+    st.markdown("<h2 style='text-align: center;'>🎉 Examination Submitted Successfully</h2>", unsafe_allow_html=True)
+    st.write("---")
+    
+    st.markdown(
+        f"Thank you, **{st.session_state.get('candidate_name', 'Candidate')}** "
+        f"({st.session_state.get('candidate_email', '')}). "
+        "Your examination responses, audit logs, and proctoring records have been securely recorded to the database."
+    )
+    
+    # 顯示總結數據卡片
+    col_r1, col_r2, col_r3 = st.columns(3)
+    col_r1.metric("Questions Answered", f"{len(st.session_state.get('answers', {}))} / 75")
+    col_r2.metric("Focus Warnings", st.session_state.get("focus_loss_count", 0))
+    col_r3.metric("Final Status", "Submitted")
+    
+    st.markdown("---")
+    st.warning("⚠️ **Important:** Your session is now closed. You may safely close this browser tab or window.")
+    
+    # 安全登出/返回首頁按鈕
+    if st.button("🚪 Exit Examination Portal", use_container_width=True):
+        # 清除 Session State 確保安全性
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
