@@ -818,6 +818,58 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     """, height=0)
 
 # ==========================================
+# Step 4 - Exam Review & Final Submission (檢視與交卷前確認頁面)
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 4:
+    
+    st.markdown("<h2 style='text-align: left;'>📋 Exam Review & Final Submission</h2>", unsafe_allow_html=True)
+    st.write("Review your completion status below before submitting your final paper.")
+    st.write("---")
+    
+    # 1. 統計各項數據
+    total_questions = 75
+    user_answers = st.session_state.get("answers", {})
+    answered_count = len(user_answers)
+    unanswered_count = total_questions - answered_count
+    
+    # 統計被標記 (Flagged) 的題數
+    flagged_questions = st.session_state.get("flagged_questions", set())
+    flagged_count = len(flagged_questions)
+    
+    # 專注度警告次數
+    focus_losses = st.session_state.get("focus_loss_count", 0)
+    
+    # 2. 呈現數據指標看板
+    col_v1, col_v2, col_v3, col_v4 = st.columns(4)
+    col_v1.metric("Answered", f"{answered_count} / {total_questions}")
+    col_v2.metric("Unanswered", unanswered_count)
+    col_v3.metric("Flagged", flagged_count)
+    col_v4.metric("Focus Losses", focus_losses)
+    
+    # 若有未作答或被標記的題目，給予溫馨提醒
+    if unanswered_count > 0:
+        st.warning(f"⚠️ You currently have **{unanswered_count}** unanswered question(s). You can still return to answer them.")
+    if flagged_count > 0:
+        st.info(📤 f"📌 You have flagged **{flagged_count}** question(s) for review.")
+        
+    st.write("---")
+    
+    # 3. 底部操作按鈕：返回考試 vs 確認交卷
+    col_act1, col_act2 = st.columns(2)
+    
+    with col_act1:
+        if st.button("⬅️ Return to Exam", use_container_width=True):
+            st.session_state.exam_step = 3  # 回到答題頁面
+            st.rerun()
+            
+    with col_act2:
+        if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
+            # 點擊後直接推進到結算與評分頁面（假設我們將評分結算頁設為 Step 5）
+            st.session_state.exam_step = 5 
+            st.rerun()
+
+
+# ==========================================
 # Step 4 - 考試結果與結算頁面 (Pass / Fail & Result Page)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
