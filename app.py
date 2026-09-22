@@ -217,30 +217,22 @@ if not st.session_state.authenticated:
               st.session_state.candidate_japanese_name = j_name
               st.session_state.candidate_name = f"{f_name} {l_name}".strip()
 
-              # 2. 判斷是否為中途斷線重連 (Resume Exam 情況)
+             # 2. 判斷是否為中途斷線重連 (Resume Exam 情況)
               if committed_time != "":
-                # 已經有 Committed 時間，代表是中途斷線，直接略過拍照/休息，進到 Step 3 考題
-                st.session_state.exam_step = 3
-                st.success("🔄 Detected an active session. Resuming your exam...")
-                time.sleep(1)
-                st.rerun()
-              else:
-                # 🟢 放在 Step 0 登入驗證成功、檢查是否已有 Committed 時間的判斷處
- 
-                if committed_str and str(committed_str).strip() != "":
-                    committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
-                    elapsed_seconds = (datetime.datetime.now() - committed_time).total_seconds()
+                try:
+                    committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
+                    elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
                     
-                    # 超過 60 分鐘 (3600秒) 判定為 DNF
-                    if elapsed_seconds > 3600:
-                        try:
-                            exam_end_val = sheet.cell(cell.row, 12).value  # Column 12 是 ExamEndTime
-                            if not exam_end_val or str(exam_end_val).strip() == "":
-                                sheet.update_cell(cell.row, 12, "DNF")
-                        except Exception as e:
-                            print(f"Failed to update DNF: {e}")
+                    # 超過 90 分鐘 (5400秒) 判定為 DNF（若你的考試時間是 60 分鐘則改為 3600）
+                    EXAM_TIME_LIMIT = 5400 
+                    
+                    if elapsed_seconds > EXAM_TIME_LIMIT:
+                        # 檢查 Column 12 (ExamStatus) 是否已經寫入過，避免重複寫入
+                        exam_end_val = vouchers_sheet.cell(row_index, 12).value  
+                        if not exam_end_val or str(exam_end_val).strip() == "":
+                            vouchers_sheet.update_cell(row_index, 12, "DNF")
                             
-                        st.error("❌ **Exam Expired:** Your 60-minute examination window has elapsed. Your status has been recorded as **DNF** (Did Not Finish). Please contact the exam administrator.")
+                        st.error("❌ **Exam Expired:** Your examination window has elapsed. Your status has been recorded as **DNF** (Did Not Finish). Please contact the exam administrator.")
                         st.stop()  # 阻斷後續程式碼，禁止進入
                     else:
                         # 仍在時限內，允許重連繼續考試
@@ -248,7 +240,16 @@ if not st.session_state.authenticated:
                         st.success("🔄 Detected an active session. Resuming your exam...")
                         time.sleep(1)
                         st.rerun()
-            
+                except Exception as e:
+                    print(f"Failed to check DNF: {e}")
+                    # 若時間解析發生例外，安全起見仍導向考題或報錯
+                    st.session_state.exam_step = 3
+                    st.rerun()
+              else:
+                # 尚未開始過考試，正常進入 Step 1 (身分核對與考試須知)
+                st.session_state.exam_step = 1
+                st.rerun()
+                  
         except Exception as e:
           st.error(f"Connection error: {e}")
 
