@@ -356,7 +356,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
       if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
-        
+        update_voucher_committed(st.session_state.voucher_code)
         st.session_state.on_break = False
         st.session_state.exam_step = 3
         st.rerun()
@@ -421,7 +421,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                   sheet = db.worksheet("Vouchers")
                   cell = sheet.find(st.session_state.candidate_email)
                   if cell:
-                    sheet.update_cell(cell.row, 10, photo_url)
+                    sheet.update_cell(cell.row, 9, photo_url)
                 except Exception:
                   pass
 
