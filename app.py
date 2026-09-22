@@ -71,16 +71,18 @@ def get_sheets_connection():
   sheet = client.open("ShisaKanko_Exam_Database")
   return sheet
 
-# 🟢 【新加入】記錄第一次開始考試的時間 (Committed)
+# 🟢 記錄第一次開始考試的時間 (Committed)
 def update_voucher_committed(voucher_code):
     try:
         db = get_sheets_connection()
         sheet = db.worksheet("Vouchers")
         cell = sheet.find(voucher_code)
         if cell:
-            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # 假設 Committed 欄位在第 10 欄 (Column J)
-            sheet.update_cell(cell.row, 10, current_time)
+            # 檢查目前 Column 10 (Committed) 是否已經有值，如果沒有才寫入
+            current_value = sheet.cell(cell.row, 10).value
+            if not current_value or str(current_value).strip() == "":
+                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                sheet.update_cell(cell.row, 10, current_time)
     except Exception as e:
         print(f"Failed to update Committed time: {e}")
 
