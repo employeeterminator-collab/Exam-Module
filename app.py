@@ -349,7 +349,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
     st.write(
         "<p style='text-align: center;'>Your photo has been successfully verified. "
         "Take a brief break before your core examination begins. "
-        "The exam will start automatically when the timer expires.
+        "The exam will start automatically when the timer expires."
         "Once the exam started, your voucher will be count as used and committed.</p>",
         unsafe_allow_html=True,
     )
