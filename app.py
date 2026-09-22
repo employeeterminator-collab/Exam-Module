@@ -367,14 +367,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 # ==========================================
 # Step 3 - 核心問答模組 (含全螢幕前置解鎖屏)
 # ==========================================
-    elif st.session_state.authenticated and st.session_state.exam_step == 3:
-
- 
-
-    # =========================================================
-    # 3. 考生已經進入全螢幕！以下是真正的考試核心介面
-    # =========================================================
-    
+elif st.session_state.authenticated and st.session_state.exam_step == 3:
     # 初始化 Step 3 變數
     if "current_q" not in st.session_state:
         st.session_state.current_q = 1
