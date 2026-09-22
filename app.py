@@ -364,21 +364,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               st.rerun()
 
 
-
-# ==========================================
-# Step 3 - 核心問答模組 (Body-Injected Anti-Cheat Banner)
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 3:
-
-    # --- [1] 初始化 Step 3 所需的 Session State 變數 ---
-    if "current_q" not in st.session_state:
-        st.session_state.current_q = 1
-    if "answers" not in st.session_state:
-        st.session_state.answers = {}  
-    if "flags" not in st.session_state:
-        st.session_state.flags = set()  
-    if "focus_loss_count" not in st.session_state:
-        st.session_state.focus_loss_count = 0
 # ==========================================
 # Step 3 - 核心問答模組
 # ==========================================
