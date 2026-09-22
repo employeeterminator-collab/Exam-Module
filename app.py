@@ -209,18 +209,7 @@ if not st.session_state.authenticated:
                 time.sleep(1)
                 st.rerun()
               else:
-                # 3. 首次登入：寫入 Committed 時間，並進入 Step 1 (身分確認與規則)
-                current_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                # 假設 Committed 欄位在第 10 欄 (可依實際 Google Sheets 欄位順序微調索引)
-                # 建議透過欄位名稱更新：可以搭配 cell 尋找或直接更新對應 Column
-                try:
-                  cell = vouchers_sheet.find(voucher_input.strip())
-                  if cell:
-                    # 假設 Committed 欄位在 Column 10 (或根據實際欄位修改)
-                    vouchers_sheet.update_cell(cell.row, 10, current_timestamp)
-                except Exception:
-                  pass
-
+                
                 st.session_state.exam_step = 1
                 st.rerun()
           else:
