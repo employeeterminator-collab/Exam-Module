@@ -416,9 +416,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         """, height=120)
         
         # 額外提供一個備用按鈕，萬一 JS 重新載入有延遲時讓 Python 端也能同步狀態
-        if st.button("✅ I am in Fullscreen. Proceed to Exam ➔", use_container_width=True):
-            st.session_state.fullscreen_ready = True
-            st.rerun()
+     #   if st.button("✅ I am in Fullscreen. Proceed to Exam ➔", use_container_width=True):
+      #      st.session_state.fullscreen_ready = True
+     #       st.rerun()
             
         # 停止往下執行，直到解鎖為止
         st.stop()
