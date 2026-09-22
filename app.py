@@ -527,32 +527,29 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.exam_step = 4
             st.rerun()
 
-# --- [4] 底部固定警告橫幅 (改為向上浮動置中卡片，徹底解決遮擋問題) ---
+# --- [4] 頂部固定警告橫幅 (Top Banner Strategy) ---
     st.components.v1.html("""
         <script>
-            // 確保只建立一次 Banner
+            // 確保只建立一次頂部 Banner
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
                 banner.id = 'global-warning-banner';
                 banner.style.cssText = `
                     position: fixed;
-                    bottom: 90px;                  /* 大幅向上推高，徹底避開底部邊界與工作列 */
-                    left: 50%;                     /* 橫向置中 */
-                    transform: translateX(-50%);   /* 完美置中校正 */
-                    width: 85%;
-                    max-width: 650px;              /* 限制最大寬度，保持精美外觀 */
-                    background-color: #dc2626;
+                    top: 0;                        /* 固定在畫面最頂部 */
+                    left: 0;
+                    width: 100vw;                  /* 橫跨整個螢幕寬度 */
+                    background-color: #dc2626;     /* 醒目紅色 */
                     color: white;
                     text-align: center;
-                    padding: 16px 24px;
+                    padding: 16px 20px;
                     font-family: sans-serif;
                     font-weight: bold;
-                    font-size: 14px;
-                    line-height: 1.5;
-                    border-radius: 10px;           /* 圓角外觀 */
-                    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-                    z-index: 2147483647;
-                    display: none;
+                    font-size: 15px;
+                    line-height: 1.4;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.4); /* 向下的陰影 */
+                    z-index: 2147483647;           /* 最高層級，確保不被覆蓋 */
+                    display: none;                 
                     box-sizing: border-box;
                 `;
                 banner.innerHTML = "🚨 WARNING: Inappropriate movement detected! Tab switch, screen blur, or cursor out of bounds. Please remain focused on the exam.";
