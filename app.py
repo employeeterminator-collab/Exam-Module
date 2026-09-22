@@ -345,7 +345,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
   
   # 如果正在休息，顯示倒數計時畫面
   if st.session_state.on_break:
-    st.markdown("<h2 style='text-align: center;'>☕ Mandatory Rest Break</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>Pre-Exam Candidate Transition Pause</h2>", unsafe_allow_html=True)
     st.write(
         "<p style='text-align: center;'>Your photo has been successfully verified. "
         "Take a brief break before your core examination begins. "
