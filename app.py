@@ -579,7 +579,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.session_state.focus_loss_count > 0:
             st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
    
-   with header_col2:
+       with header_col2:
         # 🟢 透過 Python 計算真實剩餘秒數（以 60 分鐘/3600秒 為基準，配合 Committed 時間）
         remaining_seconds = 3600
         try:
