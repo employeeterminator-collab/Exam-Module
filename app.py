@@ -109,7 +109,7 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
             
             # 請根據你的 Google Sheets 實際欄位順序調整：
             # 假設 Column J: CompletedExam, Column K: WarningCount, Column L: ExamStatus, Column M: CandidateExplanation
-            sheet.update_cell(cell.row, 10, completed_time)  # CompletedExam 時間
+            sheet.update_cell(cell.row, 9, completed_time)  # CompletedExam 時間
             sheet.update_cell(cell.row, 11, warning_count)   # WarningCount
             sheet.update_cell(cell.row, 12, exam_status)     # ExamStatus (Pass / Fail / Pending)
             sheet.update_cell(cell.row, 13, explanation)     # CandidateExplanation
