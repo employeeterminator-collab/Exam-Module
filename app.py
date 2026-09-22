@@ -579,7 +579,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.session_state.focus_loss_count > 0:
             st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
    
-       with header_col2:
+    with header_col2:
         # 🟢 透過 Python 計算真實剩餘秒數（以 60 分鐘/3600秒 為基準，配合 Committed 時間）
         remaining_seconds = 3600
         try:
@@ -587,7 +587,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             sheet = db.worksheet("Vouchers")
             cell = sheet.find(st.session_state.voucher_code)
             if cell:
-                committed_str = sheet.cell(cell.row, 10).value # Column 10 是 Committed
+                committed_str = sheet.cell(cell.row, 10).value  # Column 10 是 Committed
                 if committed_str and str(committed_str).strip() != "":
                     committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
                     elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
@@ -602,16 +602,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:00:00</div>
             </div>
             <script>
-                // 🟢 使用獨特的 Voucher Code 作為 Key，確保不同使用者換人登入時絕不共用計時器
                 const STORAGE_KEY = 'exam_end_time_{st.session_state.voucher_code}';
-                let endTime = parent.sessionStorage.getItem(STORAGE_KEY);
-                
-                // 如果沒有紀錄，或者距離後端計算的剩餘時間有落差，則以伺服器/資料庫的精準剩餘秒數初始化
                 const serverRemaining = {remaining_seconds};
-                if (!endTime || Math.abs(Number(endTime) - (Date.now() + serverRemaining * 1000)) > 5000) {
-                    endTime = Date.now() + (serverRemaining * 1000);
-                    parent.sessionStorage.setItem(STORAGE_KEY, endTime);
-                }
+                
+                let endTime = Date.now() + (serverRemaining * 1000);
+                parent.sessionStorage.setItem(STORAGE_KEY, endTime);
 
                 function updateCountdown() {
                     const now = Date.now();
@@ -632,7 +627,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(updateCountdown, 1000);
             </script>
         """
-        st.components.v1.html(timer_html, height=75)
+        st.components.v1.html(timer_html, height=75)   
            
     with header_col3:
         # 放大 20% 的綠色相機預覽框
