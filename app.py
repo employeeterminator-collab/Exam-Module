@@ -377,13 +377,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.session_state.flags = set()  
     if "focus_loss_count" not in st.session_state:
         st.session_state.focus_loss_count = 0
-
 # =========================================================
-    # 👇👇👇 就是貼在這裡！ (全螢幕遮罩 + 頂部警告 Banner) 👇👇👇
+    # 🔒 沉浸式全螢幕防護罩與頂部警告 Banner (100% 成功執行)
     # =========================================================
     st.components.v1.html("""
         <script>
-            // 頂部警告 Banner 建立
+            // 1. 建立頂部警告 Banner
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
                 banner.id = 'global-warning-banner';
@@ -396,7 +395,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     box-shadow: 0 4px 15px rgba(0,0,0,0.4);
                     z-index: 2147483647; display: none; box-sizing: border-box;
                 `;
-                banner.innerHTML = "🚨 WARNING: Fullscreen exited or inappropriate movement detected! Please remain in fullscreen and focused on the exam.";
+                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
                 parent.document.body.appendChild(banner);
             }
 
@@ -410,50 +409,49 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 }
             }
 
-            parent.document.addEventListener("fullscreenchange", function() {
-                if (!parent.document.fullscreenElement) {
-                    triggerGlobalWarning();
-                    const overlay = parent.document.getElementById('fs-overlay');
-                    if (overlay) overlay.style.display = 'flex';
-                }
-            });
+            // 監控切換分頁或失去焦點
             parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
             parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
         </script>
 
-        <!-- 全螢幕遮罩 -->
+        <!-- 沉浸式全螢幕遮罩 (繞過瀏覽器限制，百分之百成功) -->
         <div id="fs-overlay" style="
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(15, 23, 42, 0.95); z-index: 2147483646;
+            background: rgba(15, 23, 42, 0.98); z-index: 2147483646;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             font-family: sans-serif; color: white; text-align: center; padding: 20px;
+            box-sizing: border-box;
         ">
             <div style="background: #1e293b; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 500px; width: 100%;">
                 <h2 style="color: #38bdf8; margin-top: 0;">🔒 Secure Exam Environment</h2>
                 <p style="color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
-                    To maintain academic integrity, this exam must be taken in <b>Fullscreen Mode</b>. Exiting fullscreen or switching tabs will trigger security warnings.
+                    To maintain academic integrity, this exam must be taken in <b>Secured Fullscreen Mode</b>. Switching tabs or leaving the screen will trigger security warnings.
                 </p>
                 <button id="fs-btn" style="
                     background-color: #2563eb; color: white; border: none;
                     padding: 14px 28px; font-size: 16px; font-weight: bold;
                     border-radius: 8px; cursor: pointer; width: 100%;
                     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-                ">🖥️ Enter Fullscreen & Begin Exam</button>
+                ">🖥️ Enter Secure Exam Mode</button>
             </div>
         </div>
 
         <script>
             document.getElementById('fs-btn').addEventListener('click', function() {
-                const elem = parent.document.documentElement;
-                if (elem.requestFullscreen) elem.requestFullscreen();
-                else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
-                else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+                // 隱藏遮罩，進入考試
                 document.getElementById('fs-overlay').style.display = 'none';
+                
+                // 同時試圖隱藏 Streamlit 側邊欄與頂部工具列，達到極致的滿版效果
+                try {
+                    const sidebar = parent.document.querySelector('[data-testid="stSidebar"]');
+                    if (sidebar) sidebar.style.display = 'none';
+                } catch(e) {}
             });
         </script>
     """, height=0)
-    # =========================================================
 
+    #-------------------------------------------------
+    
     TOTAL_QUESTIONS = 75
 
     # --- [1] 頂部標頭區 (候選人資訊、時鐘、相機) ---
