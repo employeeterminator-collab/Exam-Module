@@ -849,15 +849,19 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                 answered_count = len(st.session_state.get("answers", {}))
                 focus_losses = st.session_state.get("focus_loss_count", 0)
                 
-                # 1. 確保 Column 12 (ExamEndTime) 寫入當前交卷時間
                 db = get_sheets_connection()
                 sheet = db.worksheet("Vouchers")
                 cell = sheet.find(st.session_state.voucher_code)
                 if cell:
                     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    sheet.update_cell(cell.row, 12, current_time) # 寫入 Column 12 結束時間
+                    
+                    # 1. 將交卷時間寫入 Column 12 (ExamEndTime)
+                    sheet.update_cell(cell.row, 12, current_time) 
+                    
+                    # 2. 將 "Submitted" 狀態寫入 Column 13 (ExamStatus)
+                    sheet.update_cell(cell.row, 13, "Submitted")
                 
-                # 2. 寫入其他結算數據與狀態 (CompletedExam, WarningCount, ExamStatus 等)
+                # 執行其他結算數據與稽核紀錄更新
                 finalize_exam_submission(
                     voucher_code=st.session_state.voucher_code,
                     warning_count=focus_losses,
@@ -865,7 +869,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     explanation=f"Answered {answered_count}/75 questions."
                 )
             except Exception as e:
-                print(f"Error on manual submit and updating ExamEndTime: {e}")
+                print(f"Error on manual submit and updating columns: {e}")
             
             st.session_state.exam_submitted = True
             st.success("🎉 Exam successfully submitted and recorded to Google Sheets!")
