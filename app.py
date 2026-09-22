@@ -369,6 +369,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 # Step 3 - 核心問答模組 (Body-Injected Anti-Cheat Banner)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
+
+    # --- [1] 初始化 Step 3 所需的 Session State 變數 ---
     if "current_q" not in st.session_state:
         st.session_state.current_q = 1
     if "answers" not in st.session_state:
@@ -377,23 +379,31 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.session_state.flags = set()  
     if "focus_loss_count" not in st.session_state:
         st.session_state.focus_loss_count = 0
-# =========================================================
-    # 🔒 沉浸式全螢幕防護罩與頂部警告 Banner (100% 成功執行)
-    # =========================================================
+
+    # --- [2] 注入頂部防作弊監控 Banner (純淨執行，絕不干擾計時器) ---
     st.components.v1.html("""
         <script>
-            // 1. 建立頂部警告 Banner
+            // 確保只建立一次頂部警告 Banner
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
                 banner.id = 'global-warning-banner';
                 banner.style.cssText = `
                     position: fixed;
-                    top: 0; left: 0; width: 100vw;
-                    background-color: #dc2626; color: white;
-                    text-align: center; padding: 16px 20px;
-                    font-family: sans-serif; font-weight: bold; font-size: 15px;
+                    top: 0; 
+                    left: 0; 
+                    width: 100vw;
+                    background-color: #dc2626; 
+                    color: white;
+                    text-align: center; 
+                    padding: 16px 20px;
+                    font-family: sans-serif; 
+                    font-weight: bold; 
+                    font-size: 15px;
+                    line-height: 1.4;
                     box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-                    z-index: 2147483647; display: none; box-sizing: border-box;
+                    z-index: 2147483647; 
+                    display: none; 
+                    box-sizing: border-box;
                 `;
                 banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
                 parent.document.body.appendChild(banner);
@@ -405,61 +415,46 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if (b) {
                     b.style.display = 'block';
                     clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
+                    bannerTimer = setTimeout(() => {
+                        b.style.display = 'none';
+                    }, 8000); // 顯示 8 秒後自動隱藏
                 }
             }
 
-            // 監控切換分頁或失去焦點
-            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
-            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
-        </script>
+            // A. 偵測開新分頁 / 隱藏畫面
+            parent.document.addEventListener("visibilitychange", function() {
+                if (parent.document.hidden) {
+                    triggerGlobalWarning();
+                }
+            });
 
-        <!-- 沉浸式全螢幕遮罩 (繞過瀏覽器限制，百分之百成功) -->
-        <div id="fs-overlay" style="
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(15, 23, 42, 0.98); z-index: 2147483646;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-family: sans-serif; color: white; text-align: center; padding: 20px;
-            box-sizing: border-box;
-        ">
-            <div style="background: #1e293b; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 500px; width: 100%;">
-                <h2 style="color: #38bdf8; margin-top: 0;">🔒 Secure Exam Environment</h2>
-                <p style="color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
-                    To maintain academic integrity, this exam must be taken in <b>Secured Fullscreen Mode</b>. Switching tabs or leaving the screen will trigger security warnings.
-                </p>
-                <button id="fs-btn" style="
-                    background-color: #2563eb; color: white; border: none;
-                    padding: 14px 28px; font-size: 16px; font-weight: bold;
-                    border-radius: 8px; cursor: pointer; width: 100%;
-                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-                ">🖥️ Enter Secure Exam Mode</button>
-            </div>
-        </div>
+            // B. 偵測視窗失去焦點 (Blur)
+            parent.window.addEventListener("blur", function() {
+                triggerGlobalWarning();
+            });
 
-        <script>
-            document.getElementById('fs-btn').addEventListener('click', function() {
-                // 隱藏遮罩，進入考試
-                document.getElementById('fs-overlay').style.display = 'none';
-                
-                // 同時試圖隱藏 Streamlit 側邊欄與頂部工具列，達到極致的滿版效果
-                try {
-                    const sidebar = parent.document.querySelector('[data-testid="stSidebar"]');
-                    if (sidebar) sidebar.style.display = 'none';
-                } catch(e) {}
+            // C. 偵測滑鼠移出視窗邊界
+            parent.document.addEventListener("mouseleave", function(e) {
+                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
+                    triggerGlobalWarning();
+                }
             });
         </script>
     """, height=0)
 
-    #-------------------------------------------------
-    
+    # --- [3] 考場實用提示 (建議考生按 F11 進入全螢幕) ---
+    st.info("💡 **Exam Tip:** For the best proctored experience, press **F11** on your keyboard to enter fullscreen mode.")
+
     TOTAL_QUESTIONS = 75
 
-    # --- [1] 頂部標頭區 (候選人資訊、時鐘、相機) ---
+    # --- [4] 頂部標頭區 (候選人資訊、時鐘、相機) ---
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
-        st.markdown(f"### 👤 Candidate: **{st.session_state.candidate_name}**")
-        st.caption(f"Email: {st.session_state.candidate_email}")
+        st.markdown(f"### 👤 Candidate: {st.session_state.get('candidate_name', 'User')}")
+        st.write(f"Email: {st.session_state.get('candidate_email', '')}")
+
+    # (接下來接你原本的題目選單、計時器邏輯與答題介面...)
         if st.session_state.focus_loss_count > 0:
             st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
 
