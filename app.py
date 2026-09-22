@@ -601,67 +601,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.exam_step = 4
             st.rerun()
 
-# --- [4] 頂部固定警告橫幅 (Top Banner Strategy) ---
-    st.components.v1.html("""
-        <script>
-            // 確保只建立一次頂部 Banner
-            if (!parent.document.getElementById('global-warning-banner')) {
-                const banner = parent.document.createElement('div');
-                banner.id = 'global-warning-banner';
-                banner.style.cssText = `
-                    position: fixed;
-                    top: 0;                        /* 固定在畫面最頂部 */
-                    left: 0;
-                    width: 100vw;                  /* 橫跨整個螢幕寬度 */
-                    background-color: #dc2626;     /* 醒目紅色 */
-                    color: white;
-                    text-align: center;
-                    padding: 16px 20px;
-                    font-family: sans-serif;
-                    font-weight: bold;
-                    font-size: 15px;
-                    line-height: 1.4;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.4); /* 向下的陰影 */
-                    z-index: 2147483647;           /* 最高層級，確保不被覆蓋 */
-                    display: none;                 
-                    box-sizing: border-box;
-                `;
-                banner.innerHTML = "🚨 WARNING: Inappropriate movement detected! Tab switch, screen blur, or cursor out of bounds. Please remain focused on the exam.";
-                parent.document.body.appendChild(banner);
-            }
-
-            let bannerTimer;
-            function triggerGlobalWarning() {
-                const b = parent.document.getElementById('global-warning-banner');
-                if (b) {
-                    b.style.display = 'block';
-                    clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => {
-                        b.style.display = 'none';
-                    }, 8000); // 顯示 8 秒後自動隱藏
-                }
-            }
-
-            // 1. 偵測開新分頁 / 隱藏畫面
-            parent.document.addEventListener("visibilitychange", function() {
-                if (parent.document.hidden) {
-                    triggerGlobalWarning();
-                }
-            });
-
-            // 2. 偵測視窗失去焦點
-            parent.window.addEventListener("blur", function() {
-                triggerGlobalWarning();
-            });
-
-            // 3. 偵測滑鼠移出畫面邊界
-            parent.document.addEventListener("mouseleave", function(e) {
-                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
-                    triggerGlobalWarning();
-                }
-            });
-        </script>
-    """, height=0)
+https://gemini.google.com/app/9e3e3b81dfc2f374#:~:text=%23%20%2D%2D%2D%20%5B4%5D%20%E5%83%85%E4%BF%9D%E7%95%99,height%3D0)
 
 # ==========================================
 # Step 4 - 結算總結與交卷頁 (Review & Finish Exam)
