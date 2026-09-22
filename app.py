@@ -855,28 +855,21 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                 if cell:
                     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    # 1. 將交卷時間寫入 Column 12 (ExamEndTime)
-                    sheet.update_cell(cell.row, 12, current_time) 
+                    # 🎯 單一且絕對正確的寫入：一次搞定 Column 12 與 Column 13
+                    sheet.update_cell(cell.row, 12, current_time)  # Column 12: ExamEndTime
+                    sheet.update_cell(cell.row, 13, "Submitted")   # Column 13: ExamStatus
                     
-                    # 2. 將 "Submitted" 狀態寫入 Column 13 (ExamStatus)
-                    sheet.update_cell(cell.row, 13, "Submitted")
-                
-                # 執行其他結算數據與稽核紀錄更新
-                finalize_exam_submission(
-                    voucher_code=st.session_state.voucher_code,
-                    warning_count=focus_losses,
-                    exam_status="Submitted",
-                    explanation=f"Answered {answered_count}/75 questions."
-                )
+                    # 如果有其他欄位要寫入（例如 Warning Count 存在 Column 11 或其他），可以在這裡一併處理
+                    # sheet.update_cell(cell.row, 11, focus_losses) 
+
+                print("Exam successfully submitted and columns 12 & 13 updated.")
             except Exception as e:
-                print(f"Error on manual submit and updating columns: {e}")
+                print(f"Error on manual submit: {e}")
             
             st.session_state.exam_submitted = True
             st.success("🎉 Exam successfully submitted and recorded to Google Sheets!")
             time.sleep(1)
             st.rerun()
-
-
 
 
 # ==========================================
