@@ -367,61 +367,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 # ==========================================
 # Step 3 - 核心問答模組 (含全螢幕前置解鎖屏)
 # ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 3:
+    elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
-    # 1. 初始化全螢幕解鎖狀態
- #   if "fullscreen_ready" not in st.session_state:
-#        st.session_state.fullscreen_ready = False
-
-    # 2. 如果還沒解鎖全螢幕，只顯示獨立的全螢幕引導畫面
-#    if not st.session_state.fullscreen_ready:
-#        st.markdown("### 🖥️ Secure Exam Display")
- #       st.info("💡 **Exam Tip:** For the best proctored experience, press **F11** on your keyboard to enter fullscreen mode.")
-        
-        # 透過 st.components.v1.html 處理全螢幕觸發，並用 Streamlit callback 或重新整理狀態
-        # 這裡我們利用 JavaScript 觸發全螢幕後，透過更改一個 hidden 的按鈕或直接重新整理來切換狀態
-            st.components.v1.html("""
-#            <div style="font-family: sans-serif; margin-top: 20px;">
-#                <button id="fs-btn" style="
-#                    background-color: #2563eb; 
-#                    color: white; 
-#                    border: none; 
-#                    padding: 16px 24px; 
-#                    font-size: 16px; 
-#                    font-weight: bold; 
-#                    border-radius: 8px; 
-#                   cursor: pointer;
-#                    width: 100%;
-#                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-#                ">🖥️ Click Here to Enter Fullscreen Mode</button>
-#            </div>
-
-            <script>
-                document.getElementById('fs-btn').addEventListener('click', function() {
-                    const elem = parent.document.documentElement;
-                    if (elem.requestFullscreen) {
-                        elem.requestFullscreen();
-                    } else if (elem.webkitRequestFullscreen) {
-                        elem.webkitRequestFullscreen();
-                    } else if (elem.msRequestFullscreen) {
-                        elem.msRequestFullscreen();
-                    }
-                    
-                    // 點擊後通知 Python 端解鎖下一步 (利用 window.location 重新載入並帶參數或直接 rerunning)
-                    setTimeout(() => {
-                        parent.window.location.reload();
-                    }, 300);
-                });
-            </script>
-         """, height=120)
-        
-        # 額外提供一個備用按鈕，萬一 JS 重新載入有延遲時讓 Python 端也能同步狀態
-     #   if st.button("✅ I am in Fullscreen. Proceed to Exam ➔", use_container_width=True):
-      #      st.session_state.fullscreen_ready = True
-     #       st.rerun()
-            
-        # 停止往下執行，直到解鎖為止
-#        st.stop()
+ 
 
     # =========================================================
     # 3. 考生已經進入全螢幕！以下是真正的考試核心介面
