@@ -461,34 +461,41 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
    
     with header_col2:
-        st.markdown("""
-            <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white;">
-                <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px;">⏳ TIME REMAINING</div>
+        st.components.v1.html("""
+            <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
+                <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px; margin-bottom: 4px;">⏳ TIME REMAINING</div>
                 <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:00:00</div>
             </div>
             <script>
-                // 專門更新自訂計時器 UI 的前端腳本
-                if (!window.timerIntervalStarted) {
-                    window.timerIntervalStarted = true;
-                    const STORAGE_KEY = 'exam_end_time_shisa';
-                    let endTime = sessionStorage.getItem(STORAGE_KEY);
-                    if (!endTime) {
-                        endTime = Date.now() + (3600 * 1000);
-                        sessionStorage.setItem(STORAGE_KEY, endTime);
-                    }
-                    setInterval(() => {
-                        const now = Date.now();
-                        let timeLeft = Math.floor((endTime - now) / 1000);
-                        if (timeLeft < 0) timeLeft = 0;
-                        const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
-                        const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
-                        const s = String(timeLeft % 60).padStart(2, '0');
-                        const target = document.getElementById('native-js-timer');
-                        if (target) target.innerText = `${h}:${m}:${s}`;
-                    }, 1000);
+                const STORAGE_KEY = 'exam_end_time_shisa';
+                let endTime = parent.sessionStorage.getItem(STORAGE_KEY);
+                
+                // 如果還沒有記錄結束時間，設定為 60 分鐘後 (3600秒)
+                if (!endTime) {
+                    endTime = Date.now() + (3600 * 1000);
+                    parent.sessionStorage.setItem(STORAGE_KEY, endTime);
                 }
+
+                function updateCountdown() {
+                    const now = Date.now();
+                    let timeLeft = Math.floor((endTime - now) / 1000);
+                    if (timeLeft < 0) timeLeft = 0;
+
+                    const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
+                    const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
+                    const s = String(timeLeft % 60).padStart(2, '0');
+
+                    const target = document.getElementById('native-js-timer');
+                    if (target) {
+                        target.innerText = h + ":" + m + ":" + s;
+                    }
+                }
+
+                // 立即更新一次，然後每秒執行
+                updateCountdown();
+                setInterval(updateCountdown, 1000);
             </script>
-        """, unsafe_allow_html=True)
+        """, height=75)
            
     with header_col3:
         # 放大 20% 的綠色相機預覽框
