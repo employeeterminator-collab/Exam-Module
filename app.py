@@ -116,6 +116,22 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
+# 🟢 放在頂部的 Helper 函式區塊
+def update_exam_end_time(voucher_code, status_text):
+    try:
+        db = get_sheets_connection()
+        sheet = db.worksheet("Vouchers")
+        cell = sheet.find(voucher_code)
+        if cell:
+            # 檢查 Column 12 (ExamEndTime) 是否已經有記錄，避免重複覆寫
+            current_val = sheet.cell(cell.row, 12).value
+            if not current_val or str(current_val).strip() == "":
+                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                sheet.update_cell(cell.row, 12, current_time)
+    except Exception as e:
+        print(f"Failed to update ExamEndTime: {e}")
+
+
 
 # ==========================================
 # Step 0 - 考生身分驗證、重連與憑證確認
@@ -209,15 +225,30 @@ if not st.session_state.authenticated:
                 time.sleep(1)
                 st.rerun()
               else:
-                
-                st.session_state.exam_step = 1
-                st.rerun()
-          else:
-            st.error(
-                "❌ Verification failed. Please check your Email and Voucher"
-                " Code, or ensure you have completed registration."
-            )
-
+                # 🟢 放在 Step 0 登入驗證成功、檢查是否已有 Committed 時間的判斷處
+ 
+                if committed_str and str(committed_str).strip() != "":
+                    committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
+                    elapsed_seconds = (datetime.datetime.now() - committed_time).total_seconds()
+                    
+                    # 超過 60 分鐘 (3600秒) 判定為 DNF
+                    if elapsed_seconds > 3600:
+                        try:
+                            exam_end_val = sheet.cell(cell.row, 12).value  # Column 12 是 ExamEndTime
+                            if not exam_end_val or str(exam_end_val).strip() == "":
+                                sheet.update_cell(cell.row, 12, "DNF")
+                        except Exception as e:
+                            print(f"Failed to update DNF: {e}")
+                            
+                        st.error("❌ **Exam Expired:** Your 60-minute examination window has elapsed. Your status has been recorded as **DNF** (Did Not Finish). Please contact the exam administrator.")
+                        st.stop()  # 阻斷後續程式碼，禁止進入
+                    else:
+                        # 仍在時限內，允許重連繼續考試
+                        st.session_state.exam_step = 3
+                        st.success("🔄 Detected an active session. Resuming your exam...")
+                        time.sleep(1)
+                        st.rerun()
+            
         except Exception as e:
           st.error(f"Connection error: {e}")
 
