@@ -72,20 +72,6 @@ def get_sheets_connection():
   return sheet
 
 
-# 🟢 【新加入】記錄第一次開始考試的時間 (Committed)
-def update_voucher_committed(voucher_code):
-    try:
-        db = get_sheets_connection()
-        sheet = db.worksheet("Vouchers")
-        cell = sheet.find(voucher_code)
-        if cell:
-            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # 假設 Committed 欄位在第 10 欄 (Column J)
-            sheet.update_cell(cell.row, 10, current_time)
-    except Exception as e:
-        print(f"Failed to update Committed time: {e}")
-
-
 # 🟢 【新加入】記錄單次違規事件到 ViolationLogs Tab
 def log_violation_to_sheet(voucher_code):
     try:
