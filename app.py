@@ -379,7 +379,58 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.session_state.flags = set()  
     if "focus_loss_count" not in st.session_state:
         st.session_state.focus_loss_count = 0
+# ==========================================
+# Step 3 - 核心問答模組
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
+    # --- [1] 初始化 Step 3 變數 ---
+    if "current_q" not in st.session_state:
+        st.session_state.current_q = 1
+    if "answers" not in st.session_state:
+        st.session_state.answers = {}  
+    if "flags" not in st.session_state:
+        st.session_state.flags = set()  
+    if "focus_loss_count" not in st.session_state:
+        st.session_state.focus_loss_count = 0
+
+    # --- [2] 放置全螢幕切換按鈕 ---
+    st.markdown("### 🖥️ Secure Exam Display")
+    st.components.v1.html("""
+        <div style="font-family: sans-serif; margin-bottom: 15px;">
+            <button id="fs-btn" style="
+                background-color: #2563eb; 
+                color: white; 
+                border: none; 
+                padding: 12px 24px; 
+                font-size: 15px; 
+                font-weight: bold; 
+                border-radius: 6px; 
+                cursor: pointer;
+                box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
+                width: 100%;
+            ">🖥️ Click Here to Enter Fullscreen Mode</button>
+        </div>
+
+        <script>
+            document.getElementById('fs-btn').addEventListener('click', function() {
+                const elem = parent.document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
+            });
+        </script>
+    """, height=65)
+
+    # --- [3] 接下來接你原本的計時器與題目介面 ---
+    TOTAL_QUESTIONS = 75
+    # ... (其餘程式碼)
+
+    
     EXAM_DURATION_SECONDS = 3600
     # --- [2] 注入頂部防作弊監控 Banner (純淨執行，絕不干擾計時器) ---
     st.components.v1.html("""
