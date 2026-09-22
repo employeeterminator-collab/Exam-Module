@@ -612,20 +612,28 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
    
     with header_col2:
-        # 🟢 透過 Python 計算真實剩餘秒數（以 90 分鐘/5400秒 為基準，配合 Committed 時間）
-        remaining_seconds = 5400
-        try:
-            db = get_sheets_connection()
-            sheet = db.worksheet("Vouchers")
-            cell = sheet.find(st.session_state.voucher_code)
-            if cell:
-                committed_str = sheet.cell(cell.row, 10).value  # Column 10 是 Committed
-                if committed_str and str(committed_str).strip() != "":
-                    committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
-                    elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
-                    remaining_seconds = max(0, 5400 - elapsed_seconds)
-        except Exception as e:
-            print(f"Error calculating remaining time: {e}")
+        # 🟢 快取機制：只在第一次進入考試時向 Google Sheets 查詢一次，之後直接從 session_state 讀取
+        if "exam_remaining_seconds" not in st.session_state:
+            initial_remaining = 5400
+            try:
+                db = get_sheets_connection()
+                sheet = db.worksheet("Vouchers")
+                cell = sheet.find(st.session_state.voucher_code)
+                if cell:
+                    committed_str = sheet.cell(cell.row, 10).value  # Column 10 是 Committed
+                    if committed_str and str(committed_str).strip() != "":
+                        committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
+                        elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
+                        initial_remaining = max(0, 5400 - elapsed_seconds)
+            except Exception as e:
+                print(f"Error calculating initial remaining time: {e}")
+            
+            st.session_state.exam_remaining_seconds = initial_remaining
+            st.session_state.exam_timer_start_local = time.time()
+
+        # 根據本地流逝的時間精準扣減，不再頻繁打 Google Sheets API
+        elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
+        remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
 
         # 使用普通字串搭配 .replace()，完美解決 JavaScript 大括號與 Python f-string 衝突的問題
         timer_html = """
