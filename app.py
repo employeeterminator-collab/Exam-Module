@@ -72,7 +72,7 @@ def get_sheets_connection():
 
 
 # ==========================================
-# Step 0 - 考生身分驗證與憑證確認
+# Step 0 - 考生身分驗證、重連與憑證確認
 # ==========================================
 if not st.session_state.authenticated:
   st.markdown(
@@ -116,8 +116,11 @@ if not st.session_state.authenticated:
           vouchers_sheet = db.worksheet("Vouchers")
           records = vouchers_sheet.get_all_records()
 
-          matched = False
-          for record in records:
+          matched_record = None
+          row_index = None
+
+          # 尋找匹配的記錄（比對 Voucher 與 Email）
+          for idx, record in enumerate(records, start=2): # gspread row 從 2 開始 (含 Header)
             r_voucher = str(record.get("VoucherCode", "")).strip()
             r_email = str(record.get("AssignedEmail", "")).strip()
             r_status = str(record.get("Status", "")).strip()
@@ -128,10 +131,21 @@ if not st.session_state.authenticated:
                 and r_email.lower() == email_input.strip().lower()
                 and r_status.lower() == "used"
             ):
-              matched = True
-              f_name = str(record.get("EnglishFirstName", "")).strip()
-              l_name = str(record.get("EnglishLastName", "")).strip()
-              j_name = str(record.get("JapaneseName", "")).strip()
+              matched_record = record
+              row_index = idx
+              break
+
+          if matched_record:
+            completed_exam = str(matched_record.get("CompletedExam", "")).strip()
+            committed_time = str(matched_record.get("Committed", "")).strip()
+
+            # 1. 檢查是否已經完成過考試（永久鎖定）
+            if completed_exam != "":
+              st.error("❌ This exam has already been completed. You cannot log in again with this voucher.")
+            else:
+              f_name = str(matched_record.get("EnglishFirstName", "")).strip()
+              l_name = str(matched_record.get("EnglishLastName", "")).strip()
+              j_name = str(matched_record.get("JapaneseName", "")).strip()
 
               st.session_state.authenticated = True
               st.session_state.candidate_email = email_input.strip()
@@ -140,13 +154,33 @@ if not st.session_state.authenticated:
               st.session_state.candidate_last_name = l_name
               st.session_state.candidate_japanese_name = j_name
               st.session_state.candidate_name = f"{f_name} {l_name}".strip()
-              st.session_state.exam_step = 1
-              st.rerun()
 
-          if not matched:
+              # 2. 判斷是否為中途斷線重連 (Resume Exam 情況)
+              if committed_time != "":
+                # 已經有 Committed 時間，代表是中途斷線，直接略過拍照/休息，進到 Step 3 考題
+                st.session_state.exam_step = 3
+                st.success("🔄 Detected an active session. Resuming your exam...")
+                time.sleep(1)
+                st.rerun()
+              else:
+                # 3. 首次登入：寫入 Committed 時間，並進入 Step 1 (身分確認與規則)
+                current_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                # 假設 Committed 欄位在第 10 欄 (可依實際 Google Sheets 欄位順序微調索引)
+                # 建議透過欄位名稱更新：可以搭配 cell 尋找或直接更新對應 Column
+                try:
+                  cell = vouchers_sheet.find(voucher_input.strip())
+                  if cell:
+                    # 假設 Committed 欄位在 Column 10 (或根據實際欄位修改)
+                    vouchers_sheet.update_cell(cell.row, 10, current_timestamp)
+                except Exception:
+                  pass
+
+                st.session_state.exam_step = 1
+                st.rerun()
+          else:
             st.error(
                 "❌ Verification failed. Please check your Email and Voucher"
-                " Code, or ensure you have completed registration on exam1."
+                " Code, or ensure you have completed registration."
             )
 
         except Exception as e:
