@@ -590,8 +590,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 const STORAGE_KEY = 'exam_end_time_shisa';
                 let endTime = parent.sessionStorage.getItem(STORAGE_KEY);
                 
-                // 如果還沒有記錄結束時間，設定為 60 分鐘後 (3600秒)
-                if (!endTime) {
+                // 🟢 修正：如果沒有記錄結束時間，或者舊的結束時間已經過期（小於當前時間），自動重設為全新的 60 分鐘
+                if (!endTime || Number(endTime) < Date.now()) {
                     endTime = Date.now() + (3600 * 1000);
                     parent.sessionStorage.setItem(STORAGE_KEY, endTime);
                 }
