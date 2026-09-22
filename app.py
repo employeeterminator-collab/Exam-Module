@@ -378,6 +378,82 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "focus_loss_count" not in st.session_state:
         st.session_state.focus_loss_count = 0
 
+# =========================================================
+    # 👇👇👇 就是貼在這裡！ (全螢幕遮罩 + 頂部警告 Banner) 👇👇👇
+    # =========================================================
+    st.components.v1.html("""
+        <script>
+            // 頂部警告 Banner 建立
+            if (!parent.document.getElementById('global-warning-banner')) {
+                const banner = parent.document.createElement('div');
+                banner.id = 'global-warning-banner';
+                banner.style.cssText = `
+                    position: fixed;
+                    top: 0; left: 0; width: 100vw;
+                    background-color: #dc2626; color: white;
+                    text-align: center; padding: 16px 20px;
+                    font-family: sans-serif; font-weight: bold; font-size: 15px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                    z-index: 2147483647; display: none; box-sizing: border-box;
+                `;
+                banner.innerHTML = "🚨 WARNING: Fullscreen exited or inappropriate movement detected! Please remain in fullscreen and focused on the exam.";
+                parent.document.body.appendChild(banner);
+            }
+
+            let bannerTimer;
+            function triggerGlobalWarning() {
+                const b = parent.document.getElementById('global-warning-banner');
+                if (b) {
+                    b.style.display = 'block';
+                    clearTimeout(bannerTimer);
+                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
+                }
+            }
+
+            parent.document.addEventListener("fullscreenchange", function() {
+                if (!parent.document.fullscreenElement) {
+                    triggerGlobalWarning();
+                    const overlay = parent.document.getElementById('fs-overlay');
+                    if (overlay) overlay.style.display = 'flex';
+                }
+            });
+            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
+            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
+        </script>
+
+        <!-- 全螢幕遮罩 -->
+        <div id="fs-overlay" style="
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.95); z-index: 2147483646;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-family: sans-serif; color: white; text-align: center; padding: 20px;
+        ">
+            <div style="background: #1e293b; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 500px; width: 100%;">
+                <h2 style="color: #38bdf8; margin-top: 0;">🔒 Secure Exam Environment</h2>
+                <p style="color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
+                    To maintain academic integrity, this exam must be taken in <b>Fullscreen Mode</b>. Exiting fullscreen or switching tabs will trigger security warnings.
+                </p>
+                <button id="fs-btn" style="
+                    background-color: #2563eb; color: white; border: none;
+                    padding: 14px 28px; font-size: 16px; font-weight: bold;
+                    border-radius: 8px; cursor: pointer; width: 100%;
+                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+                ">🖥️ Enter Fullscreen & Begin Exam</button>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('fs-btn').addEventListener('click', function() {
+                const elem = parent.document.documentElement;
+                if (elem.requestFullscreen) elem.requestFullscreen();
+                else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+                else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+                document.getElementById('fs-overlay').style.display = 'none';
+            });
+        </script>
+    """, height=0)
+    # =========================================================
+
     TOTAL_QUESTIONS = 75
 
     # --- [1] 頂部標頭區 (候選人資訊、時鐘、相機) ---
