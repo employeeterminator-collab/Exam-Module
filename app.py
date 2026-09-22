@@ -579,7 +579,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.session_state.focus_loss_count > 0:
             st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
    
-    with header_col2:
+  with header_col2:
         # 🟢 透過 Python 計算真實剩餘秒數（以 60 分鐘/3600秒 為基準，配合 Committed 時間）
         remaining_seconds = 3600
         try:
@@ -595,15 +595,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         except Exception as e:
             print(f"Error calculating remaining time: {e}")
 
-        # 將 Python 計算好的剩餘秒數安全傳遞給前端 JS
-        timer_html = f"""
+        # 使用普通字串搭配 .replace()，完美解決 JavaScript 大括號與 Python f-string 衝突的問題
+        timer_html = """
             <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
                 <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px; margin-bottom: 4px;">⏳ TIME REMAINING</div>
                 <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:00:00</div>
             </div>
             <script>
-                const STORAGE_KEY = 'exam_end_time_{st.session_state.voucher_code}';
-                const serverRemaining = {remaining_seconds};
+                const STORAGE_KEY = 'exam_end_time_VOUCHER_PLACEHOLDER';
+                const serverRemaining = SERVER_REMAINING_PLACEHOLDER;
                 
                 let endTime = Date.now() + (serverRemaining * 1000);
                 parent.sessionStorage.setItem(STORAGE_KEY, endTime);
@@ -627,6 +627,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(updateCountdown, 1000);
             </script>
         """
+        
+        # 安全替換變數
+        timer_html = timer_html.replace('VOUCHER_PLACEHOLDER', str(st.session_state.voucher_code))
+        timer_html = timer_html.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
+
         st.components.v1.html(timer_html, height=75)   
            
     with header_col3:
