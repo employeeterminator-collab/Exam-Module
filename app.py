@@ -59,6 +59,8 @@ if "flagged_questions" not in st.session_state:
     st.session_state.flagged_questions = set()
 if "focus_loss_count" not in st.session_state:
     st.session_state.focus_loss_count = 0
+if "exam_questions" not in st.session_state:
+    st.session_state.exam_questions = []
 
 # ==========================================
 # 3. Google Sheets 連線與資料庫輔助函式
@@ -73,6 +75,43 @@ def get_sheets_connection():
   client = gspread.authorize(creds)
   sheet = client.open("ShisaKanko_Exam_Database")
   return sheet
+
+# 動態載入獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")
+def get_exam_questions():
+    try:
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        
+        spreadsheet = client.open("Questions")
+        sheet = spreadsheet.worksheet("A")
+        records = sheet.get_all_records()
+        
+        normalized_records = []
+        for r in records:
+            q_text = r.get("QuestionText", r.get("Question", ""))
+            if not str(q_text).strip():
+                continue
+            normalized_records.append({
+                "Question": q_text,
+                "OptionA": r.get("OptionA", ""),
+                "OptionB": r.get("OptionB", ""),
+                "OptionC": r.get("OptionC", ""),
+                "OptionD": r.get("OptionD", ""),
+                "CorrectAnswer": r.get("CorrectAnswer", "")
+            })
+            
+        if normalized_records:
+            return normalized_records
+            
+    except Exception as e:
+        st.error(f"Google Sheets Debug Error: {e}")
+        
+    return []
 
 # 記錄第一次開始考試的時間 (Committed)
 def update_voucher_committed(voucher_code):
@@ -130,43 +169,6 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
-# 取得獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")
-def get_exam_questions():
-    try:
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        
-        spreadsheet = client.open("Questions")
-        sheet = spreadsheet.worksheet("A")
-        records = sheet.get_all_records()
-        
-        normalized_records = []
-        for r in records:
-            q_text = r.get("QuestionText", r.get("Question", ""))
-            if not str(q_text).strip():
-                continue
-            normalized_records.append({
-                "Question": q_text,
-                "OptionA": r.get("OptionA", ""),
-                "OptionB": r.get("OptionB", ""),
-                "OptionC": r.get("OptionC", ""),
-                "OptionD": r.get("OptionD", ""),
-                "CorrectAnswer": r.get("CorrectAnswer", "")
-            })
-            
-        if normalized_records:
-            return normalized_records
-            
-    except Exception as e:
-        st.error(f"Google Sheets Debug Error: {e}")
-        
-    return []
-
 
 # ==========================================
 # Step 0 - 考生身分驗證與精準 DNF 檢查
@@ -219,14 +221,15 @@ if not st.session_state.authenticated:
               break
 
           if matched_record:
-            row_vals = vouchers_sheet.row_values(row_index)
-            
-            committed_time = row_vals[9].strip() if len(row_vals) > 9 else str(matched_record.get("Committed", "")).strip()
-            completed_exam_val = row_vals[11].strip() if len(row_vals) > 11 else str(matched_record.get("CompletedExam", "")).strip()
-            exam_end_val = row_vals[12].strip() if len(row_vals) > 12 else str(matched_record.get("ExamEndTime", "")).strip()
+            completed_exam_val = str(matched_record.get("CompletedExam", "")).strip()
+            exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()
+            committed_time = str(matched_record.get("Committed", "")).strip()
 
+            # 🛡️ STRICT BLOCK: If the exam was already finished, passed, failed, or DNF'd, deny entry permanently
             if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
               st.error("❌ **Access Denied:** This examination has already been completed, submitted, or expired using this voucher. Re-entry is strictly prohibited.")
+            
+            # Check if already timed out (DNF)
             elif committed_time != "":
               try:
                 committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
@@ -236,8 +239,9 @@ if not st.session_state.authenticated:
                 if elapsed_seconds > EXAM_TIME_LIMIT:
                     if exam_end_val != "DNF":
                         vouchers_sheet.update_cell(row_index, 13, "DNF")
-                    st.error("❌ **Access Denied:** Exam session expired (Time limit exceeded). Status updated to DNF.")
+                    st.error("❌ **Access Denied:** Exam session expired (Time limit exceeded). Please contact Administrator.")
                 else:
+                    # Within valid active session window, resume
                     f_name = str(matched_record.get("EnglishFirstName", "")).strip()
                     l_name = str(matched_record.get("EnglishLastName", "")).strip()
                     j_name = str(matched_record.get("JapaneseName", "")).strip()
@@ -257,6 +261,7 @@ if not st.session_state.authenticated:
               except Exception as e:
                 st.error(f"Time validation error: {e}")
             else:
+              # Brand new session, start Step 1
               f_name = str(matched_record.get("EnglishFirstName", "")).strip()
               l_name = str(matched_record.get("EnglishLastName", "")).strip()
               j_name = str(matched_record.get("JapaneseName", "")).strip()
@@ -468,198 +473,297 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - Core Examination Room (Questions, Timer, Webcam & Anti-Cheat)
+# Step 3 - 核心問答模組 (連線 Google Sheets 題庫、Phantom 警告、Webcam、計時器)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
-    
-    # ⏱️ 1. Persistent 90-Minute Countdown Timer & Session Initialization
-    if "exam_start_timestamp" not in st.session_state:
-        st.session_state.exam_start_timestamp = time.time()
 
-    elapsed_exam_time = int(time.time() - st.session_state.exam_start_timestamp)
-    EXAM_TOTAL_LIMIT = 5400  # 90 minutes
-    exam_remaining_secs = EXAM_TOTAL_LIMIT - elapsed_exam_time
+    if "current_q" not in st.session_state:
+        st.session_state.current_q = 1
+    if "answers" not in st.session_state:
+        st.session_state.answers = {}  
+    if "flagged_questions" not in st.session_state:
+        st.session_state.flagged_questions = set()  
 
-    if exam_remaining_secs <= 0:
-        st.error("⏰ Exam time has expired! Automatically submitting your exam...")
-        st.session_state.exam_step = 4
-        st.rerun()
+    # Fetch questions from Google Sheets if not already cached
+    if not st.session_state.exam_questions:
+        st.session_state.exam_questions = get_exam_questions()
 
-    e_mins, e_secs = divmod(max(0, exam_remaining_secs), 60)
-    
-    # 🚨 2. Top Warning Banner & Timer Display
-    timer_col, warning_col = st.columns([3, 1])
-    with timer_col:
-        st.markdown(f"### ⏱️ Time Remaining: **{e_mins:02d}:{e_secs:02d}**")
-    with warning_col:
-        current_warnings = st.session_state.get('focus_loss_count', 0)
-        st.markdown(f"⚠️ Focus Warnings: **{current_warnings}**")
-    
-    if current_warnings > 0:
-        st.warning(f"⚠️ **Security Alert:** Tab switching or focus loss detected ({current_warnings} time/s). This event has been logged.")
+    exam_questions = st.session_state.exam_questions
+    TOTAL_QUESTIONS = len(exam_questions) if exam_questions else 75
 
-    st.markdown("---")
+    def handle_focus_loss():
+        log_violation_to_sheet(st.session_state.voucher_code)
 
-    # 📷 3. Continuous Webcam Monitoring & Tab-Switching Anti-Cheat JavaScript Injector
-    # This renders the proctoring webcam feed in the sidebar/top and listens for visibility changes
-    proctor_col1, proctor_col2 = st.columns([3, 1])
-    with proctor_col2:
-        st.markdown("##### 📷 Proctoring Feed")
-        # Live proctoring camera widget active during exam core
-        st.camera_input("Proctor Cam", key="exam_live_proctor_cam", label_visibility="collapsed")
+    # 1. Hidden backend trigger button for violation counting & sheet logging
+    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
+        pass
 
-    with proctor_col1:
-        # Fetch questions if not already cached in session state
-        if "exam_questions" not in st.session_state or not st.session_state.exam_questions:
-            st.session_state.exam_questions = get_exam_questions()
-
-        exam_questions = st.session_state.get("exam_questions", [])
-        
-        if not exam_questions:
-            st.error("❌ Failed to load exam questions from the database. Please check your connection or contact the administrator.")
-        else:
-            total_q_count = len(exam_questions)
-            
-            # Initialize current question index pointer if not present
-            if "current_q" not in st.session_state:
-                st.session_state.current_q = 1
-
-            current_idx = st.session_state.current_q - 1
-            current_q_data = exam_questions[current_idx]
-
-            # Top progress bar and header info
-            st.markdown(f"### 🛡️ Shisa Kanko-Shi Examination Room")
-            progress_val = st.session_state.current_q / total_q_count
-            st.progress(progress_val)
-            st.write(f"Question **{st.session_state.current_q}** of **{total_q_count}**")
-            st.markdown("---")
-
-            # Display question content
-            q_text = current_q_data.get("Question", "Question text unavailable.")
-            st.markdown(f"#### Q{st.session_state.current_q}. {q_text}")
-
-            # Extract options
-            options = []
-            for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
-                val = current_q_data.get(opt_key, "")
-                if val and str(val).strip() != "":
-                    options.append(str(val).strip())
-
-            # Retrieve saved answers
-            if "answers" not in st.session_state:
-                st.session_state.answers = {}
-
-            current_answer = st.session_state.answers.get(st.session_state.current_q, None)
-            
-            default_index = 0
-            if current_answer in options:
-                default_index = options.index(current_answer)
-
-            # Radio button selection
-            selected_option = st.radio(
-                "Select your answer:",
-                options,
-                index=default_index,
-                key=f"q_radio_{st.session_state.current_q}"
-            )
-
-            if selected_option:
-                st.session_state.answers[st.session_state.current_q] = selected_option
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Navigation and Flagging controls
-            col_nav1, col_nav2, col_nav3 = st.columns(3)
-            
-            with col_nav1:
-                if st.session_state.current_q > 1:
-                    if st.button("⬅️ Previous Question", use_container_width=True):
-                        st.session_state.current_q -= 1
-                        st.rerun()
-
-            with col_nav2:
-                is_flagged = st.session_state.current_q in st.session_state.flagged_questions
-                flag_label = "⭐ Unflag Question" if is_flagged else "☆ Flag for Review"
-                if st.button(flag_label, use_container_width=True):
-                    if is_flagged:
-                        st.session_state.flagged_questions.remove(st.session_state.current_q)
-                    else:
-                        st.session_state.flagged_questions.add(st.session_state.current_q)
-                    st.rerun()
-
-            with col_nav3:
-                if st.session_state.current_q < total_q_count:
-                    if st.button("Next Question ➡️", use_container_width=True, type="primary"):
-                        st.session_state.current_q += 1
-                        st.rerun()
-
-            st.markdown("---")
-            
-            # Jump or Review trigger footer
-            b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
-            with b_col2:
-                if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
-                    st.session_state.exam_step = 4
-                    st.rerun()
-
-    # JavaScript blur/visibility listener to trigger warning updates via backend calls
-    focus_script = f"""
+    # 2. JavaScript handles auto-hiding the button, global warning banner, visibility/blur/mouseleave detectors
+    st.components.v1.html("""
         <script>
-        document.addEventListener("visibilitychange", function() {{
-            if (document.hidden) {{
-                // User switched tabs or minimized window
-                console.log("Tab hidden event detected");
-            }}
-        }});
+            function hideTriggerButton() {
+                const buttons = parent.document.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend')) {
+                        let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
+                        if (container) {
+                            container.style.display = 'none';
+                        }
+                    }
+                });
+            }
+            
+            setTimeout(hideTriggerButton, 50);
+            setInterval(hideTriggerButton, 300);
+
+            if (!parent.document.getElementById('global-warning-banner')) {
+                const banner = parent.document.createElement('div');
+                banner.id = 'global-warning-banner';
+                banner.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100vw;
+                    background-color: #dc2626; color: white; text-align: center; 
+                    padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
+                    font-size: 15px; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                    z-index: 2147483647; display: none; box-sizing: border-box;
+                `;
+                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
+                parent.document.body.appendChild(banner);
+            }
+
+            let bannerTimer;
+            function triggerGlobalWarning() {
+                const b = parent.document.getElementById('global-warning-banner');
+                if (b) {
+                    b.style.display = 'block';
+                    clearTimeout(bannerTimer);
+                    bannerTimer = setTimeout(() => {
+                        b.style.display = 'none';
+                    }, 8000);
+                }
+                
+                const buttons = parent.document.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend')) {
+                        btn.click();
+                    }
+                });
+            }
+
+            parent.document.addEventListener("visibilitychange", function() {
+                if (parent.document.hidden) {
+                    triggerGlobalWarning();
+                }
+            });
+
+            parent.window.addEventListener("blur", function() {
+                triggerGlobalWarning();
+            });
+
+            parent.document.addEventListener("mouseleave", function(e) {
+                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
+                    triggerGlobalWarning();
+                }
+            });
         </script>
-    """
-    components.html(focus_script, height=0)
+    """, height=0)
 
-    # Keep timer running every second seamlessly
-    time.sleep(1)
-    st.rerun()
-# ==========================================
-# Step 4 - Review and Submit Page
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    st.markdown("### 📋 Examination Review & Submission")
-    st.write("Please review your progress below before submitting your final answers.")
+    header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
+    
+    with header_col1:
+        st.markdown(f"### 👤 Candidate: {st.session_state.get('candidate_name', 'User')}")
+        st.write(f"Email: {st.session_state.get('candidate_email', '')}")
+   
+    with header_col2:
+        if "exam_remaining_seconds" not in st.session_state:
+            initial_remaining = 5400
+            try:
+                db = get_sheets_connection()
+                sheet = db.worksheet("Vouchers")
+                cell = sheet.find(st.session_state.voucher_code)
+                if cell:
+                    committed_str = sheet.cell(cell.row, 10).value
+                    if committed_str and str(committed_str).strip() != "":
+                        committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
+                        elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
+                        initial_remaining = max(0, 5400 - elapsed_seconds)
+            except Exception as e:
+                print(f"Error calculating initial remaining time: {e}")
+            
+            st.session_state.exam_remaining_seconds = initial_remaining
+            st.session_state.exam_timer_start_local = time.time()
 
-    total_q_count = len(st.session_state.get("exam_questions", [])) or 75
-    answered_count = len(st.session_state.get("answers", {}))
-    flagged_count = len(st.session_state.get("flagged_questions", set()))
+        elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
+        remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
 
-    col_stat1, col_stat2, col_stat3 = st.columns(3)
-    with col_stat1:
-        st.metric("Total Questions", total_q_count)
-    with col_stat2:
-        st.metric("Answered", answered_count)
-    with col_stat3:
-        st.metric("Flagged for Review", flagged_count)
+        timer_html = """
+            <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
+                <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px; margin-bottom: 4px;">⏳ TIME REMAINING</div>
+                <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
+            </div>
+            <script>
+                const STORAGE_KEY = 'exam_end_time_VOUCHER_PLACEHOLDER';
+                const serverRemaining = SERVER_REMAINING_PLACEHOLDER;
+                
+                let endTime = Date.now() + (serverRemaining * 1000);
+                parent.sessionStorage.setItem(STORAGE_KEY, endTime);
 
-    st.markdown("---")
-    st.markdown("#### 🔍 Question Status Summary")
+                function updateCountdown() {
+                    const now = Date.now();
+                    let timeLeft = Math.floor((endTime - now) / 1000);
+                    if (timeLeft < 0) timeLeft = 0;
 
-    for q_num in range(1, total_q_count + 1):
-        has_answered = q_num in st.session_state.get("answers", {})
-        is_flagged = q_num in st.session_state.get("flagged_questions", set())
+                    const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
+                    const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
+                    const s = String(timeLeft % 60).padStart(2, '0');
+
+                    const target = document.getElementById('native-js-timer');
+                    if (target) {
+                        target.innerText = h + ":" + m + ":" + s;
+                    }
+                }
+
+                updateCountdown();
+                setInterval(updateCountdown, 1000);
+            </script>
+        """
+        timer_html = timer_html.replace('VOUCHER_PLACEHOLDER', str(st.session_state.voucher_code))
+        timer_html = timer_html.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
+
+        st.components.v1.html(timer_html, height=75)
+           
+    with header_col3:
+        st.components.v1.html("""
+            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
+                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
+                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 72px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
+            </div>
+            <script>
+                async function initCam() {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                        document.getElementById('top-webcam').srcObject = stream;
+                    } catch (e) {
+                        console.error("Camera access error", e);
+                    }
+                }
+                initCam();
+            </script>
+        """, height=110)
+
+    st.divider()
+
+    with st.sidebar:
+        st.markdown("### 📹 Security Status")
+        st.markdown(f"""
+            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
+                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
+                <div style="color: #475569; font-size: 11px; margin-top: 4px;">Warnings: {st.session_state.focus_loss_count}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown(f"### 🗺️ Question Palette (1–{TOTAL_QUESTIONS})")
+        st.markdown("<small>🟢 Answered | ⚪ Unanswered | ⭐ Flagged</small>", unsafe_allow_html=True)
         
-        status_icon = "🟢 Answered" if has_answered else "⚪ Unanswered"
-        if is_flagged:
-            status_icon += " | ⭐ Flagged"
+        cols_per_row = 5
+        for i in range(1, TOTAL_QUESTIONS + 1, cols_per_row):
+            cols = st.columns(cols_per_row)
+            for j in range(cols_per_row):
+                q_num = i + j
+                if q_num <= TOTAL_QUESTIONS:
+                    label = f"⭐{q_num}" if q_num in st.session_state.flagged_questions else f"{q_num}"
+                    if cols[j].button(label, key=f"pal_{q_num}", use_container_width=True):
+                        st.session_state.current_q = q_num
+                        st.rerun()
 
-        c1, c2, c3 = st.columns([1, 4, 2])
-        with c1:
-            st.write(f"**Q{q_num}**")
-        with c2:
-            st.write(status_icon)
-        with c3:
-            if st.button(f"Jump to Q{q_num}", key=f"review_jump_{q_num}"):
-                st.session_state.current_q = q_num
-                st.session_state.exam_step = 3
+    if not exam_questions:
+        st.error("❌ Failed to load exam questions from the database. Please check your connection or contact the administrator.")
+    else:
+        q_idx = st.session_state.current_q
+        current_q_data = exam_questions[q_idx - 1]
+
+        st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
+        st.progress(q_idx / TOTAL_QUESTIONS)
+
+        q_text = current_q_data.get("Question", "Question text unavailable.")
+        st.markdown(f"#### Q{q_idx}. {q_text}")
+
+        options = []
+        for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
+            val = current_q_data.get(opt_key, "")
+            if val and str(val).strip() != "":
+                options.append(str(val).strip())
+
+        current_answer = st.session_state.answers.get(q_idx, None)
+        default_index = 0
+        if current_answer in options:
+            default_index = options.index(current_answer)
+
+        selected = st.radio(
+            "Select your answer:", 
+            options, 
+            index=default_index, 
+            key=f"q_radio_{q_idx}"
+        )
+
+        if selected:
+            st.session_state.answers[q_idx] = selected
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
+
+        with col_btn1:
+            is_flagged = q_idx in st.session_state.flagged_questions
+            flag_label = "🚩 Flagged for Review" if is_flagged else "🏳️ Flag Question"
+
+            if st.checkbox(flag_label, value=is_flagged, key=f"flag_box_{q_idx}"):
+                st.session_state.flagged_questions.add(q_idx)
+            else:
+                st.session_state.flagged_questions.discard(q_idx)
+
+        with col_btn2:
+            if st.button("⬅️ Previous", use_container_width=True, disabled=(q_idx == 1)):
+                st.session_state.current_q -= 1
                 st.rerun()
 
+        with col_btn3:
+            if st.button("Next ➡️", use_container_width=True, disabled=(q_idx == TOTAL_QUESTIONS)):
+                st.session_state.current_q += 1
+                st.rerun()
+
+        st.markdown("---")
+
+        b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
+        with b_col2:
+            if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
+                st.session_state.exam_step = 4
+                st.rerun()
+
+
+# ==========================================
+# Step 4 - 考試總結與提交確認頁面
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 4:
+    st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Final Submission</h2>", unsafe_allow_html=True)
+    st.write("---")
+
+    total_q_count = len(st.session_state.get("exam_questions", [])) or 75
+    answered_cnt = len(st.session_state.get("answers", {}))
+    unanswered_cnt = total_q_count - answered_cnt
+    flagged_cnt = len(st.session_state.get("flagged_questions", set()))
+    focus_warnings = st.session_state.get("focus_loss_count", 0)
+
+    st.markdown(f"""
+    ### Summary Status:
+    - **Questions Answered:** {answered_cnt} / {total_q_count}
+    - **Unanswered Questions:** {unanswered_cnt}
+    - **Flagged Questions:** {flagged_cnt}
+    - **Focus Loss Warnings Recorded:** {focus_warnings}
+    """)
+
     st.markdown("---")
+    st.warning("⚠️ Once you click **Confirm and Submit Exam**, your answers will be finalized and sent to the examination database. You cannot make any further changes.")
 
     col_sub1, col_sub2 = st.columns(2)
     with col_sub1:
@@ -671,7 +775,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
         if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
             with st.spinner("Submitting exam and recording results..."):
                 try:
+                    answered_count = len(st.session_state.get("answers", {}))
                     focus_losses = st.session_state.get("focus_loss_count", 0)
+                    
                     correct_count = 0
                     user_answers = st.session_state.get("answers", {})
                     exam_questions = st.session_state.get("exam_questions", [])
@@ -700,6 +806,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                 except Exception as e:
                     st.error(f"Submission error: {e}")
 
+
 # ==========================================
 # Step 5 - 考試結果與結算頁面
 # ==========================================
@@ -710,6 +817,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
     status = st.session_state.get("exam_final_status", "Submitted")
     correct_cnt = st.session_state.get("exam_correct_count", 0)
     answered_cnt = len(st.session_state.get("answers", {}))
+    total_q_count = len(st.session_state.get("exam_questions", [])) or 75
     focus_warnings = st.session_state.get("focus_loss_count", 0)
     
     if status == "Pass":
