@@ -566,7 +566,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.session_state.exam_step = 4
                 st.rerun()
 
-
 # ==========================================
 # Step 4 - Review and Submit Page
 # ==========================================
@@ -649,7 +648,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                 except Exception as e:
                     st.error(f"Submission error: {e}")
 
-
 # ==========================================
 # Step 5 - 考試結果與結算頁面
 # ==========================================
@@ -671,7 +669,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
     
     col_res1, col_res2, col_res3, col_res4 = st.columns(4)
     col_res1.metric("Final Status", status)
-    col_res2.metric("Questions Answered", f"{answered_cnt} / 75")
+    col_res2.metric("Questions Answered", f"{answered_cnt} / {total_q_count}")
     col_res3.metric("Focus Warnings", focus_warnings)
     col_res4.metric("Exam Outcome", "Completed")
     
