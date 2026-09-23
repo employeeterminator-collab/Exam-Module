@@ -452,32 +452,32 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     def handle_focus_loss():
         log_violation_to_sheet(st.session_state.voucher_code)
 
-    placeholder_container = st.empty()
-    with placeholder_container.container():
-        # Target Streamlit's container directly and throw it completely off-screen
-        st.markdown("""
-            <style>
-            div.element-container:has(button[key="hidden-violation-trigger"]) {
-                position: fixed !important;
-                top: -999px !important;
-                left: -999px !important;
-                width: 0px !important;
-                height: 0px !important;
-                overflow: hidden !important;
-                opacity: 0 !important;
-                pointer-events: none !important;
-                z-index: -999 !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
+    # 1. Render the button normally (no complex CSS needed here)
+    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
+        pass
 
-        # Render the button normally so JavaScript can find and click it
-        if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
-            pass
-   
-
+    # 2. JavaScript handles both auto-hiding the button on load and triggering it on violations
     st.components.v1.html("""
         <script>
+            // Automatically hide the trigger button visually on load
+            function hideTriggerButton() {
+                const buttons = parent.document.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend')) {
+                        // Find Streamlit's parent container and hide it completely
+                        let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
+                        if (container) {
+                            container.style.display = 'none';
+                        }
+                    }
+                });
+            }
+            
+            // Run on load and poll briefly to catch Streamlit's rerender cycles
+            setTimeout(hideTriggerButton, 50);
+            setInterval(hideTriggerButton, 300);
+
+            // Global warning banner setup
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
                 banner.id = 'global-warning-banner';
