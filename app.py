@@ -130,7 +130,7 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
- # 取得題庫資料
+# 取得獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")
 def get_exam_questions():
     try:
         scope = [
@@ -141,7 +141,6 @@ def get_exam_questions():
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
         
-        # Open the separate "Questions" spreadsheet file and select tab "A"
         spreadsheet = client.open("Questions")
         sheet = spreadsheet.worksheet("A")
         records = sheet.get_all_records()
@@ -164,7 +163,6 @@ def get_exam_questions():
             return normalized_records
             
     except Exception as e:
-        # ⚠️ Temporarily show the exact error on screen so we can diagnose it immediately
         st.error(f"Google Sheets Debug Error: {e}")
         
     return []
@@ -221,18 +219,14 @@ if not st.session_state.authenticated:
               break
 
           if matched_record:
-            # Fetch direct row values by exact column index to prevent header naming mismatches
             row_vals = vouchers_sheet.row_values(row_index)
             
             committed_time = row_vals[9].strip() if len(row_vals) > 9 else str(matched_record.get("Committed", "")).strip()
             completed_exam_val = row_vals[11].strip() if len(row_vals) > 11 else str(matched_record.get("CompletedExam", "")).strip()
             exam_end_val = row_vals[12].strip() if len(row_vals) > 12 else str(matched_record.get("ExamEndTime", "")).strip()
 
-            # 🛡️ STRICT BLOCK: If the exam was already finished, passed, failed, or DNF'd, deny entry permanently
             if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
               st.error("❌ **Access Denied:** This examination has already been completed, submitted, or expired using this voucher. Re-entry is strictly prohibited.")
-            
-            # ⏳ RESTORED DNF & EXPIRED TIME CHECK: Check if already timed out (90 minutes limit)
             elif committed_time != "":
               try:
                 committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
@@ -244,7 +238,6 @@ if not st.session_state.authenticated:
                         vouchers_sheet.update_cell(row_index, 13, "DNF")
                     st.error("❌ **Access Denied:** Exam session expired (Time limit exceeded). Status updated to DNF.")
                 else:
-                    # Within valid active session window, resume
                     f_name = str(matched_record.get("EnglishFirstName", "")).strip()
                     l_name = str(matched_record.get("EnglishLastName", "")).strip()
                     j_name = str(matched_record.get("JapaneseName", "")).strip()
@@ -264,7 +257,6 @@ if not st.session_state.authenticated:
               except Exception as e:
                 st.error(f"Time validation error: {e}")
             else:
-              # Brand new session, start Step 1
               f_name = str(matched_record.get("EnglishFirstName", "")).strip()
               l_name = str(matched_record.get("EnglishLastName", "")).strip()
               j_name = str(matched_record.get("JapaneseName", "")).strip()
@@ -475,27 +467,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               st.rerun()
 
 
-# 取得題庫資料
-def get_exam_questions():
-    try:
-        db = get_sheets_connection()
-        sheet = db.worksheet("Questions")
-        records = sheet.get_all_records()
-        return records
-    except Exception as e:
-        print(f"Failed to fetch questions: {e}")
-        return []
-
-# --- END OF STEP 3 ---
-    b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
-    with b_col2:
-        if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
-            st.session_state.exam_step = 4
-            st.rerun()
 # ==========================================
 # Step 3 - Core Examination Room (Questions & Answers)
 # ==========================================
-if st.session_state.authenticated and st.session_state.exam_step == 3:
+elif st.session_state.authenticated and st.session_state.exam_step == 3:
     # Fetch questions if not already cached in session state
     if "exam_questions" not in st.session_state or not st.session_state.exam_questions:
         st.session_state.exam_questions = get_exam_questions()
@@ -590,10 +565,12 @@ if st.session_state.authenticated and st.session_state.exam_step == 3:
             if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
                 st.session_state.exam_step = 4
                 st.rerun()
+
+
 # ==========================================
 # Step 4 - Review and Submit Page
 # ==========================================
-if st.session_state.authenticated and st.session_state.exam_step == 4:
+elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.markdown("### 📋 Examination Review & Submission")
     st.write("Please review your progress below before submitting your final answers.")
 
@@ -648,7 +625,6 @@ if st.session_state.authenticated and st.session_state.exam_step == 4:
                     user_answers = st.session_state.get("answers", {})
                     exam_questions = st.session_state.get("exam_questions", [])
                     
-                    # Grade dynamically using the 'CorrectAnswer' column from Google Sheets
                     for idx, q_data in enumerate(exam_questions, start=1):
                         user_ans = user_answers.get(idx, "")
                         correct_ans = str(q_data.get("CorrectAnswer", "")).strip()
@@ -672,6 +648,7 @@ if st.session_state.authenticated and st.session_state.exam_step == 4:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Submission error: {e}")
+
 
 # ==========================================
 # Step 5 - 考試結果與結算頁面
