@@ -181,29 +181,28 @@ if not st.session_state.authenticated:
               row_index = idx
               break
 
-          if matched_record:
-            completed_exam_val = str(matched_record.get("CompletedExam", "")).strip()
-            exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()
-            committed_time = str(matched_record.get("Committed", "")).strip()
+         if matched_record:
+            completed_exam_val = str(matched_record.get("CompletedExam", "")).strip() # Column 12
+            exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()       # Column 13
+            committed_time = str(matched_record.get("Committed", "")).strip()       # Column 10
 
-            # 1. 優先檢查是否已經正式提交或完成考試
-            if completed_exam_val != "" or exam_end_val in ["Pass", "Fail"]:
-              st.error("❌ **Access Denied:** This examination has already been completed or submitted using this voucher. You cannot log in again.")
+            # 🛡️ STRICT BLOCK: If the exam was already finished, passed, failed, or DNF'd, deny entry permanently
+            if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
+              st.error("❌ **Access Denied:** This examination has already been completed, submitted, or expired using this voucher. Re-entry is strictly prohibited.")
             
-            # 2. 優先檢查是否已經超時且未完成 (DNF)
+            # 2. Check if already timed out (DNF)
             elif committed_time != "":
               try:
                 committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
                 elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
-                EXAM_TIME_LIMIT = 5400  # 90 分鐘
+                EXAM_TIME_LIMIT = 5400  # 90 minutes
 
-                if elapsed_seconds > EXAM_TIME_LIMIT or exam_end_val == "DNF":
-                    if not exam_end_val or str(exam_end_val).strip() != "DNF":
-                        vouchers_sheet.update_cell(row_index, 12, "DNF")
-                    
-                    st.error("❌ **Access Denied:** Exam session expired. Exam did not finish. Please contact Administrator.")
+                if elapsed_seconds > EXAM_TIME_LIMIT:
+                    if exam_end_val != "DNF":
+                        vouchers_sheet.update_cell(row_index, 13, "DNF")
+                    st.error("❌ **Access Denied:** Exam session expired (Time limit exceeded). Please contact Administrator.")
                 else:
-                    # 仍在有效時間內，正常恢復或進入考試
+                    # Within valid active session window, resume
                     f_name = str(matched_record.get("EnglishFirstName", "")).strip()
                     l_name = str(matched_record.get("EnglishLastName", "")).strip()
                     j_name = str(matched_record.get("JapaneseName", "")).strip()
@@ -223,7 +222,7 @@ if not st.session_state.authenticated:
               except Exception as e:
                 st.error(f"Time validation error: {e}")
             else:
-              # 尚未開始計時（在 Step 1 或 Step 2 階段）
+              # Brand new session, start Step 1
               f_name = str(matched_record.get("EnglishFirstName", "")).strip()
               l_name = str(matched_record.get("EnglishLastName", "")).strip()
               j_name = str(matched_record.get("JapaneseName", "")).strip()
@@ -240,9 +239,6 @@ if not st.session_state.authenticated:
               st.rerun()
           else:
             st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
-                  
-        except Exception as e:
-          st.error(f"Connection error: {e}")
 
 
 # ==========================================
