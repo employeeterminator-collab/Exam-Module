@@ -474,7 +474,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
         # Render the button with a blank space so no text leaks or shows up
         if st.button("&nbsp;", key="hidden-violation-trigger", on_click=handle_focus_loss):
-        pass
+            pass
    
 
     st.components.v1.html("""
