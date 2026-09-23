@@ -436,11 +436,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.session_state.focus_loss_count += 1
         log_violation_to_sheet(st.session_state.voucher_code)
 
-    # 利用 Streamlit 的 container 將隱藏按鈕完全隱藏（不佔畫面空間）
-    with st.container():
-        st.markdown('<style>div[data-testid="stVerticalBlock"] div:has(> button#hidden-violation-trigger) {display: none;}</style>', unsafe_allow_html=True)
+    # 利用 st.empty() 徹底將隱藏按鈕從畫面上移除，不留任何痕跡
+    placeholder_container = st.empty()
+    with placeholder_container.container():
         if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
             pass
+    placeholder_container.empty()
 
     # 3. 注入頂部防作弊警告 Banner 與自動回報 JavaScript
     st.components.v1.html("""
@@ -668,43 +669,76 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.exam_step = 4
             st.rerun()
 
+
+# ==========================================
+# Step 4 - 考試總結與提交確認頁面 (新增)
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 4:
+    st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Final Submission</h2>", unsafe_allow_html=True)
+    st.write("---")
+
+    answered_cnt = len(st.session_state.get("answers", {}))
+    unanswered_cnt = 75 - answered_cnt
+    flagged_cnt = len(st.session_state.get("flagged_questions", set()))
+    focus_warnings = st.session_state.get("focus_loss_count", 0)
+
+    st.markdown(f"""
+    ### Summary Status:
+    - **Questions Answered:** {answered_cnt} / 75
+    - **Unanswered Questions:** {unanswered_cnt}
+    - **Flagged Questions:** {flagged_cnt}
+    - **Focus Loss Warnings Recorded:** {focus_warnings}
+    """)
+
+    st.markdown("---")
+    st.warning("⚠️ Once you click **Confirm and Submit Exam**, your answers will be finalized and sent to the examination database. You cannot make any further changes.")
+
+    col_sub1, col_sub2 = st.columns(2)
+    with col_sub1:
+        if st.button("⬅️ Return to Exam", use_container_width=True):
+            st.session_state.exam_step = 3
+            st.rerun()
+
+    with col_sub2:
+        if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
+            with st.spinner("Submitting exam and recording results..."):
+                try:
+                    # 結算與更新至資料庫
+                    answered_count = len(st.session_state.get("answers", {}))
+                    focus_losses = st.session_state.get("focus_loss_count", 0)
+                    
+                    correct_count = 0
+                    user_answers = st.session_state.get("answers", {})
+                    correct_answer_key = st.session_state.get("correct_answers", {})
+                    
+                    for q_idx, user_ans in user_answers.items():
+                        if correct_answer_key.get(q_idx) == user_ans:
+                            correct_count += 1
+                    
+                    passing_score_percentage = 70.0
+                    score_percentage = (correct_count / 75.0) * 100 if 75 > 0 else 0
+                    final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
+                    
+                    # 呼叫 finalize 寫入 Google Sheets
+                    finalize_exam_submission(
+                        st.session_state.voucher_code,
+                        focus_losses,
+                        final_status,
+                        explanation=f"Answered {answered_count}/75, Correct {correct_count}"
+                    )
+                    
+                    st.session_state.exam_final_status = final_status
+                    st.session_state.exam_correct_count = correct_count
+                    st.session_state.exam_step = 5
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Submission error: {e}")
+
+
 # ==========================================
 # Step 5 - 考試結果與結算頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 5:
-    
-    if not st.session_state.get("exam_sheets_updated", False):
-        try:
-            answered_count = len(st.session_state.get("answers", {}))
-            focus_losses = st.session_state.get("focus_loss_count", 0)
-            
-            correct_count = 0
-            user_answers = st.session_state.get("answers", {})
-            correct_answer_key = st.session_state.get("correct_answers", {})
-            
-            for q_idx, user_ans in user_answers.items():
-                if correct_answer_key.get(q_idx) == user_ans:
-                    correct_count += 1
-            
-            passing_score_percentage = 70.0
-            score_percentage = (correct_count / 75.0) * 100 if 75 > 0 else 0
-            final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
-            
-            db = get_sheets_connection()
-            sheet = db.worksheet("Vouchers")
-            cell = sheet.find(st.session_state.voucher_code)
-            if cell:
-                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                sheet.update_cell(cell.row, 12, current_time) 
-                sheet.update_cell(cell.row, 13, final_status)
-            
-            st.session_state.exam_sheets_updated = True
-            st.session_state.exam_final_status = final_status
-            st.session_state.exam_correct_count = correct_count
-            
-        except Exception as e:
-            print(f"Error updating exam result to Google Sheets: {e}")
-
     st.markdown("<h2 style='text-align: center;'>📋 Examination Result & Summary</h2>", unsafe_allow_html=True)
     st.write("---")
     
