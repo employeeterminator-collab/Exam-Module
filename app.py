@@ -471,7 +471,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     st.markdown('<div class="hidden-trigger-wrapper">', unsafe_allow_html=True)
     if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
         pass
-    st.markdown('</div>', unsafe_allow_html=True
+    st.markdown('</div>', unsafe_allow_html=True)
    
 
     st.components.v1.html("""
