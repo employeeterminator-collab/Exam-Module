@@ -133,12 +133,22 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
  # 取得題庫資料
 def get_exam_questions():
     try:
-        db = get_sheets_connection()
-        sheet = db.worksheet("Questions")
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        
+        # Open the separate Google Sheet file named "Questions"
+        spreadsheet = client.open("Questions")
+        # Pull records from the first worksheet (or specify .worksheet("A") if needed)
+        sheet = spreadsheet.get_worksheet(0)
         records = sheet.get_all_records()
         return records
     except Exception as e:
-        print(f"Failed to fetch questions: {e}")
+        print(f"Failed to fetch questions from separate file: {e}")
         return []
 
 
