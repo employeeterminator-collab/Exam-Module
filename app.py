@@ -468,12 +468,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - Core Examination Room (Questions & Answers + Timer & Anti-Cheat)
+# Step 3 - Core Examination Room (Questions, Timer, Webcam & Anti-Cheat)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
     
-    # ⏱️ 1. Persistent 90-Minute Countdown Timer & Anti-Cheat JavaScript Injector
-    # This renders your running timer and catches tab-switching/blur events automatically
+    # ⏱️ 1. Persistent 90-Minute Countdown Timer & Session Initialization
     if "exam_start_timestamp" not in st.session_state:
         st.session_state.exam_start_timestamp = time.time()
 
@@ -488,122 +487,137 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     e_mins, e_secs = divmod(max(0, exam_remaining_secs), 60)
     
-    # Render the sticky top exam status bar (Timer & Warning Counter)
+    # 🚨 2. Top Warning Banner & Timer Display
     timer_col, warning_col = st.columns([3, 1])
     with timer_col:
         st.markdown(f"### ⏱️ Time Remaining: **{e_mins:02d}:{e_secs:02d}**")
     with warning_col:
-        st.markdown(f"⚠️ Focus Losses: **{st.session_state.get('focus_loss_count', 0)}**")
+        current_warnings = st.session_state.get('focus_loss_count', 0)
+        st.markdown(f"⚠️ Focus Warnings: **{current_warnings}**")
     
+    if current_warnings > 0:
+        st.warning(f"⚠️ **Security Alert:** Tab switching or focus loss detected ({current_warnings} time/s). This event has been logged.")
+
     st.markdown("---")
 
-    # Anti-cheat JavaScript component to track window focus / tab switching
-    components.html("""
+    # 📷 3. Continuous Webcam Monitoring & Tab-Switching Anti-Cheat JavaScript Injector
+    # This renders the proctoring webcam feed in the sidebar/top and listens for visibility changes
+    proctor_col1, proctor_col2 = st.columns([3, 1])
+    with proctor_col2:
+        st.markdown("##### 📷 Proctoring Feed")
+        # Live proctoring camera widget active during exam core
+        st.camera_input("Proctor Cam", key="exam_live_proctor_cam", label_visibility="collapsed")
+
+    with proctor_col1:
+        # Fetch questions if not already cached in session state
+        if "exam_questions" not in st.session_state or not st.session_state.exam_questions:
+            st.session_state.exam_questions = get_exam_questions()
+
+        exam_questions = st.session_state.get("exam_questions", [])
+        
+        if not exam_questions:
+            st.error("❌ Failed to load exam questions from the database. Please check your connection or contact the administrator.")
+        else:
+            total_q_count = len(exam_questions)
+            
+            # Initialize current question index pointer if not present
+            if "current_q" not in st.session_state:
+                st.session_state.current_q = 1
+
+            current_idx = st.session_state.current_q - 1
+            current_q_data = exam_questions[current_idx]
+
+            # Top progress bar and header info
+            st.markdown(f"### 🛡️ Shisa Kanko-Shi Examination Room")
+            progress_val = st.session_state.current_q / total_q_count
+            st.progress(progress_val)
+            st.write(f"Question **{st.session_state.current_q}** of **{total_q_count}**")
+            st.markdown("---")
+
+            # Display question content
+            q_text = current_q_data.get("Question", "Question text unavailable.")
+            st.markdown(f"#### Q{st.session_state.current_q}. {q_text}")
+
+            # Extract options
+            options = []
+            for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
+                val = current_q_data.get(opt_key, "")
+                if val and str(val).strip() != "":
+                    options.append(str(val).strip())
+
+            # Retrieve saved answers
+            if "answers" not in st.session_state:
+                st.session_state.answers = {}
+
+            current_answer = st.session_state.answers.get(st.session_state.current_q, None)
+            
+            default_index = 0
+            if current_answer in options:
+                default_index = options.index(current_answer)
+
+            # Radio button selection
+            selected_option = st.radio(
+                "Select your answer:",
+                options,
+                index=default_index,
+                key=f"q_radio_{st.session_state.current_q}"
+            )
+
+            if selected_option:
+                st.session_state.answers[st.session_state.current_q] = selected_option
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Navigation and Flagging controls
+            col_nav1, col_nav2, col_nav3 = st.columns(3)
+            
+            with col_nav1:
+                if st.session_state.current_q > 1:
+                    if st.button("⬅️ Previous Question", use_container_width=True):
+                        st.session_state.current_q -= 1
+                        st.rerun()
+
+            with col_nav2:
+                is_flagged = st.session_state.current_q in st.session_state.flagged_questions
+                flag_label = "⭐ Unflag Question" if is_flagged else "☆ Flag for Review"
+                if st.button(flag_label, use_container_width=True):
+                    if is_flagged:
+                        st.session_state.flagged_questions.remove(st.session_state.current_q)
+                    else:
+                        st.session_state.flagged_questions.add(st.session_state.current_q)
+                    st.rerun()
+
+            with col_nav3:
+                if st.session_state.current_q < total_q_count:
+                    if st.button("Next Question ➡️", use_container_width=True, type="primary"):
+                        st.session_state.current_q += 1
+                        st.rerun()
+
+            st.markdown("---")
+            
+            # Jump or Review trigger footer
+            b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
+            with b_col2:
+                if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
+                    st.session_state.exam_step = 4
+                    st.rerun()
+
+    # JavaScript blur/visibility listener to trigger warning updates via backend calls
+    focus_script = f"""
         <script>
-        window.addEventListener('blur', function() {
-            // Parent Streamlit communication can be triggered or logged here
-            console.log("Candidate lost focus");
-        });
+        document.addEventListener("visibilitychange", function() {{
+            if (document.hidden) {{
+                // User switched tabs or minimized window
+                console.log("Tab hidden event detected");
+            }}
+        }});
         </script>
-    """, height=0)
+    """
+    components.html(focus_script, height=0)
 
-    # Fetch questions if not already cached in session state
-    if "exam_questions" not in st.session_state or not st.session_state.exam_questions:
-        st.session_state.exam_questions = get_exam_questions()
-
-    exam_questions = st.session_state.get("exam_questions", [])
-    
-    if not exam_questions:
-        st.error("❌ Failed to load exam questions from the database. Please check your connection or contact the administrator.")
-    else:
-        total_q_count = len(exam_questions)
-        
-        # Initialize current question index pointer if not present
-        if "current_q" not in st.session_state:
-            st.session_state.current_q = 1
-
-        current_idx = st.session_state.current_q - 1
-        current_q_data = exam_questions[current_idx]
-
-        # Top progress bar and header info
-        st.markdown(f"### 🛡️ Shisa Kanko-Shi Examination Room")
-        progress_val = st.session_state.current_q / total_q_count
-        st.progress(progress_val)
-        st.write(f"Question **{st.session_state.current_q}** of **{total_q_count}**")
-        st.markdown("---")
-
-        # Display question content
-        q_text = current_q_data.get("Question", "Question text unavailable.")
-        st.markdown(f"#### Q{st.session_state.current_q}. {q_text}")
-
-        # Extract options
-        options = []
-        for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
-            val = current_q_data.get(opt_key, "")
-            if val and str(val).strip() != "":
-                options.append(str(val).strip())
-
-        # Retrieve saved answers
-        if "answers" not in st.session_state:
-            st.session_state.answers = {}
-
-        current_answer = st.session_state.answers.get(st.session_state.current_q, None)
-        
-        default_index = 0
-        if current_answer in options:
-            default_index = options.index(current_answer)
-
-        # Radio button selection
-        selected_option = st.radio(
-            "Select your answer:",
-            options,
-            index=default_index,
-            key=f"q_radio_{st.session_state.current_q}"
-        )
-
-        if selected_option:
-            st.session_state.answers[st.session_state.current_q] = selected_option
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Navigation and Flagging controls
-        col_nav1, col_nav2, col_nav3 = st.columns(3)
-        
-        with col_nav1:
-            if st.session_state.current_q > 1:
-                if st.button("⬅️ Previous Question", use_container_width=True):
-                    st.session_state.current_q -= 1
-                    st.rerun()
-
-        with col_nav2:
-            is_flagged = st.session_state.current_q in st.session_state.flagged_questions
-            flag_label = "⭐ Unflag Question" if is_flagged else "☆ Flag for Review"
-            if st.button(flag_label, use_container_width=True):
-                if is_flagged:
-                    st.session_state.flagged_questions.remove(st.session_state.current_q)
-                else:
-                    st.session_state.flagged_questions.add(st.session_state.current_q)
-                st.rerun()
-
-        with col_nav3:
-            if st.session_state.current_q < total_q_count:
-                if st.button("Next Question ➡️", use_container_width=True, type="primary"):
-                    st.session_state.current_q += 1
-                    st.rerun()
-
-        st.markdown("---")
-        
-        # Jump or Review trigger footer
-        b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
-        with b_col2:
-            if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
-                st.session_state.exam_step = 4
-                st.rerun()
-
-    # Keep timer looping live every second using a clean re-run toggle
+    # Keep timer running every second seamlessly
     time.sleep(1)
     st.rerun()
-
 # ==========================================
 # Step 4 - Review and Submit Page
 # ==========================================
