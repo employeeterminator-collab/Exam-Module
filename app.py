@@ -442,8 +442,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if st.button("TriggerViolationBackend", key="hidden_violation_btn", help=None, on_click=handle_focus_loss):
         pass
 
-    # 3. 注入頂部防作弊警告 Banner 與自動回報 JavaScript
-    st.components.v1.html(f"""
+   # 3. 注入頂部防作弊警告 Banner 與自動回報 JavaScript (移除 f 字首)
+    st.components.v1.html("""
         <script>
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
@@ -472,11 +472,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 
                 // 自動觸發 Streamlit 的隱藏按鈕以累加後端計數與寫入 Google Sheets
                 const buttons = parent.document.querySelectorAll('button');
-                buttons.forEach(btn => {{
-                    if (btn.innerText.includes('TriggerViolationBackend')) {{
+                buttons.forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend')) {
                         btn.click();
-                    }}
-                }});
+                    }
+                });
             }
 
             parent.document.addEventListener("visibilitychange", function() {
