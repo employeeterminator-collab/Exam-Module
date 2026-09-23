@@ -142,8 +142,8 @@ def get_exam_questions():
         client = gspread.authorize(creds)
         
         # Open the separate Google Sheet file named "Questions"
-        spreadsheet = client.open("Questions")
-        # Pull records from the first worksheet (or specify .worksheet("A") if needed)
+        spreadsheet = client.open("A")
+        # Pull records from the first worksheet (or specify .worksheet("SheetName") if needed)
         sheet = spreadsheet.get_worksheet(0)
         records = sheet.get_all_records()
         return records
