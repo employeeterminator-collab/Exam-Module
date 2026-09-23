@@ -133,7 +133,17 @@ def update_exam_end_time(voucher_code, status_text):
     except Exception as e:
         print(f"Failed to update ExamEndTime: {e}")
 
-
+def log_violation_to_sheet(voucher_code):
+    try:
+        db = get_sheets_connection()
+        # 確保你的 Google Sheets 裡面有一個叫做 "ViolationLogs" 的分頁
+        sheet = db.worksheet("ViolationLogs")
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 寫入格式：[Voucher Code, 違規時間, 違規類型]
+        sheet.append_row([voucher_code, current_time, "Focus Lost / Tab Switched"])
+    except Exception as e:
+        print(f"Error logging violation to Google Sheets: {e}")
 
 # ==========================================
 # Step 0 - 考生身分驗證、重連與憑證確認
@@ -473,7 +483,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 # Step 3 - 核心問答模組 (含全螢幕前置解鎖屏)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
-    # 初始化 Step 3 變數
+    
+    # 🚨 1. 優先檢查是否有來自前端的違規訊號 (放這裡最安全、最優先)
+    query_params = st.query_params
+    if "violation_triggered" in query_params:
+        # 本地計數器 +1
+        st.session_state.focus_loss_count = st.session_state.get("focus_loss_count", 0) + 1
+        
+        # 寫入 Google Sheets 的 ViolationLogs Tab
+        voucher = st.session_state.get("voucher_code", "UNKNOWN")
+        log_violation_to_sheet(voucher)
+        
+        # 清除 query param 並重新整理畫面，避免重複觸發
+        st.query_params.clear()
+        st.rerun()
+
+    # 2. 初始化 Step 3 變數
     if "current_q" not in st.session_state:
         st.session_state.current_q = 1
     if "answers" not in st.session_state:
