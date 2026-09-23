@@ -415,7 +415,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (單一整合區塊)
+# Step 3 - 核心問答模組 (已修正失焦計數與連動回報)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -431,8 +431,19 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # 2. 注入頂部防作弊警告 Banner (純淨顯示，絕不破壞 Session 或強制重整)
-    st.components.v1.html("""
+    # 2. 接收前端失焦事件的隱藏元件與回調
+    # 當前端 JavaScript 偵測到切換分頁，會自動點擊這個隱藏的 Streamlit 按鈕來累加次數
+    def handle_focus_loss():
+        st.session_state.focus_loss_count += 1
+        # 同步寫入 Google Sheets 的 ViolationLogs
+        log_violation_to_sheet(st.session_state.voucher_code)
+
+    # 用來接收前端呼叫的隱藏按鈕區塊
+    if st.button("TriggerViolationBackend", key="hidden_violation_btn", help=None, on_click=handle_focus_loss):
+        pass
+
+    # 3. 注入頂部防作弊警告 Banner 與自動回報 JavaScript
+    st.components.v1.html(f"""
         <script>
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
@@ -458,6 +469,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         b.style.display = 'none';
                     }, 8000);
                 }
+                
+                // 自動觸發 Streamlit 的隱藏按鈕以累加後端計數與寫入 Google Sheets
+                const buttons = parent.document.querySelectorAll('button');
+                buttons.forEach(btn => {{
+                    if (btn.innerText.includes('TriggerViolationBackend')) {{
+                        btn.click();
+                    }}
+                }});
             }
 
             parent.document.addEventListener("visibilitychange", function() {
@@ -478,7 +497,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
 
-    # 3. 頂部標頭區 (候選人資訊、時鐘、相機)
+    # 4. 頂部標頭區 (候選人資訊、時鐘、相機)
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
@@ -564,12 +583,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.divider()
 
-    # 4. 側邊欄 (防作弊狀態與題號面板)
+    # 5. 側邊欄 (防作弊狀態與題號面板)
     with st.sidebar:
         st.markdown("### 📹 Security Status")
-        st.markdown("""
+        st.markdown(f"""
             <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
                 <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
+                <div style="color: #475569; font-size: 11px; margin-top: 4px;">Warnings: {st.session_state.focus_loss_count}</div>
             </div>
         """, unsafe_allow_html=True)
 
@@ -588,7 +608,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         st.session_state.current_q = q_num
                         st.rerun()
 
-    # 5. 主畫面答題區
+    # 6. 主畫面答題區
     q_idx = st.session_state.current_q
 
     st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
@@ -647,51 +667,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
             st.session_state.exam_step = 4
             st.rerun()
-
-
-# ==========================================
-# Step 4 - Exam Review & Final Submission
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    
-    st.markdown("<h2 style='text-align: left;'>📋 Exam Review & Final Submission</h2>", unsafe_allow_html=True)
-    st.write("Review your completion status below before submitting your final paper.")
-    st.write("---")
-    
-    total_questions = 75
-    user_answers = st.session_state.get("answers", {})
-    answered_count = len(user_answers)
-    unanswered_count = total_questions - answered_count
-    
-    flagged_questions = st.session_state.get("flagged_questions", set())
-    flagged_count = len(flagged_questions)
-    focus_losses = st.session_state.get("focus_loss_count", 0)
-    
-    col_v1, col_v2, col_v3, col_v4 = st.columns(4)
-    col_v1.metric("Answered", f"{answered_count} / {total_questions}")
-    col_v2.metric("Unanswered", unanswered_count)
-    col_v3.metric("Flagged", flagged_count)
-    col_v4.metric("Focus Losses", focus_losses)
-    
-    if unanswered_count > 0:
-        st.warning(f"⚠️ You currently have **{unanswered_count}** unanswered question(s). You can still return to answer them.")
-    if flagged_count > 0:
-        st.info(f"📌 You have flagged **{flagged_count}** question(s) for review.")
-        
-    st.write("---")
-    
-    col_act1, col_act2 = st.columns(2)
-    
-    with col_act1:
-        if st.button("⬅️ Return to Exam", use_container_width=True):
-            st.session_state.exam_step = 3
-            st.rerun()
-            
-    with col_act2:
-        if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
-            st.session_state.exam_step = 5 
-            st.rerun()
-
 
 # ==========================================
 # Step 5 - 考試結果與結算頁面
