@@ -467,7 +467,7 @@ def get_exam_questions():
 # ==========================================
 # Step 3 - Core Examination Room (Questions & Answers)
 # ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 3:
+if st.session_state.authenticated and st.session_state.exam_step == 3:
     # Fetch questions if not already cached in session state
     if "exam_questions" not in st.session_state or not st.session_state.exam_questions:
         st.session_state.exam_questions = get_exam_questions()
