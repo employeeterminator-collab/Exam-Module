@@ -415,7 +415,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (已修正失焦計數與連動回報)
+# Step 3 - 核心問答模組 (隱藏背景按鈕並修復跳轉)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -431,18 +431,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # 2. 接收前端失焦事件的隱藏元件與回調
-    # 當前端 JavaScript 偵測到切換分頁，會自動點擊這個隱藏的 Streamlit 按鈕來累加次數
+    # 2. 接收前端失焦事件的後端處理函式
     def handle_focus_loss():
         st.session_state.focus_loss_count += 1
-        # 同步寫入 Google Sheets 的 ViolationLogs
         log_violation_to_sheet(st.session_state.voucher_code)
 
-    # 用來接收前端呼叫的隱藏按鈕區塊
-    if st.button("TriggerViolationBackend", key="hidden_violation_btn", help=None, on_click=handle_focus_loss):
-        pass
+    # 利用 Streamlit 的 container 將隱藏按鈕完全隱藏（不佔畫面空間）
+    with st.container():
+        st.markdown('<style>div[data-testid="stVerticalBlock"] div:has(> button#hidden-violation-trigger) {display: none;}</style>', unsafe_allow_html=True)
+        if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
+            pass
 
-   # 3. 注入頂部防作弊警告 Banner 與自動回報 JavaScript (移除 f 字首)
+    # 3. 注入頂部防作弊警告 Banner 與自動回報 JavaScript
     st.components.v1.html("""
         <script>
             if (!parent.document.getElementById('global-warning-banner')) {
@@ -470,7 +470,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     }, 8000);
                 }
                 
-                // 自動觸發 Streamlit 的隱藏按鈕以累加後端計數與寫入 Google Sheets
+                // 自動觸發隱藏按鈕以累加後端計數與寫入 Google Sheets
                 const buttons = parent.document.querySelectorAll('button');
                 buttons.forEach(btn => {
                     if (btn.innerText.includes('TriggerViolationBackend')) {
