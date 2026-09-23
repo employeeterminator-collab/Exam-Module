@@ -193,7 +193,7 @@ if not st.session_state.authenticated:
             if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
               st.error("❌ **Access Denied:** This examination has already been completed, submitted, or expired using this voucher. Re-entry is strictly prohibited.")
             
-            # Check if already timed out (DNF)
+            # ⏳ RESTORED DNF & EXPIRED TIME CHECK: Check if already timed out (90 minutes limit)
             elif committed_time != "":
               try:
                 committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
@@ -203,7 +203,7 @@ if not st.session_state.authenticated:
                 if elapsed_seconds > EXAM_TIME_LIMIT:
                     if exam_end_val != "DNF":
                         vouchers_sheet.update_cell(row_index, 13, "DNF")
-                    st.error("❌ **Access Denied:** Exam session expired (Time limit exceeded). Please contact Administrator.")
+                    st.error("❌ **Access Denied:** Exam session expired (Time limit exceeded). Status updated to DNF.")
                 else:
                     # Within valid active session window, resume
                     f_name = str(matched_record.get("EnglishFirstName", "")).strip()
