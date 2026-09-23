@@ -458,6 +458,12 @@ def get_exam_questions():
         print(f"Failed to fetch questions: {e}")
         return []
 
+# --- END OF STEP 3 ---
+    b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
+    with b_col2:
+        if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
+            st.session_state.exam_step = 4
+            st.rerun()
 
 # ==========================================
 # Step 4 - Review and Submit Page
@@ -481,7 +487,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.markdown("---")
     st.markdown("#### 🔍 Question Status Summary")
 
-    # Render quick summary table or list
     for q_num in range(1, total_q_count + 1):
         has_answered = q_num in st.session_state.get("answers", {})
         is_flagged = q_num in st.session_state.get("flagged_questions", set())
