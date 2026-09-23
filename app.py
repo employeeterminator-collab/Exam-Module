@@ -123,10 +123,10 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
         cell = sheet.find(voucher_code)
         if cell:
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sheet.update_cell(cell.row, 9, completed_time)  # CompletedExam / Photo URL
+            sheet.update_cell(cell.row, 12, completed_time)  # CompletedExam / Photo URL
             sheet.update_cell(cell.row, 11, warning_count) # WarningCount
-            sheet.update_cell(cell.row, 12, exam_status)   # ExamStatus / EndTime
-            sheet.update_cell(cell.row, 13, explanation)   # Explanation
+            sheet.update_cell(cell.row, 13, exam_status)   # ExamStatus / EndTime
+            sheet.update_cell(cell.row, 14, explanation)   # Explanation
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
