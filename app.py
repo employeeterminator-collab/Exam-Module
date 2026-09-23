@@ -468,7 +468,7 @@ def get_exam_questions():
 # ==========================================
 # Step 4 - Review and Submit Page
 # ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 4:
+if st.session_state.authenticated and st.session_state.exam_step == 4:
     st.markdown("### 📋 Examination Review & Submission")
     st.write("Please review your progress below before submitting your final answers.")
 
