@@ -181,10 +181,13 @@ if not st.session_state.authenticated:
               row_index = idx
               break
 
-          if matched_record:
-            completed_exam_val = str(matched_record.get("CompletedExam", "")).strip()
-            exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()
-            committed_time = str(matched_record.get("Committed", "")).strip()
+        if matched_record:
+            # Fetch direct row values by exact column index to prevent header naming mismatches
+            row_vals = vouchers_sheet.row_values(row_index)
+            
+            committed_time = row_vals[9].strip() if len(row_vals) > 9 else str(matched_record.get("Committed", "")).strip()
+            completed_exam_val = row_vals[11].strip() if len(row_vals) > 11 else str(matched_record.get("CompletedExam", "")).strip()
+            exam_end_val = row_vals[12].strip() if len(row_vals) > 12 else str(matched_record.get("ExamEndTime", "")).strip()
 
             # 🛡️ STRICT BLOCK: If the exam was already finished, passed, failed, or DNF'd, deny entry permanently
             if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
