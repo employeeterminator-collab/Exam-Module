@@ -460,7 +460,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             div.element-container:has(button[key="hidden-violation-trigger"]),
             button[key="hidden-violation-trigger"] {
                 position: fixed;
-                left: -99999px;
+                left: -0px;
                 bottom: 0px;
                 opacity: 0;
                 pointer-events: none;
