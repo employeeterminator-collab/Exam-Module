@@ -24,7 +24,6 @@ hide_streamlit_style = """
     [data-testid="stDecoration"] {display: none !important; visibility: hidden !important;}
     [data-testid="stStatusWidget"] {display: none !important; visibility: hidden !important;}
     
-    /* 隱藏所有 Markdown 標題的錨點連結圖示 */
     .stMarkdown h1 a, .stMarkdown h2 a, .stMarkdown h3 a, .stMarkdown h4 a {
         display: none !important;
     }
@@ -73,14 +72,13 @@ def get_sheets_connection():
   sheet = client.open("ShisaKanko_Exam_Database")
   return sheet
 
-# 🟢 記錄第一次開始考試的時間 (Committed)
+# 記錄第一次開始考試的時間 (Committed)
 def update_voucher_committed(voucher_code):
     try:
         db = get_sheets_connection()
         sheet = db.worksheet("Vouchers")
         cell = sheet.find(voucher_code)
         if cell:
-            # 檢查目前 Column 10 (Committed) 是否已經有值，如果沒有才寫入
             current_value = sheet.cell(cell.row, 10).value
             if not current_value or str(current_value).strip() == "":
                 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -88,19 +86,17 @@ def update_voucher_committed(voucher_code):
     except Exception as e:
         print(f"Failed to update Committed time: {e}")
 
-# 🟢 【新加入】記錄單次違規事件到 ViolationLogs Tab
+# 記錄違規事件到 ViolationLogs Tab
 def log_violation_to_sheet(voucher_code):
     try:
         db = get_sheets_connection()
         logs_sheet = db.worksheet("ViolationLogs")
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # 寫入新的一行：[Voucher, Offended Timestamp]
-        logs_sheet.append_row([voucher_code, current_time])
+        logs_sheet.append_row([voucher_code, current_time, "Focus Lost / Tab Switched"])
     except Exception as e:
         print(f"Failed to log violation: {e}")
 
-
-# 🟢 【新加入】完成考試時更新狀態 (CompletedExam, WarningCount, ExamStatus, CandidateExplanation)
+# 完成考試時更新狀態
 def finalize_exam_submission(voucher_code, warning_count, exam_status, explanation=""):
     try:
         db = get_sheets_connection()
@@ -108,24 +104,19 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
         cell = sheet.find(voucher_code)
         if cell:
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            # 請根據你的 Google Sheets 實際欄位順序調整：
-            # 假設 Column J: CompletedExam, Column K: WarningCount, Column L: ExamStatus, Column M: CandidateExplanation
-            sheet.update_cell(cell.row, 9, completed_time)  # CompletedExam 時間
-            sheet.update_cell(cell.row, 11, warning_count)   # WarningCount
-            sheet.update_cell(cell.row, 12, exam_status)     # ExamStatus (Pass / Fail / Pending)
-            sheet.update_cell(cell.row, 13, explanation)     # CandidateExplanation
+            sheet.update_cell(cell.row, 9, completed_time)
+            sheet.update_cell(cell.row, 11, warning_count)
+            sheet.update_cell(cell.row, 12, exam_status)
+            sheet.update_cell(cell.row, 13, explanation)
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
-# 🟢 放在頂部的 Helper 函式區塊
 def update_exam_end_time(voucher_code, status_text):
     try:
         db = get_sheets_connection()
         sheet = db.worksheet("Vouchers")
         cell = sheet.find(voucher_code)
         if cell:
-            # 檢查 Column 12 (ExamEndTime) 是否已經有記錄，避免重複覆寫
             current_val = sheet.cell(cell.row, 12).value
             if not current_val or str(current_val).strip() == "":
                 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -133,17 +124,6 @@ def update_exam_end_time(voucher_code, status_text):
     except Exception as e:
         print(f"Failed to update ExamEndTime: {e}")
 
-def log_violation_to_sheet(voucher_code):
-    try:
-        db = get_sheets_connection()
-        # 確保你的 Google Sheets 裡面有一個叫做 "ViolationLogs" 的分頁
-        sheet = db.worksheet("ViolationLogs")
-        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 寫入格式：[Voucher Code, 違規時間, 違規類型]
-        sheet.append_row([voucher_code, current_time, "Focus Lost / Tab Switched"])
-    except Exception as e:
-        print(f"Error logging violation to Google Sheets: {e}")
 
 # ==========================================
 # Step 0 - 考生身分驗證、重連與憑證確認
@@ -154,35 +134,22 @@ if not st.session_state.authenticated:
       unsafe_allow_html=True,
   )
   st.markdown(
-      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling"
-      " Specialist)</h3>",
+      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling Specialist)</h3>",
       unsafe_allow_html=True,
   )
   st.write("---")
 
   st.markdown("### Candidate Authentication")
-  st.write(
-      "Please enter your registered Email and Voucher Code to enter the"
-      " examination room."
-  )
+  st.write("Please enter your registered Email and Voucher Code to enter the examination room.")
 
   with st.form("auth_form"):
-    email_input = st.text_input(
-        "Registered Email Address", placeholder="e.g., candidate@example.com"
-    )
-    voucher_input = st.text_input(
-        "Voucher Code", type="password", placeholder="Enter your voucher code"
-    )
+    email_input = st.text_input("Registered Email Address", placeholder="e.g., candidate@example.com")
+    voucher_input = st.text_input("Voucher Code", type="password", placeholder="Enter your voucher code")
 
     submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
 
     if submitted:
-      if (
-          not email_input
-          or not voucher_input
-          or not email_input.strip()
-          or not voucher_input.strip()
-      ):
+      if not email_input or not voucher_input or not email_input.strip() or not voucher_input.strip():
         st.error("Please enter both your Email and Voucher Code.")
       else:
         try:
@@ -193,8 +160,7 @@ if not st.session_state.authenticated:
           matched_record = None
           row_index = None
 
-          # 尋找匹配的記錄（比對 Voucher 與 Email）
-          for idx, record in enumerate(records, start=2): # gspread row 從 2 開始 (含 Header)
+          for idx, record in enumerate(records, start=2):
             r_voucher = str(record.get("VoucherCode", "")).strip()
             r_email = str(record.get("AssignedEmail", "")).strip()
             r_status = str(record.get("Status", "")).strip()
@@ -213,7 +179,6 @@ if not st.session_state.authenticated:
             completed_exam = str(matched_record.get("CompletedExam", "")).strip()
             committed_time = str(matched_record.get("Committed", "")).strip()
 
-            # 1. 檢查是否已經完成過考試（永久鎖定）
             if completed_exam != "":
               st.error("❌ This exam has already been completed. You cannot log in again with this voucher.")
             else:
@@ -229,50 +194,41 @@ if not st.session_state.authenticated:
               st.session_state.candidate_japanese_name = j_name
               st.session_state.candidate_name = f"{f_name} {l_name}".strip()
 
-             # 2. 判斷是否為中途斷線重連 (Resume Exam 情況)
               if committed_time != "":
                 try:
                     committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
                     elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
-                    
-                    # 超過 90 分鐘 (5400秒) 判定為 DNF（若你的考試時間是 60 分鐘則改為 3600）
                     EXAM_TIME_LIMIT = 5400 
                     
                     if elapsed_seconds > EXAM_TIME_LIMIT:
-                        # 檢查 Column 12 (ExamStatus) 是否已經寫入過，避免重複寫入
                         exam_end_val = vouchers_sheet.cell(row_index, 12).value  
                         if not exam_end_val or str(exam_end_val).strip() == "":
                             vouchers_sheet.update_cell(row_index, 12, "DNF")
                             
-                        st.error("❌ **Exam Expired:** Your examination window has elapsed. Your status has been recorded as **DNF** (Did Not Finish). Please contact the exam administrator.")
-                        st.stop()  # 阻斷後續程式碼，禁止進入
+                        st.error("❌ **Exam Expired:** Your examination window has elapsed. Your status has been recorded as **DNF** (Did Not Finish). Please contact the administrator.")
+                        st.stop()
                     else:
-                        # 仍在時限內，允許重連繼續考試
                         st.session_state.exam_step = 3
                         st.success("🔄 Detected an active session. Resuming your exam...")
                         time.sleep(1)
                         st.rerun()
                 except Exception as e:
                     print(f"Failed to check DNF: {e}")
-                    # 若時間解析發生例外，安全起見仍導向考題或報錯
                     st.session_state.exam_step = 3
                     st.rerun()
               else:
-                # 尚未開始過考試，正常進入 Step 1 (身分核對與考試須知)
                 st.session_state.exam_step = 1
                 st.rerun()
                   
         except Exception as e:
           st.error(f"Connection error: {e}")
 
+
 # ==========================================
 # Step 1 - 身分核對與考試須知
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 1:
-  st.markdown(
-      f"### Welcome, {st.session_state.candidate_first_name}"
-      f" {st.session_state.candidate_last_name}!"
-  )
+  st.markdown(f"### Welcome, {st.session_state.candidate_first_name} {st.session_state.candidate_last_name}!")
   st.write("---")
 
   st.markdown("### Step 1: Candidate Information Verification")
@@ -285,10 +241,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
     - **4. Email Address:** {st.session_state.candidate_email}
     """)
 
-  st.warning(
-      "⚠️ If the above information is incorrect or missing, please end the"
-      " exam now and contact administrator."
-  )
+  st.warning("⚠️ If the above information is incorrect or missing, please end the exam now and contact administrator.")
 
   st.markdown(
       """
@@ -350,24 +303,24 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
 
   st.write("---")
 
+
 # ==========================================
 # Step 2 - 考生拍照驗證與倒數休息頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 2:
   
-  # 如果正在休息，顯示倒數計時畫面
   if st.session_state.on_break:
     st.markdown("<h2 style='text-align: center;'>Pre-Exam Candidate Transition Pause</h2>", unsafe_allow_html=True)
     st.write(
         "<p style='text-align: center;'>Your photo has been successfully verified. "
         "Take a brief break before your core examination begins. "
-        "The exam will start automatically when the timer expires."
+        "The exam will start automatically when the timer expires. "
         "Once the exam started, your voucher will be count as used and committed.</p>",
         unsafe_allow_html=True,
     )
     st.write("---")
 
-    TOTAL_SECONDS = 5 * 60  # 5 分鐘
+    TOTAL_SECONDS = 5 * 60
     elapsed = int(time.time() - st.session_state.break_start_time)
     remaining = TOTAL_SECONDS - elapsed
 
@@ -391,7 +344,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
     with col2:
       if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
         update_voucher_committed(st.session_state.voucher_code)
-          
         st.session_state.on_break = False
         st.session_state.exam_step = 3
         st.rerun()
@@ -399,13 +351,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
     time.sleep(1)
     st.rerun()
 
-  # 否則，顯示拍照驗證畫面
   else:
     st.markdown("### Step 3: Candidate Photo Verification")
-    st.write(
-        f"Candidate: **{st.session_state.candidate_name}**"
-        f" ({st.session_state.candidate_email})"
-    )
+    st.write(f"Candidate: **{st.session_state.candidate_name}** ({st.session_state.candidate_email})")
 
     if "photo_attempts" not in st.session_state:
       st.session_state.photo_attempts = 0
@@ -414,14 +362,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
     remaining_attempts = MAX_ATTEMPTS - st.session_state.photo_attempts
 
     if remaining_attempts <= 0:
-      st.error(
-          "❌ You have exceeded the maximum allowed photo verification attempts"
-          f" ({MAX_ATTEMPTS}/{MAX_ATTEMPTS}). Your session is locked. Please"
-          " contact the administrator."
-      )
+      st.error(f"❌ You have exceeded the maximum allowed photo verification attempts ({MAX_ATTEMPTS}/{MAX_ATTEMPTS}). Your session is locked. Please contact the administrator.")
     else:
       st.write("Please take a photo for identity verification records prior to starting the exam.")
-
       photo_file = st.camera_input("Capture Your Photo", key="exam_camera_input")
 
       if photo_file is not None:
@@ -434,7 +377,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
           with st.spinner("Uploading verification photo to secure storage and proceeding..."):
             try:
               import requests
-
               imgbb_key = st.secrets["imgbb"]["api_key"]
               upload_url = "https://api.imgbb.com/1/upload"
 
@@ -450,7 +392,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
               if result.get("success"):
                 photo_url = result["data"]["url"]
-
                 try:
                   db = get_sheets_connection()
                   sheet = db.worksheet("Vouchers")
@@ -460,45 +401,25 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                 except Exception:
                   pass
 
-                # 啟動休息倒數，並切換狀態
                 st.session_state.on_break = True
                 st.session_state.break_start_time = time.time()
                 st.rerun()
               else:
                 error_msg = result.get("error", {}).get("message", "Unknown error")
-                st.error(
-                    f"Upload failed: {error_msg}. Please try again."
-                    f" ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)"
-                )
+                st.error(f"Upload failed: {error_msg}. Please try again. ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)")
                 st.rerun()
 
             except Exception as e:
-              st.error(
-                  f"An unexpected error occurred: {e}."
-                  f" ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)"
-              )
+              st.error(f"An unexpected error occurred: {e}. ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)")
               st.rerun()
 
+
 # ==========================================
-# Step 3 - 核心問答模組 (含全螢幕前置解鎖屏)
+# Step 3 - 核心問答模組 (單一整合區塊)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
-    
-    # 🚨 1. 優先檢查是否有來自前端的違規訊號 (放這裡最安全、最優先)
-    query_params = st.query_params
-    if "violation_triggered" in query_params:
-        # 本地計數器 +1
-        st.session_state.focus_loss_count = st.session_state.get("focus_loss_count", 0) + 1
-        
-        # 寫入 Google Sheets 的 ViolationLogs Tab
-        voucher = st.session_state.get("voucher_code", "UNKNOWN")
-        log_violation_to_sheet(voucher)
-        
-        # 清除 query param 並重新整理畫面，避免重複觸發
-        st.query_params.clear()
-        st.rerun()
 
-    # 2. 初始化 Step 3 變數
+    # 1. 初始化 Step 3 變數
     if "current_q" not in st.session_state:
         st.session_state.current_q = 1
     if "answers" not in st.session_state:
@@ -508,7 +429,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "focus_loss_count" not in st.session_state:
         st.session_state.focus_loss_count = 0
 
-    # 注入頂部防作弊警告 Banner
+    TOTAL_QUESTIONS = 75
+
+    # 2. 注入頂部防作弊警告 Banner (純淨顯示，絕不破壞 Session 或強制重整)
     st.components.v1.html("""
         <script>
             if (!parent.document.getElementById('global-warning-banner')) {
@@ -518,77 +441,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     position: fixed; top: 0; left: 0; width: 100vw;
                     background-color: #dc2626; color: white; text-align: center; 
                     padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
-                    font-size: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                    font-size: 15px; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
                     z-index: 2147483647; display: none; box-sizing: border-box;
-                `;
-                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
-                parent.document.body.appendChild(banner);
-            }
-            let bannerTimer;
-            function triggerGlobalWarning() {
-                const b = parent.document.getElementById('global-warning-banner');
-                if (b) {
-                    b.style.display = 'block';
-                    clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
-                }
-            }
-            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
-            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
-        </script>
-    """, height=0)
-
-    # 接下來接你原本的標頭區、時鐘、題目導航與 75 題內容... 
-
-    
-    
-# ==========================================
-# Step 3 - 核心問答模組
-# ==========================================
-
-
-    # --- [1] 初始化 Step 3 變數 ---
-    if "current_q" not in st.session_state:
-        st.session_state.current_q = 1
-    if "answers" not in st.session_state:
-        st.session_state.answers = {}  
-    if "flags" not in st.session_state:
-        st.session_state.flags = set()  
-    if "focus_loss_count" not in st.session_state:
-        st.session_state.focus_loss_count = 0
-
-    
-
-    # --- [3] 接下來接你原本的計時器與題目介面 ---
-    TOTAL_QUESTIONS = 75
-    # ... (其餘程式碼)
-
-    
-    EXAM_DURATION_SECONDS = 5400
-    # --- [2] 注入頂部防作弊監控 Banner (純淨執行，絕不干擾計時器) ---
-    st.components.v1.html("""
-        <script>
-            // 確保只建立一次頂部警告 Banner
-            if (!parent.document.getElementById('global-warning-banner')) {
-                const banner = parent.document.createElement('div');
-                banner.id = 'global-warning-banner';
-                banner.style.cssText = `
-                    position: fixed;
-                    top: 0; 
-                    left: 0; 
-                    width: 100vw;
-                    background-color: #dc2626; 
-                    color: white;
-                    text-align: center; 
-                    padding: 16px 20px;
-                    font-family: sans-serif; 
-                    font-weight: bold; 
-                    font-size: 15px;
-                    line-height: 1.4;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-                    z-index: 2147483647; 
-                    display: none; 
-                    box-sizing: border-box;
                 `;
                 banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
                 parent.document.body.appendChild(banner);
@@ -602,23 +456,20 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     clearTimeout(bannerTimer);
                     bannerTimer = setTimeout(() => {
                         b.style.display = 'none';
-                    }, 8000); // 顯示 8 秒後自動隱藏
+                    }, 8000);
                 }
             }
 
-            // A. 偵測開新分頁 / 隱藏畫面
             parent.document.addEventListener("visibilitychange", function() {
                 if (parent.document.hidden) {
                     triggerGlobalWarning();
                 }
             });
 
-            // B. 偵測視窗失去焦點 (Blur)
             parent.window.addEventListener("blur", function() {
                 triggerGlobalWarning();
             });
 
-            // C. 偵測滑鼠移出視窗邊界
             parent.document.addEventListener("mouseleave", function(e) {
                 if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
                     triggerGlobalWarning();
@@ -627,23 +478,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
 
-
-
-    TOTAL_QUESTIONS = 75
-
-    # --- [4] 頂部標頭區 (候選人資訊、時鐘、相機) ---
+    # 3. 頂部標頭區 (候選人資訊、時鐘、相機)
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
         st.markdown(f"### 👤 Candidate: {st.session_state.get('candidate_name', 'User')}")
         st.write(f"Email: {st.session_state.get('candidate_email', '')}")
-
-    # (接下來接你原本的題目選單、計時器邏輯與答題介面...)
-        if st.session_state.focus_loss_count > 0:
-            st.error(f"🚨 Inappropriate movement detected: {st.session_state.focus_loss_count} time(s)")
    
     with header_col2:
-        # 🟢 快取機制：只在第一次進入考試時向 Google Sheets 查詢一次，之後直接從 session_state 讀取
         if "exam_remaining_seconds" not in st.session_state:
             initial_remaining = 5400
             try:
@@ -651,7 +493,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 sheet = db.worksheet("Vouchers")
                 cell = sheet.find(st.session_state.voucher_code)
                 if cell:
-                    committed_str = sheet.cell(cell.row, 10).value  # Column 10 是 Committed
+                    committed_str = sheet.cell(cell.row, 10).value
                     if committed_str and str(committed_str).strip() != "":
                         committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
                         elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
@@ -662,11 +504,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.exam_remaining_seconds = initial_remaining
             st.session_state.exam_timer_start_local = time.time()
 
-        # 根據本地流逝的時間精準扣減，不再頻繁打 Google Sheets API
         elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
         remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
 
-        # 使用普通字串搭配 .replace()，完美解決 JavaScript 大括號與 Python f-string 衝突的問題
         timer_html = """
             <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
                 <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px; margin-bottom: 4px;">⏳ TIME REMAINING</div>
@@ -698,15 +538,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(updateCountdown, 1000);
             </script>
         """
-        
-        # 安全替換變數
         timer_html = timer_html.replace('VOUCHER_PLACEHOLDER', str(st.session_state.voucher_code))
         timer_html = timer_html.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
 
         st.components.v1.html(timer_html, height=75)
            
     with header_col3:
-        # 放大 20% 的綠色相機預覽框
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
                 <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
@@ -727,7 +564,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.divider()
 
-    # --- [2] 側邊欄 (防作弊與導覽) ---
+    # 4. 側邊欄 (防作弊狀態與題號面板)
     with st.sidebar:
         st.markdown("### 📹 Security Status")
         st.markdown("""
@@ -746,12 +583,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             for j in range(cols_per_row):
                 q_num = i + j
                 if q_num <= TOTAL_QUESTIONS:
-                    label = f"⭐{q_num}" if q_num in st.session_state.flags else f"{q_num}"
+                    label = f"⭐{q_num}" if q_num in st.session_state.flagged_questions else f"{q_num}"
                     if cols[j].button(label, key=f"pal_{q_num}", use_container_width=True):
                         st.session_state.current_q = q_num
                         st.rerun()
 
-    # --- [3] 主畫面區域 (Main Content Area) ---
+    # 5. 主畫面答題區
     q_idx = st.session_state.current_q
 
     st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
@@ -811,43 +648,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.exam_step = 4
             st.rerun()
 
-# --- [4] 僅保留頂部防作弊警告監控（絕不干擾計時器與畫面） ---
-    st.components.v1.html("""
-        <script>
-            if (!parent.document.getElementById('global-warning-banner')) {
-                const banner = parent.document.createElement('div');
-                banner.id = 'global-warning-banner';
-                banner.style.cssText = `
-                    position: fixed;
-                    top: 0; left: 0; width: 100vw;
-                    background-color: #dc2626; color: white;
-                    text-align: center; padding: 16px 20px;
-                    font-family: sans-serif; font-weight: bold; font-size: 15px;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-                    z-index: 2147483647; display: none; box-sizing: border-box;
-                `;
-                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
-                parent.document.body.appendChild(banner);
-            }
-
-            let bannerTimer;
-            function triggerGlobalWarning() {
-                const b = parent.document.getElementById('global-warning-banner');
-                if (b) {
-                    b.style.display = 'block';
-                    clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
-                }
-            }
-
-            // 僅純粹監控分頁切換與視窗失去焦點
-            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
-            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
-        </script>
-    """, height=0)
 
 # ==========================================
-# Step 4 - Exam Review & Final Submission (檢視與交卷前確認頁面)
+# Step 4 - Exam Review & Final Submission
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     
@@ -855,91 +658,71 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.write("Review your completion status below before submitting your final paper.")
     st.write("---")
     
-    # 1. 統計各項數據
     total_questions = 75
     user_answers = st.session_state.get("answers", {})
     answered_count = len(user_answers)
     unanswered_count = total_questions - answered_count
     
-    # 統計被標記 (Flagged) 的題數
     flagged_questions = st.session_state.get("flagged_questions", set())
     flagged_count = len(flagged_questions)
-    
-    # 專注度警告次數
     focus_losses = st.session_state.get("focus_loss_count", 0)
     
-    # 2. 呈現數據指標看板
     col_v1, col_v2, col_v3, col_v4 = st.columns(4)
     col_v1.metric("Answered", f"{answered_count} / {total_questions}")
     col_v2.metric("Unanswered", unanswered_count)
     col_v3.metric("Flagged", flagged_count)
     col_v4.metric("Focus Losses", focus_losses)
     
-    # 若有未作答或被標記的題目，給予溫馨提醒
     if unanswered_count > 0:
         st.warning(f"⚠️ You currently have **{unanswered_count}** unanswered question(s). You can still return to answer them.")
     if flagged_count > 0:
-        # 🟢 修正此處：移除了原本卡在裡面的多餘 📤 字元
         st.info(f"📌 You have flagged **{flagged_count}** question(s) for review.")
         
     st.write("---")
     
-    # 3. 底部操作按鈕：返回考試 vs 確認交卷
     col_act1, col_act2 = st.columns(2)
     
     with col_act1:
         if st.button("⬅️ Return to Exam", use_container_width=True):
-            st.session_state.exam_step = 3  # 回到答題頁面
+            st.session_state.exam_step = 3
             st.rerun()
             
     with col_act2:
         if st.button("🔒 Finish & Submit Exam", type="primary", use_container_width=True):
-            # 點擊後推進到結算與評分頁面 (Step 5)
             st.session_state.exam_step = 5 
             st.rerun()
 
 
 # ==========================================
-# Step 4 - 考試結果與結算頁面 (Pass / Fail & Result Page)
+# Step 5 - 考試結果與結算頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 5:
     
-    # 確保寫入 Google Sheets 的動作在整個 Session 中只執行一次，防止雙重寫入或覆蓋
     if not st.session_state.get("exam_sheets_updated", False):
         try:
             answered_count = len(st.session_state.get("answers", {}))
             focus_losses = st.session_state.get("focus_loss_count", 0)
             
-            # 💡 範例評分邏輯：假設總題數 75 題，你可以比對答案算出正確題數
-            # 這裡示範如何計算分數與判定 Pass / Fail（可根據你的答題對照表調整）
             correct_count = 0
             user_answers = st.session_state.get("answers", {})
-            correct_answer_key = st.session_state.get("correct_answers", {}) # 假設你有正確答案字典
+            correct_answer_key = st.session_state.get("correct_answers", {})
             
             for q_idx, user_ans in user_answers.items():
                 if correct_answer_key.get(q_idx) == user_ans:
                     correct_count += 1
             
-            # 若沒有設定對照表，這裡先以答對率或預設邏輯為例（例如答對幾題及格，門檻可自行調整）
-            passing_score_percentage = 70.0 # 70% 及格
+            passing_score_percentage = 70.0
             score_percentage = (correct_count / 75.0) * 100 if 75 > 0 else 0
-            
             final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
             
-            # 連線 Google Sheets 寫入資料
             db = get_sheets_connection()
             sheet = db.worksheet("Vouchers")
             cell = sheet.find(st.session_state.voucher_code)
             if cell:
                 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
-                # 1. 寫入交卷時間到 Column 12 (ExamEndTime)
                 sheet.update_cell(cell.row, 12, current_time) 
-                
-                # 2. 寫入 Pass 或 Fail 狀態到 Column 13 (ExamStatus)
                 sheet.update_cell(cell.row, 13, final_status)
             
-            # 鎖定標記，避免重複寫入
             st.session_state.exam_sheets_updated = True
             st.session_state.exam_final_status = final_status
             st.session_state.exam_correct_count = correct_count
@@ -947,17 +730,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
         except Exception as e:
             print(f"Error updating exam result to Google Sheets: {e}")
 
-    # --- 畫面呈現：Exam Result Page ---
     st.markdown("<h2 style='text-align: center;'>📋 Examination Result & Summary</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    # 取得存在 session 中的最終狀態
     status = st.session_state.get("exam_final_status", "Submitted")
     correct_cnt = st.session_state.get("exam_correct_count", 0)
     answered_cnt = len(st.session_state.get("answers", {}))
     focus_warnings = st.session_state.get("focus_loss_count", 0)
     
-    # 呈現大大的 Pass / Fail 狀態提醒框
     if status == "Pass":
         st.success("🎉 **CONGRATULATIONS! You have PASSED the examination.**")
     else:
@@ -965,7 +745,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
         
     st.write(f"Candidate: **{st.session_state.get('candidate_name', 'Candidate')}** ({st.session_state.get('candidate_email', '')})")
     
-    # 數據指標看板
     col_res1, col_res2, col_res3, col_res4 = st.columns(4)
     col_res1.metric("Final Status", status)
     col_res2.metric("Questions Answered", f"{answered_cnt} / 75")
@@ -975,9 +754,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
     st.markdown("---")
     st.info("💡 Your results and timestamps have been securely recorded in the official examination database (Google Sheets).")
     
-    # 離開按鈕
     if st.button("🚪 Exit Examination Portal", use_container_width=True):
-        # 清除所有 Session 狀態，安全登出
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
