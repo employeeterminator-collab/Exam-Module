@@ -130,6 +130,17 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
+ # 取得題庫資料
+def get_exam_questions():
+    try:
+        db = get_sheets_connection()
+        sheet = db.worksheet("Questions")
+        records = sheet.get_all_records()
+        return records
+    except Exception as e:
+        print(f"Failed to fetch questions: {e}")
+        return []
+
 
 # ==========================================
 # Step 0 - 考生身分驗證與精準 DNF 檢查
@@ -436,267 +447,16 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               st.rerun()
 
 
-# ==========================================
-# Step 3 - 核心問答模組
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 3:
-
-    if "current_q" not in st.session_state:
-        st.session_state.current_q = 1
-    if "answers" not in st.session_state:
-        st.session_state.answers = {}  
-    if "flags" not in st.session_state:
-        st.session_state.flags = set()  
-
-    TOTAL_QUESTIONS = 75
-
-    def handle_focus_loss():
-        log_violation_to_sheet(st.session_state.voucher_code)
-
-    # 1. Render the button normally (no complex CSS needed here)
-    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
-        pass
-
-    # 2. JavaScript handles both auto-hiding the button on load and triggering it on violations
-    st.components.v1.html("""
-        <script>
-            // Automatically hide the trigger button visually on load
-            function hideTriggerButton() {
-                const buttons = parent.document.querySelectorAll('button');
-                buttons.forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) {
-                        // Find Streamlit's parent container and hide it completely
-                        let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
-                        if (container) {
-                            container.style.display = 'none';
-                        }
-                    }
-                });
-            }
-            
-            // Run on load and poll briefly to catch Streamlit's rerender cycles
-            setTimeout(hideTriggerButton, 50);
-            setInterval(hideTriggerButton, 300);
-
-            // Global warning banner setup
-            if (!parent.document.getElementById('global-warning-banner')) {
-                const banner = parent.document.createElement('div');
-                banner.id = 'global-warning-banner';
-                banner.style.cssText = `
-                    position: fixed; top: 0; left: 0; width: 100vw;
-                    background-color: #dc2626; color: white; text-align: center; 
-                    padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
-                    font-size: 15px; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-                    z-index: 2147483647; display: none; box-sizing: border-box;
-                `;
-                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
-                parent.document.body.appendChild(banner);
-            }
-
-            let bannerTimer;
-            function triggerGlobalWarning() {
-                const b = parent.document.getElementById('global-warning-banner');
-                if (b) {
-                    b.style.display = 'block';
-                    clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => {
-                        b.style.display = 'none';
-                    }, 8000);
-                }
-                
-                const buttons = parent.document.querySelectorAll('button');
-                buttons.forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) {
-                        btn.click();
-                    }
-                });
-            }
-
-            parent.document.addEventListener("visibilitychange", function() {
-                if (parent.document.hidden) {
-                    triggerGlobalWarning();
-                }
-            });
-
-            parent.window.addEventListener("blur", function() {
-                triggerGlobalWarning();
-            });
-
-            parent.document.addEventListener("mouseleave", function(e) {
-                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
-                    triggerGlobalWarning();
-                }
-            });
-        </script>
-    """, height=0)
-
-    header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
-    
-    with header_col1:
-        st.markdown(f"### 👤 Candidate: {st.session_state.get('candidate_name', 'User')}")
-        st.write(f"Email: {st.session_state.get('candidate_email', '')}")
-   
-    with header_col2:
-        if "exam_remaining_seconds" not in st.session_state:
-            initial_remaining = 5400
-            try:
-                db = get_sheets_connection()
-                sheet = db.worksheet("Vouchers")
-                cell = sheet.find(st.session_state.voucher_code)
-                if cell:
-                    committed_str = sheet.cell(cell.row, 10).value
-                    if committed_str and str(committed_str).strip() != "":
-                        committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
-                        elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
-                        initial_remaining = max(0, 5400 - elapsed_seconds)
-            except Exception as e:
-                print(f"Error calculating initial remaining time: {e}")
-            
-            st.session_state.exam_remaining_seconds = initial_remaining
-            st.session_state.exam_timer_start_local = time.time()
-
-        elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
-        remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
-
-        timer_html = """
-            <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
-                <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px; margin-bottom: 4px;">⏳ TIME REMAINING</div>
-                <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
-            </div>
-            <script>
-                const STORAGE_KEY = 'exam_end_time_VOUCHER_PLACEHOLDER';
-                const serverRemaining = SERVER_REMAINING_PLACEHOLDER;
-                
-                let endTime = Date.now() + (serverRemaining * 1000);
-                parent.sessionStorage.setItem(STORAGE_KEY, endTime);
-
-                function updateCountdown() {
-                    const now = Date.now();
-                    let timeLeft = Math.floor((endTime - now) / 1000);
-                    if (timeLeft < 0) timeLeft = 0;
-
-                    const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
-                    const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
-                    const s = String(timeLeft % 60).padStart(2, '0');
-
-                    const target = document.getElementById('native-js-timer');
-                    if (target) {
-                        target.innerText = h + ":" + m + ":" + s;
-                    }
-                }
-
-                updateCountdown();
-                setInterval(updateCountdown, 1000);
-            </script>
-        """
-        timer_html = timer_html.replace('VOUCHER_PLACEHOLDER', str(st.session_state.voucher_code))
-        timer_html = timer_html.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
-
-        st.components.v1.html(timer_html, height=75)
-           
-    with header_col3:
-        st.components.v1.html("""
-            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
-                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 72px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
-            </div>
-            <script>
-                async function initCam() {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                        document.getElementById('top-webcam').srcObject = stream;
-                    } catch (e) {
-                        console.error("Camera access error", e);
-                    }
-                }
-                initCam();
-            </script>
-        """, height=110)
-
-    st.divider()
-
-    with st.sidebar:
-        st.markdown("### 📹 Security Status")
-        st.markdown(f"""
-            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
-                <div style="color: #475569; font-size: 11px; margin-top: 4px;">Warnings: {st.session_state.focus_loss_count}</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown("### 🗺️ Question Palette (1–75)")
-        st.markdown("<small>🟢 Answered | ⚪ Unanswered | ⭐ Flagged</small>", unsafe_allow_html=True)
-        
-        cols_per_row = 5
-        for i in range(1, TOTAL_QUESTIONS + 1, cols_per_row):
-            cols = st.columns(cols_per_row)
-            for j in range(cols_per_row):
-                q_num = i + j
-                if q_num <= TOTAL_QUESTIONS:
-                    label = f"⭐{q_num}" if q_num in st.session_state.flagged_questions else f"{q_num}"
-                    if cols[j].button(label, key=f"pal_{q_num}", use_container_width=True):
-                        st.session_state.current_q = q_num
-                        st.rerun()
-
-    q_idx = st.session_state.current_q
-
-    st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
-    st.progress(q_idx / TOTAL_QUESTIONS)
-
-    st.markdown(f"""
-    > **Scenario / Question Text for Q{q_idx}:**  
-    > According to the Shisa Kanko (Pointing and Calling) safety protocols, what is the primary cognitive benefit of executing a physical point paired with a verbal command during a critical operational check?
-    """)
-
-    options = [
-        "A. It reduces muscular fatigue during long shifts.",
-        "B. It enhances consciousness and reduces operational errors by synchronizing brain and sensory alertness.",
-        "C. It replaces the need for standard digital logging.",
-        "D. It is purely ceremonial and has no measurable safety impact."
-    ]
-
-    current_answer = st.session_state.answers.get(q_idx, None)
-    selected = st.radio(
-        "Select your answer:", 
-        options, 
-        index=options.index(current_answer) if current_answer in options else None, 
-        key=f"q_radio_{q_idx}"
-    )
-
-    if selected:
-        st.session_state.answers[q_idx] = selected
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-
-    with col_btn1:
-        is_flagged = q_idx in st.session_state.flagged_questions
-        flag_label = "🚩 Flagged for Review" if is_flagged else "🏳️ Flag Question"
-
-        if st.checkbox(flag_label, value=is_flagged, key=f"flag_box_{q_idx}"):
-            st.session_state.flagged_questions.add(q_idx)
-        else:
-            st.session_state.flagged_questions.discard(q_idx)
-
-    with col_btn2:
-        if st.button("⬅️ Previous", use_container_width=True, disabled=(q_idx == 1)):
-            st.session_state.current_q -= 1
-            st.rerun()
-
-    with col_btn3:
-        if st.button("Next ➡️", use_container_width=True, disabled=(q_idx == TOTAL_QUESTIONS)):
-            st.session_state.current_q += 1
-            st.rerun()
-
-    st.markdown("---")
-
-    b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
-    with b_col2:
-        if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
-            st.session_state.exam_step = 4
-            st.rerun()
+# 取得題庫資料
+def get_exam_questions():
+    try:
+        db = get_sheets_connection()
+        sheet = db.worksheet("Questions")
+        records = sheet.get_all_records()
+        return records
+    except Exception as e:
+        print(f"Failed to fetch questions: {e}")
+        return []
 
 
 # ==========================================
@@ -734,24 +494,28 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                 try:
                     answered_count = len(st.session_state.get("answers", {}))
                     focus_losses = st.session_state.get("focus_loss_count", 0)
+                    total_q_count = len(st.session_state.get("exam_questions", [])) or 75
                     
                     correct_count = 0
                     user_answers = st.session_state.get("answers", {})
-                    correct_answer_key = st.session_state.get("correct_answers", {})
+                    exam_questions = st.session_state.get("exam_questions", [])
                     
-                    for q_idx, user_ans in user_answers.items():
-                        if correct_answer_key.get(q_idx) == user_ans:
+                    # Grade dynamically using the 'CorrectAnswer' column from Google Sheets
+                    for idx, q_data in enumerate(exam_questions, start=1):
+                        user_ans = user_answers.get(idx, "")
+                        correct_ans = str(q_data.get("CorrectAnswer", "")).strip()
+                        if user_ans and user_ans == correct_ans:
                             correct_count += 1
                     
                     passing_score_percentage = 70.0
-                    score_percentage = (correct_count / 75.0) * 100 if 75 > 0 else 0
+                    score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
                     final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
                     
                     finalize_exam_submission(
                         st.session_state.voucher_code,
                         focus_losses,
                         final_status,
-                        explanation=f"Answered {answered_count}/75, Correct {correct_count}"
+                        explanation=f"Answered {answered_count}/{total_q_count}, Correct {correct_count}"
                     )
                     
                     st.session_state.exam_final_status = final_status
