@@ -464,7 +464,104 @@ def get_exam_questions():
         if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
             st.session_state.exam_step = 4
             st.rerun()
+# ==========================================
+# Step 3 - Core Examination Room (Questions & Answers)
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 3:
+    # Fetch questions if not already cached in session state
+    if "exam_questions" not in st.session_state or not st.session_state.exam_questions:
+        st.session_state.exam_questions = get_exam_questions()
 
+    exam_questions = st.session_state.get("exam_questions", [])
+    
+    if not exam_questions:
+        st.error("❌ Failed to load exam questions from the database. Please check your connection or contact the administrator.")
+    else:
+        total_q_count = len(exam_questions)
+        
+        # Initialize current question index pointer if not present
+        if "current_q" not in st.session_state:
+            st.session_state.current_q = 1
+
+        current_idx = st.session_state.current_q - 1
+        current_q_data = exam_questions[current_idx]
+
+        # Top progress bar and header info
+        st.markdown(f"### 🛡️ Shisa Kanko-Shi Examination Room")
+        progress_val = st.session_state.current_q / total_q_count
+        st.progress(progress_val)
+        st.write(f"Question **{st.session_state.current_q}** of **{total_q_count}**")
+        st.markdown("---")
+
+        # Display question content
+        q_text = current_q_data.get("Question", "Question text unavailable.")
+        st.markdown(f"#### Q{st.session_state.current_q}. {q_text}")
+
+        # Extract options (assuming columns OptionA, OptionB, OptionC, OptionD)
+        options = []
+        for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
+            val = current_q_data.get(opt_key, "")
+            if val and str(val).strip() != "":
+                options.append(str(val).strip())
+
+        # Retrieve saved answers
+        if "answers" not in st.session_state:
+            st.session_state.answers = {}
+
+        current_answer = st.session_state.answers.get(st.session_state.current_q, None)
+        
+        # Determine option index for radio button default
+        default_index = 0
+        if current_answer in options:
+            default_index = options.index(current_answer)
+
+        # Radio button selection
+        selected_option = st.radio(
+            "Select your answer:",
+            options,
+            index=default_index,
+            key=f"q_radio_{st.session_state.current_q}"
+        )
+
+        # Save answer on selection update
+        if selected_option:
+            st.session_state.answers[st.session_state.current_q] = selected_option
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Navigation and Flagging controls
+        col_nav1, col_nav2, col_nav3 = st.columns(3)
+        
+        with col_nav1:
+            if st.session_state.current_q > 1:
+                if st.button("⬅️ Previous Question", use_container_width=True):
+                    st.session_state.current_q -= 1
+                    st.rerun()
+
+        with col_nav2:
+            is_flagged = st.session_state.current_q in st.session_state.flagged_questions
+            flag_label = "⭐ Unflag Question" if is_flagged else "☆ Flag for Review"
+            if st.button(flag_label, use_container_width=True):
+                if is_flagged:
+                    st.session_state.flagged_questions.remove(st.session_state.current_q)
+                else:
+                    st.session_state.flagged_questions.add(st.session_state.current_q)
+                st.rerun()
+
+        with col_nav3:
+            if st.session_state.current_q < total_q_count:
+                if st.button("Next Question ➡️", use_container_width=True, type="primary"):
+                    st.session_state.current_q += 1
+                    st.rerun()
+
+        st.markdown("---")
+        
+        # Jump or Review trigger footer
+        b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
+        with b_col2:
+            if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
+                st.session_state.exam_step = 4
+                st.rerun()
 # ==========================================
 # Step 4 - Review and Submit Page
 # ==========================================
