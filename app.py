@@ -455,21 +455,21 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     placeholder_container = st.empty()
     with placeholder_container.container():
     # Inject CSS to make the button invisible and out of the way, but still present in the DOM
-    st.markdown("""
-        <style>
-        div.element-container:has(button[key="hidden-violation-trigger"]),
-        button[key="hidden-violation-trigger"] {
-            position: absolute;
-            left: -9999px;
-            opacity: 0;
-            pointer-events: none;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+        st.markdown("""
+            <style>
+            div.element-container:has(button[key="hidden-violation-trigger"]),
+            button[key="hidden-violation-trigger"] {
+                position: absolute;
+                left: -9999px;
+                opacity: 0;
+                pointer-events: none;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
     # Render the button directly so the JavaScript event listener can trigger it[cite: 9]
-    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
-        pass
+        if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
+            pass
    
 
     st.components.v1.html("""
