@@ -760,14 +760,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
 
     with col_btn1:
-        is_flagged = q_idx in st.session_state.flags
-        flag_label = "⭐ Unflag Question" if is_flagged else "⭐ Flag for Review"
-        if st.button(flag_label, use_container_width=True):
-            if is_flagged:
-                st.session_state.flags.remove(q_idx)
-            else:
-                st.session_state.flags.add(q_idx)
-            st.rerun()
+        is_flagged = q_idx in st.session_state.flagged_questions
+        flag_label = "🚩 Flagged for Review" if is_flagged else "🏳️ Flag Question"
+
+        if st.checkbox(flag_label, value=is_flagged, key=f"flag_box_{q_idx}"):
+            st.session_state.flagged_questions.add(q_idx)
+        else:
+            st.session_state.flagged_questions.discard(q_idx)
 
     with col_btn2:
         if st.button("⬅️ Previous", use_container_width=True, disabled=(q_idx == 1)):
