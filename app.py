@@ -452,26 +452,28 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     def handle_focus_loss():
         log_violation_to_sheet(st.session_state.voucher_code)
 
-    # Inject CSS to hide the custom wrapper completely off-screen
-    st.markdown("""
-        <style>
-        .hidden-trigger-wrapper {
-            position: absolute !important;
-            left: -9999px !important;
-            top: -9999px !important;
-            width: 0px !important;
-            height: 0px !important;
-            overflow: hidden !important;
-            opacity: 0 !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    placeholder_container = st.empty()
+    with placeholder_container.container():
+        # Target Streamlit's container directly and throw it completely off-screen
+        st.markdown("""
+            <style>
+            div.element-container:has(button[key="hidden-violation-trigger"]) {
+                position: fixed !important;
+                top: -999px !important;
+                left: -999px !important;
+                width: 0px !important;
+                height: 0px !important;
+                overflow: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+                z-index: -999 !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
-    # Wrap the button in the custom container so it is invisible to candidates
-    st.markdown('<div class="hidden-trigger-wrapper">', unsafe_allow_html=True)
-    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
-        pass
-    st.markdown('</div>', unsafe_allow_html=True)
+        # Render the button normally so JavaScript can find and click it
+        if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
+            pass
    
 
     st.components.v1.html("""
