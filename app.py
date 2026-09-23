@@ -181,7 +181,7 @@ if not st.session_state.authenticated:
               row_index = idx
               break
 
-        if matched_record:
+          if matched_record:
             # Fetch direct row values by exact column index to prevent header naming mismatches
             row_vals = vouchers_sheet.row_values(row_index)
             
