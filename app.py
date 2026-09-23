@@ -454,22 +454,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     placeholder_container = st.empty()
     with placeholder_container.container():
-        # Inject CSS to completely hide the button container while keeping it in the DOM
+        # Inject CSS to completely hide the button container and its label text
         st.markdown("""
             <style>
+            div.element-container:has(button[key="hidden-violation-trigger"]),
             div[data-testid="stButton"]:has(button[key="hidden-violation-trigger"]) {
-                position: absolute !important;
-                width: 0px !important;
+                display: none !important;
+                visibility: hidden !important;
                 height: 0px !important;
-                overflow: hidden !important;
-                opacity: 0 !important;
-                pointer-events: none !important;
-                clip: rect(0, 0, 0, 0) !important;
+                width: 0px !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
             </style>
         """, unsafe_allow_html=True)
 
-        # Render the button with its original text so JavaScript can find and click it automatically
+        # Render the button with the exact text the JS script looks for
         if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
             pass
    
