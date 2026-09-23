@@ -141,7 +141,7 @@ def get_exam_questions():
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
         
-        # Open the "Questions" spreadsheet file and select tab "A"
+        # Open the separate "Questions" spreadsheet file and select tab "A"
         spreadsheet = client.open("Questions")
         sheet = spreadsheet.worksheet("A")
         records = sheet.get_all_records()
@@ -149,7 +149,6 @@ def get_exam_questions():
         normalized_records = []
         for r in records:
             q_text = r.get("QuestionText", r.get("Question", ""))
-            # Skip empty rows if any exist at the bottom
             if not str(q_text).strip():
                 continue
             normalized_records.append({
@@ -165,28 +164,10 @@ def get_exam_questions():
             return normalized_records
             
     except Exception as e:
-        # Display the exact connection error in the logs for quick diagnosis
-        print(f"Failed to fetch questions from file 'Questions', tab 'A': {e}")
-    
-    # Fallback to prevent infinite load failure if the connection fails or sheet is blank
-    return [
-        {
-            "Question": "Sample Question: What is the Capital of United Stats",
-            "OptionA": "Washington DC",
-            "OptionB": "Ottawa",
-            "OptionC": "London",
-            "OptionD": "Tokyo",
-            "CorrectAnswer": "A"
-        },
-        {
-            "Question": "Sample Question: What is the Capital of UK",
-            "OptionA": "Ottawa",
-            "OptionB": "London",
-            "OptionC": "Tokyo",
-            "OptionD": "Washington DC",
-            "CorrectAnswer": "B"
-        }
-    ]
+        # ⚠️ Temporarily show the exact error on screen so we can diagnose it immediately
+        st.error(f"Google Sheets Debug Error: {e}")
+        
+    return []
 
 
 # ==========================================
