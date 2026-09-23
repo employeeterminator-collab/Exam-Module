@@ -56,6 +56,8 @@ if "on_break" not in st.session_state:
   st.session_state.on_break = False
 if "break_start_time" not in st.session_state:
   st.session_state.break_start_time = None
+if "flagged_questions" not in st.session_state:
+    st.session_state.flagged_questions = set()
 
 # ==========================================
 # 3. Google Sheets 連線與資料庫輔助函式
@@ -511,7 +513,17 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
 
-    # 接下來接你原本的標頭區、時鐘、題目導航與 75 題內容...
+    # 接下來接你原本的標頭區、時鐘、題目導航與 75 題內容... 
+
+    # 🚩 Flag 狀態控制
+    is_flagged = q_idx in st.session_state.flagged_questions
+    flag_label = "🚩 Flagged for Review" if is_flagged else "🏳️ Flag Question"
+
+    if st.checkbox(flag_label, value=is_flagged, key=f"flag_box_{q_idx}"):
+        st.session_state.flagged_questions.add(q_idx)
+    else:
+        st.session_state.flagged_questions.discard(q_idx)
+    
 # ==========================================
 # Step 3 - 核心問答模組
 # ==========================================
