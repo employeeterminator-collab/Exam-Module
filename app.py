@@ -496,7 +496,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
         with c2:
             st.write(status_icon)
         with c3:
-            if st.button(f"Jump to Q{q_num}", key:="review_jump_{q_num}"):
+            if st.button(f"Jump to Q{q_num}", key=f"review_jump_{q_num}"):
                 st.session_state.current_q = q_num
                 st.session_state.exam_step = 3
                 st.rerun()
