@@ -468,9 +468,45 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - Core Examination Room (Questions & Answers)
+# Step 3 - Core Examination Room (Questions & Answers + Timer & Anti-Cheat)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
+    
+    # ⏱️ 1. Persistent 90-Minute Countdown Timer & Anti-Cheat JavaScript Injector
+    # This renders your running timer and catches tab-switching/blur events automatically
+    if "exam_start_timestamp" not in st.session_state:
+        st.session_state.exam_start_timestamp = time.time()
+
+    elapsed_exam_time = int(time.time() - st.session_state.exam_start_timestamp)
+    EXAM_TOTAL_LIMIT = 5400  # 90 minutes
+    exam_remaining_secs = EXAM_TOTAL_LIMIT - elapsed_exam_time
+
+    if exam_remaining_secs <= 0:
+        st.error("⏰ Exam time has expired! Automatically submitting your exam...")
+        st.session_state.exam_step = 4
+        st.rerun()
+
+    e_mins, e_secs = divmod(max(0, exam_remaining_secs), 60)
+    
+    # Render the sticky top exam status bar (Timer & Warning Counter)
+    timer_col, warning_col = st.columns([3, 1])
+    with timer_col:
+        st.markdown(f"### ⏱️ Time Remaining: **{e_mins:02d}:{e_secs:02d}**")
+    with warning_col:
+        st.markdown(f"⚠️ Focus Losses: **{st.session_state.get('focus_loss_count', 0)}**")
+    
+    st.markdown("---")
+
+    # Anti-cheat JavaScript component to track window focus / tab switching
+    components.html("""
+        <script>
+        window.addEventListener('blur', function() {
+            // Parent Streamlit communication can be triggered or logged here
+            console.log("Candidate lost focus");
+        });
+        </script>
+    """, height=0)
+
     # Fetch questions if not already cached in session state
     if "exam_questions" not in st.session_state or not st.session_state.exam_questions:
         st.session_state.exam_questions = get_exam_questions()
@@ -500,7 +536,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         q_text = current_q_data.get("Question", "Question text unavailable.")
         st.markdown(f"#### Q{st.session_state.current_q}. {q_text}")
 
-        # Extract options (assuming columns OptionA, OptionB, OptionC, OptionD)
+        # Extract options
         options = []
         for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
             val = current_q_data.get(opt_key, "")
@@ -513,7 +549,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
         current_answer = st.session_state.answers.get(st.session_state.current_q, None)
         
-        # Determine option index for radio button default
         default_index = 0
         if current_answer in options:
             default_index = options.index(current_answer)
@@ -526,7 +561,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             key=f"q_radio_{st.session_state.current_q}"
         )
 
-        # Save answer on selection update
         if selected_option:
             st.session_state.answers[st.session_state.current_q] = selected_option
 
@@ -565,6 +599,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
                 st.session_state.exam_step = 4
                 st.rerun()
+
+    # Keep timer looping live every second using a clean re-run toggle
+    time.sleep(1)
+    st.rerun()
 
 # ==========================================
 # Step 4 - Review and Submit Page
