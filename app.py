@@ -57,6 +57,8 @@ if "break_start_time" not in st.session_state:
   st.session_state.break_start_time = None
 if "flagged_questions" not in st.session_state:
     st.session_state.flagged_questions = set()
+if "focus_loss_count" not in st.session_state:
+    st.session_state.focus_loss_count = 0
 
 # ==========================================
 # 3. Google Sheets 連線與資料庫輔助函式
@@ -86,13 +88,27 @@ def update_voucher_committed(voucher_code):
     except Exception as e:
         print(f"Failed to update Committed time: {e}")
 
-# 記錄違規事件到 ViolationLogs Tab
+# 記錄違規事件到 ViolationLogs Tab 同時即時更新 Vouchers 上的警告次數
 def log_violation_to_sheet(voucher_code):
     try:
         db = get_sheets_connection()
+        
+        # 1. 寫入 ViolationLogs
         logs_sheet = db.worksheet("ViolationLogs")
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logs_sheet.append_row([voucher_code, current_time, "Focus Lost / Tab Switched"])
+        
+        # 2. 同步累加 Vouchers 表格中的 WarningCount 欄位 (假設在第 11 欄)
+        vouchers_sheet = db.worksheet("Vouchers")
+        cell = vouchers_sheet.find(voucher_code)
+        if cell:
+            current_warnings = vouchers_sheet.cell(cell.row, 11).value
+            try:
+                new_count = int(current_warnings) + 1 if current_warnings and str(current_warnings).isdigit() else 1
+            except:
+                new_count = 1
+            vouchers_sheet.update_cell(cell.row, 11, new_count)
+            st.session_state.focus_loss_count = new_count
     except Exception as e:
         print(f"Failed to log violation: {e}")
 
@@ -104,29 +120,16 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
         cell = sheet.find(voucher_code)
         if cell:
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sheet.update_cell(cell.row, 9, completed_time)
-            sheet.update_cell(cell.row, 11, warning_count)
-            sheet.update_cell(cell.row, 12, exam_status)
-            sheet.update_cell(cell.row, 13, explanation)
+            sheet.update_cell(cell.row, 9, completed_time)  # CompletedExam / Photo URL 欄位對應
+            sheet.update_cell(cell.row, 11, warning_count) # WarningCount
+            sheet.update_cell(cell.row, 12, exam_status)   # ExamStatus / EndTime
+            sheet.update_cell(cell.row, 13, explanation)   # Explanation
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
-def update_exam_end_time(voucher_code, status_text):
-    try:
-        db = get_sheets_connection()
-        sheet = db.worksheet("Vouchers")
-        cell = sheet.find(voucher_code)
-        if cell:
-            current_val = sheet.cell(cell.row, 12).value
-            if not current_val or str(current_val).strip() == "":
-                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                sheet.update_cell(cell.row, 12, current_time)
-    except Exception as e:
-        print(f"Failed to update ExamEndTime: {e}")
-
 
 # ==========================================
-# Step 0 - 考生身分驗證、重連與憑證確認
+# Step 0 - 考生身分驗證與防止重複登入
 # ==========================================
 if not st.session_state.authenticated:
   st.markdown(
@@ -176,11 +179,14 @@ if not st.session_state.authenticated:
               break
 
           if matched_record:
-            completed_exam = str(matched_record.get("CompletedExam", "")).strip()
-            committed_time = str(matched_record.get("Committed", "")).strip()
-
-            if completed_exam != "":
-              st.error("❌ This exam has already been completed. You cannot log in again with this voucher.")
+            # 嚴格檢查是否已經完成考試（檢查 CompletedExam、ExamEndTime 與 Status 相關欄位）
+            completed_exam_val = str(matched_record.get("CompletedExam", "")).strip()
+            exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()
+            status_val = str(matched_record.get("Status", "")).strip()
+            
+            # 只要有任何一項代表已完成、Pass、Fail 或 DNF，即判定為不可再次登入
+            if completed_exam_val != "" or exam_end_val in ["Pass", "Fail", "DNF"] or len(exam_end_val) > 5:
+              st.error("❌ **Access Denied:** This examination has already been completed or submitted using this voucher. You cannot log in again.")
             else:
               f_name = str(matched_record.get("EnglishFirstName", "")).strip()
               l_name = str(matched_record.get("EnglishLastName", "")).strip()
@@ -194,6 +200,7 @@ if not st.session_state.authenticated:
               st.session_state.candidate_japanese_name = j_name
               st.session_state.candidate_name = f"{f_name} {l_name}".strip()
 
+              committed_time = str(matched_record.get("Committed", "")).strip()
               if committed_time != "":
                 try:
                     committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
@@ -201,7 +208,6 @@ if not st.session_state.authenticated:
                     EXAM_TIME_LIMIT = 5400 
                     
                     if elapsed_seconds > EXAM_TIME_LIMIT:
-                        exam_end_val = vouchers_sheet.cell(row_index, 12).value  
                         if not exam_end_val or str(exam_end_val).strip() == "":
                             vouchers_sheet.update_cell(row_index, 12, "DNF")
                             
@@ -219,6 +225,8 @@ if not st.session_state.authenticated:
               else:
                 st.session_state.exam_step = 1
                 st.rerun()
+          else:
+            st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
                   
         except Exception as e:
           st.error(f"Connection error: {e}")
@@ -415,35 +423,31 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (隱藏背景按鈕並修復跳轉)
+# Step 3 - 核心問答模組 (修復違規次數同步計數)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
-    # 1. 初始化 Step 3 變數
     if "current_q" not in st.session_state:
         st.session_state.current_q = 1
     if "answers" not in st.session_state:
         st.session_state.answers = {}  
     if "flags" not in st.session_state:
         st.session_state.flags = set()  
-    if "focus_loss_count" not in st.session_state:
-        st.session_state.focus_loss_count = 0
 
     TOTAL_QUESTIONS = 75
 
-    # 2. 接收前端失焦事件的後端處理函式
+    # 處理違規回呼函式（會自動重新整理畫面並更新計數）
     def handle_focus_loss():
-        st.session_state.focus_loss_count += 1
         log_violation_to_sheet(st.session_state.voucher_code)
 
-    # 利用 st.empty() 徹底將隱藏按鈕從畫面上移除，不留任何痕跡
+    # 隱藏按鈕容器
     placeholder_container = st.empty()
     with placeholder_container.container():
         if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
             pass
     placeholder_container.empty()
 
-    # 3. 注入頂部防作弊警告 Banner 與自動回報 JavaScript
+    # 注入防作弊 JS，偵測切換頁籤、blur 或滑鼠移出視窗
     st.components.v1.html("""
         <script>
             if (!parent.document.getElementById('global-warning-banner')) {
@@ -471,7 +475,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     }, 8000);
                 }
                 
-                // 自動觸發隱藏按鈕以累加後端計數與寫入 Google Sheets
+                // 自動點擊隱藏按鈕以觸發後端計數更新與重新整理
                 const buttons = parent.document.querySelectorAll('button');
                 buttons.forEach(btn => {
                     if (btn.innerText.includes('TriggerViolationBackend')) {
@@ -498,7 +502,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
 
-    # 4. 頂部標頭區 (候選人資訊、時鐘、相機)
+    # 頂部標頭區
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
@@ -584,7 +588,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.divider()
 
-    # 5. 側邊欄 (防作弊狀態與題號面板)
+    # 側邊欄狀態
     with st.sidebar:
         st.markdown("### 📹 Security Status")
         st.markdown(f"""
@@ -609,7 +613,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         st.session_state.current_q = q_num
                         st.rerun()
 
-    # 6. 主畫面答題區
+    # 主畫面答題區
     q_idx = st.session_state.current_q
 
     st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
@@ -671,7 +675,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
 
 # ==========================================
-# Step 4 - 考試總結與提交確認頁面 (新增)
+# Step 4 - 考試總結與提交確認頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Final Submission</h2>", unsafe_allow_html=True)
@@ -703,7 +707,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
         if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
             with st.spinner("Submitting exam and recording results..."):
                 try:
-                    # 結算與更新至資料庫
                     answered_count = len(st.session_state.get("answers", {}))
                     focus_losses = st.session_state.get("focus_loss_count", 0)
                     
@@ -719,7 +722,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     score_percentage = (correct_count / 75.0) * 100 if 75 > 0 else 0
                     final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
                     
-                    # 呼叫 finalize 寫入 Google Sheets
                     finalize_exam_submission(
                         st.session_state.voucher_code,
                         focus_losses,
