@@ -456,14 +456,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     with placeholder_container.container():
     # Inject CSS to make the button invisible and out of the way, but still present in the DOM
         st.markdown("""
-            <style>
-            div.element-container:has(button[key="hidden-violation-trigger"]),
-            button[key="hidden-violation-trigger"] {
-                position: fixed;
-                left: -0px;
-                bottom: 0px;
-                opacity: 0;
-                pointer-events: none;
+           <style>
+        div.element-container:has(button[key="hidden-violation-trigger"]),
+        button[key="hidden-violation-trigger"] {
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            width: 1px !important;
+            height: 1px !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            z-index: 99998 !important;
+            overflow: hidden !important;
             }
             </style>
         """, unsafe_allow_html=True)
