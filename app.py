@@ -460,27 +460,48 @@ def get_exam_questions():
 
 
 # ==========================================
-# Step 4 - 考試總結與提交確認頁面
+# Step 4 - Review and Submit Page
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Final Submission</h2>", unsafe_allow_html=True)
-    st.write("---")
+    st.markdown("### 📋 Examination Review & Submission")
+    st.write("Please review your progress below before submitting your final answers.")
 
-    answered_cnt = len(st.session_state.get("answers", {}))
-    unanswered_cnt = 75 - answered_cnt
-    flagged_cnt = len(st.session_state.get("flagged_questions", set()))
-    focus_warnings = st.session_state.get("focus_loss_count", 0)
+    total_q_count = len(st.session_state.get("exam_questions", [])) or 75
+    answered_count = len(st.session_state.get("answers", {}))
+    flagged_count = len(st.session_state.get("flagged_questions", set()))
 
-    st.markdown(f"""
-    ### Summary Status:
-    - **Questions Answered:** {answered_cnt} / 75
-    - **Unanswered Questions:** {unanswered_cnt}
-    - **Flagged Questions:** {flagged_cnt}
-    - **Focus Loss Warnings Recorded:** {focus_warnings}
-    """)
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    with col_stat1:
+        st.metric("Total Questions", total_q_count)
+    with col_stat2:
+        st.metric("Answered", answered_count)
+    with col_stat3:
+        st.metric("Flagged for Review", flagged_count)
 
     st.markdown("---")
-    st.warning("⚠️ Once you click **Confirm and Submit Exam**, your answers will be finalized and sent to the examination database. You cannot make any further changes.")
+    st.markdown("#### 🔍 Question Status Summary")
+
+    # Render quick summary table or list
+    for q_num in range(1, total_q_count + 1):
+        has_answered = q_num in st.session_state.get("answers", {})
+        is_flagged = q_num in st.session_state.get("flagged_questions", set())
+        
+        status_icon = "🟢 Answered" if has_answered else "⚪ Unanswered"
+        if is_flagged:
+            status_icon += " | ⭐ Flagged"
+
+        c1, c2, c3 = st.columns([1, 4, 2])
+        with c1:
+            st.write(f"**Q{q_num}**")
+        with c2:
+            st.write(status_icon)
+        with c3:
+            if st.button(f"Jump to Q{q_num}", key:="review_jump_{q_num}"):
+                st.session_state.current_q = q_num
+                st.session_state.exam_step = 3
+                st.rerun()
+
+    st.markdown("---")
 
     col_sub1, col_sub2 = st.columns(2)
     with col_sub1:
@@ -492,10 +513,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
         if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
             with st.spinner("Submitting exam and recording results..."):
                 try:
-                    answered_count = len(st.session_state.get("answers", {}))
                     focus_losses = st.session_state.get("focus_loss_count", 0)
-                    total_q_count = len(st.session_state.get("exam_questions", [])) or 75
-                    
                     correct_count = 0
                     user_answers = st.session_state.get("answers", {})
                     exam_questions = st.session_state.get("exam_questions", [])
@@ -524,7 +542,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Submission error: {e}")
-
 
 # ==========================================
 # Step 5 - 考試結果與結算頁面
