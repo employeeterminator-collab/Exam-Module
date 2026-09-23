@@ -454,9 +454,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     placeholder_container = st.empty()
     with placeholder_container.container():
-    # Inject CSS to make the button invisible and out of the way, but still present in the DOM
-        st.markdown("""
-           <style>
+    # Inject CSS to fix the hidden violation button at the bottom screen layer and make it invisible
+    st.markdown("""
+        <style>
         div.element-container:has(button[key="hidden-violation-trigger"]),
         button[key="hidden-violation-trigger"] {
             position: fixed !important;
@@ -468,13 +468,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             pointer-events: none !important;
             z-index: 99998 !important;
             overflow: hidden !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-    # Render the button directly so the JavaScript event listener can trigger it[cite: 9]
-        if st.button("", key="hidden-violation-trigger", on_click=handle_focus_loss):
-            pass
+    # Render the button with a blank space so no text leaks or shows up
+    if st.button("&nbsp;", key="hidden-violation-trigger", on_click=handle_focus_loss):
+        pass
    
 
     st.components.v1.html("""
