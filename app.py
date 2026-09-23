@@ -461,7 +461,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             display: none;
         }
         </style>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
         if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
             pass
    
