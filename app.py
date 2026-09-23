@@ -181,65 +181,65 @@ if not st.session_state.authenticated:
               row_index = idx
               break
 
-                 if matched_record:
-                    completed_exam_val = str(matched_record.get("CompletedExam", "")).strip() # Column 12
-                    exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()       # Column 13
-                    committed_time = str(matched_record.get("Committed", "")).strip()       # Column 10
-    
-                    # 🛡️ STRICT BLOCK: If the exam was already finished, passed, failed, or DNF'd, deny entry permanently
-                    if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
-                      st.error("❌ **Access Denied:** This examination has already been completed, submitted, or expired using this voucher. Re-entry is strictly prohibited.")
-                
-                    # 2. Check if already timed out (DNF)
-                    elif committed_time != "":
-                      try:
-                        committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
-                        elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
-                        EXAM_TIME_LIMIT = 5400  # 90 minutes
-    
-                        if elapsed_seconds > EXAM_TIME_LIMIT:
-                            if exam_end_val != "DNF":
-                            vouchers_sheet.update_cell(row_index, 13, "DNF")
-                            st.error("❌ **Access Denied:** Exam session expired (Time limit exceeded). Please contact Administrator.")
-                        else:
-                            # Within valid active session window, resume
-                            f_name = str(matched_record.get("EnglishFirstName", "")).strip()
-                            l_name = str(matched_record.get("EnglishLastName", "")).strip()
-                            j_name = str(matched_record.get("JapaneseName", "")).strip()
-    
-                            st.session_state.authenticated = True
-                            st.session_state.candidate_email = email_input.strip()
-                            st.session_state.voucher_code = voucher_input.strip()
-                            st.session_state.candidate_first_name = f_name
-                            st.session_state.candidate_last_name = l_name
-                            st.session_state.candidate_japanese_name = j_name
-                            st.session_state.candidate_name = f"{f_name} {l_name}".strip()
-    
-                            st.session_state.exam_step = 3
-                            st.success("🔄 Detected an active session. Resuming your exam...")
-                            time.sleep(1)
-                            st.rerun()
-                      except Exception as e:
-                        st.error(f"Time validation error: {e}")
-                    else:
-                      # Brand new session, start Step 1
-                      f_name = str(matched_record.get("EnglishFirstName", "")).strip()
-                      l_name = str(matched_record.get("EnglishLastName", "")).strip()
-                      j_name = str(matched_record.get("JapaneseName", "")).strip()
-    
-                      st.session_state.authenticated = True
-                      st.session_state.candidate_email = email_input.strip()
-                      st.session_state.voucher_code = voucher_input.strip()
-                      st.session_state.candidate_first_name = f_name
-                      st.session_state.candidate_last_name = l_name
-                      st.session_state.candidate_japanese_name = j_name
-                      st.session_state.candidate_name = f"{f_name} {l_name}".strip()
-    
-                      st.session_state.exam_step = 1
-                      st.rerun()
-                  else:
-                    st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
+    if matched_record:
+            completed_exam_val = str(matched_record.get("CompletedExam", "")).strip() # Column 12
+            exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()       # Column 13
+            committed_time = str(matched_record.get("Committed", "")).strip()       # Column 10
 
+            # 🛡️ STRICT BLOCK: If the exam was already finished, passed, failed, or DNF'd, deny entry permanently
+            if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
+              st.error("❌ **Access Denied:** This examination has already been completed, submitted, or expired using this voucher. Re-entry is strictly prohibited.")
+            
+            # 2. Check if already timed out (DNF)
+            elif committed_time != "":
+              try:
+                committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
+                elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
+                EXAM_TIME_LIMIT = 5400  # 90 minutes
+
+                if elapsed_seconds > EXAM_TIME_LIMIT:
+                    if exam_end_val != "DNF":
+                        vouchers_sheet.update_cell(row_index, 13, "DNF")
+                    st.error("❌ **Access Denied:** Exam session expired (Time limit exceeded). Please contact Administrator.")
+                else:
+                    # Within valid active session window, resume
+                    f_name = str(matched_record.get("EnglishFirstName", "")).strip()
+                    l_name = str(matched_record.get("EnglishLastName", "")).strip()
+                    j_name = str(matched_record.get("JapaneseName", "")).strip()
+
+                    st.session_state.authenticated = True
+                    st.session_state.candidate_email = email_input.strip()
+                    st.session_state.voucher_code = voucher_input.strip()
+                    st.session_state.candidate_first_name = f_name
+                    st.session_state.candidate_last_name = l_name
+                    st.session_state.candidate_japanese_name = j_name
+                    st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+
+                    st.session_state.exam_step = 3
+                    st.success("🔄 Detected an active session. Resuming your exam...")
+                    time.sleep(1)
+                    st.rerun()
+              except Exception as e:
+                st.error(f"Time validation error: {e}")
+            else:
+              # Brand new session, start Step 1
+              f_name = str(matched_record.get("EnglishFirstName", "")).strip()
+              l_name = str(matched_record.get("EnglishLastName", "")).strip()
+              j_name = str(matched_record.get("JapaneseName", "")).strip()
+
+              st.session_state.authenticated = True
+              st.session_state.candidate_email = email_input.strip()
+              st.session_state.voucher_code = voucher_input.strip()
+              st.session_state.candidate_first_name = f_name
+              st.session_state.candidate_last_name = l_name
+              st.session_state.candidate_japanese_name = j_name
+              st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+
+              st.session_state.exam_step = 1
+              st.rerun()
+          else:
+            st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
+                
 
 # ==========================================
 # Step 1 - 身分核對與考試須知
