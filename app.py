@@ -141,14 +141,26 @@ def get_exam_questions():
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
         
-        # Open the separate Google Sheet file named "Questions"
-        spreadsheet = client.open("A")
-        # Pull records from the first worksheet (or specify .worksheet("SheetName") if needed)
-        sheet = spreadsheet.get_worksheet(0)
+        # Open the "Questions" spreadsheet file and select tab "A"
+        spreadsheet = client.open("Questions")
+        sheet = spreadsheet.worksheet("A")
         records = sheet.get_all_records()
-        return records
+        
+        # Normalize keys so that "QuestionText" maps to "Question" for the exam app
+        normalized_records = []
+        for r in records:
+            q_text = r.get("QuestionText", r.get("Question", ""))
+            normalized_records.append({
+                "Question": q_text,
+                "OptionA": r.get("OptionA", ""),
+                "OptionB": r.get("OptionB", ""),
+                "OptionC": r.get("OptionC", ""),
+                "OptionD": r.get("OptionD", ""),
+                "CorrectAnswer": r.get("CorrectAnswer", "")
+            })
+        return normalized_records
     except Exception as e:
-        print(f"Failed to fetch questions from separate file: {e}")
+        print(f"Failed to fetch questions from file 'Questions', tab 'A': {e}")
         return []
 
 
