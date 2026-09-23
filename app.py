@@ -181,16 +181,16 @@ if not st.session_state.authenticated:
               row_index = idx
               break
 
-    if matched_record:
-            completed_exam_val = str(matched_record.get("CompletedExam", "")).strip() # Column 12
-            exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()       # Column 13
-            committed_time = str(matched_record.get("Committed", "")).strip()       # Column 10
+          if matched_record:
+            completed_exam_val = str(matched_record.get("CompletedExam", "")).strip()
+            exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()
+            committed_time = str(matched_record.get("Committed", "")).strip()
 
             # 🛡️ STRICT BLOCK: If the exam was already finished, passed, failed, or DNF'd, deny entry permanently
             if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
               st.error("❌ **Access Denied:** This examination has already been completed, submitted, or expired using this voucher. Re-entry is strictly prohibited.")
             
-            # 2. Check if already timed out (DNF)
+            # Check if already timed out (DNF)
             elif committed_time != "":
               try:
                 committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
@@ -239,6 +239,8 @@ if not st.session_state.authenticated:
               st.rerun()
           else:
             st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
+        except Exception as e:
+          st.error(f"Connection error: {e}")
                 
 
 # ==========================================
