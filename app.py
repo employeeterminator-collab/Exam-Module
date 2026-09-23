@@ -454,9 +454,17 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     placeholder_container = st.empty()
     with placeholder_container.container():
+        st.markdown("""
+        <style>
+        /* Hide the hidden violation trigger button visually */
+        button[key="hidden-violation-trigger"], div:has(> button[key="hidden-violation-trigger"]) {
+            display: none;
+        }
+        </style>
+    """, unsafe_allow_html=True)
         if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
             pass
-    placeholder_container.empty()
+   
 
     st.components.v1.html("""
         <script>
