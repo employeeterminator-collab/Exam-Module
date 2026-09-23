@@ -92,11 +92,14 @@ def update_voucher_committed(voucher_code):
 def log_violation_to_sheet(voucher_code):
     try:
         db = get_sheets_connection()
-        
-        # 1. 寫入 ViolationLogs
-        logs_sheet = db.worksheet("ViolationLogs")
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        logs_sheet.append_row([voucher_code, current_time, "Focus Lost / Tab Switched"])
+        
+        # 1. 強制寫入一筆獨立紀錄到 ViolationLogs 頁籤
+        try:
+            logs_sheet = db.worksheet("ViolationLogs")
+            logs_sheet.append_row([voucher_code, current_time, "Focus Lost / Tab Switched"])
+        except Exception as log_err:
+            print(f"Failed to append row to ViolationLogs: {log_err}")
         
         # 2. 同步累加 Vouchers 表格中的 WarningCount 欄位 (第 11 欄)
         vouchers_sheet = db.worksheet("Vouchers")
@@ -110,7 +113,7 @@ def log_violation_to_sheet(voucher_code):
             vouchers_sheet.update_cell(cell.row, 11, new_count)
             st.session_state.focus_loss_count = new_count
     except Exception as e:
-        print(f"Failed to log violation: {e}")
+        print(f"Failed to log violation globally: {e}")
 
 # 完成考試時更新狀態
 def finalize_exam_submission(voucher_code, warning_count, exam_status, explanation=""):
