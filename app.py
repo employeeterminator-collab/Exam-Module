@@ -98,7 +98,7 @@ def log_violation_to_sheet(voucher_code):
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logs_sheet.append_row([voucher_code, current_time, "Focus Lost / Tab Switched"])
         
-        # 2. 同步累加 Vouchers 表格中的 WarningCount 欄位 (假設在第 11 欄)
+        # 2. 同步累加 Vouchers 表格中的 WarningCount 欄位 (第 11 欄)
         vouchers_sheet = db.worksheet("Vouchers")
         cell = vouchers_sheet.find(voucher_code)
         if cell:
@@ -120,7 +120,7 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
         cell = sheet.find(voucher_code)
         if cell:
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sheet.update_cell(cell.row, 9, completed_time)  # CompletedExam / Photo URL 欄位對應
+            sheet.update_cell(cell.row, 9, completed_time)  # CompletedExam / Photo URL
             sheet.update_cell(cell.row, 11, warning_count) # WarningCount
             sheet.update_cell(cell.row, 12, exam_status)   # ExamStatus / EndTime
             sheet.update_cell(cell.row, 13, explanation)   # Explanation
@@ -129,7 +129,7 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
 
 
 # ==========================================
-# Step 0 - 考生身分驗證與防止重複登入
+# Step 0 - 考生身分驗證與精準 DNF 檢查
 # ==========================================
 if not st.session_state.authenticated:
   st.markdown(
@@ -179,15 +179,48 @@ if not st.session_state.authenticated:
               break
 
           if matched_record:
-            # 嚴格檢查是否已經完成考試（檢查 CompletedExam、ExamEndTime 與 Status 相關欄位）
             completed_exam_val = str(matched_record.get("CompletedExam", "")).strip()
             exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()
-            status_val = str(matched_record.get("Status", "")).strip()
-            
-            # 只要有任何一項代表已完成、Pass、Fail 或 DNF，即判定為不可再次登入
-            if completed_exam_val != "" or exam_end_val in ["Pass", "Fail", "DNF"] or len(exam_end_val) > 5:
+            committed_time = str(matched_record.get("Committed", "")).strip()
+
+            # 1. 優先檢查是否已經正式提交或完成考試
+            if completed_exam_val != "" or exam_end_val in ["Pass", "Fail"]:
               st.error("❌ **Access Denied:** This examination has already been completed or submitted using this voucher. You cannot log in again.")
+            
+            # 2. 優先檢查是否已經超時且未完成 (DNF)
+            elif committed_time != "":
+              try:
+                committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
+                elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
+                EXAM_TIME_LIMIT = 5400  # 90 分鐘
+
+                if elapsed_seconds > EXAM_TIME_LIMIT or exam_end_val == "DNF":
+                    if not exam_end_val or str(exam_end_val).strip() != "DNF":
+                        vouchers_sheet.update_cell(row_index, 12, "DNF")
+                    
+                    st.error("❌ **Access Denied:** Exam session expired. Exam did not finish. Please contact Administrator.")
+                else:
+                    # 仍在有效時間內，正常恢復或進入考試
+                    f_name = str(matched_record.get("EnglishFirstName", "")).strip()
+                    l_name = str(matched_record.get("EnglishLastName", "")).strip()
+                    j_name = str(matched_record.get("JapaneseName", "")).strip()
+
+                    st.session_state.authenticated = True
+                    st.session_state.candidate_email = email_input.strip()
+                    st.session_state.voucher_code = voucher_input.strip()
+                    st.session_state.candidate_first_name = f_name
+                    st.session_state.candidate_last_name = l_name
+                    st.session_state.candidate_japanese_name = j_name
+                    st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+
+                    st.session_state.exam_step = 3
+                    st.success("🔄 Detected an active session. Resuming your exam...")
+                    time.sleep(1)
+                    st.rerun()
+              except Exception as e:
+                st.error(f"Time validation error: {e}")
             else:
+              # 尚未開始計時（在 Step 1 或 Step 2 階段）
               f_name = str(matched_record.get("EnglishFirstName", "")).strip()
               l_name = str(matched_record.get("EnglishLastName", "")).strip()
               j_name = str(matched_record.get("JapaneseName", "")).strip()
@@ -200,31 +233,8 @@ if not st.session_state.authenticated:
               st.session_state.candidate_japanese_name = j_name
               st.session_state.candidate_name = f"{f_name} {l_name}".strip()
 
-              committed_time = str(matched_record.get("Committed", "")).strip()
-              if committed_time != "":
-                try:
-                    committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
-                    elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
-                    EXAM_TIME_LIMIT = 5400 
-                    
-                    if elapsed_seconds > EXAM_TIME_LIMIT:
-                        if not exam_end_val or str(exam_end_val).strip() == "":
-                            vouchers_sheet.update_cell(row_index, 12, "DNF")
-                            
-                        st.error("❌ **Exam Expired:** Your examination window has elapsed. Your status has been recorded as **DNF** (Did Not Finish). Please contact the administrator.")
-                        st.stop()
-                    else:
-                        st.session_state.exam_step = 3
-                        st.success("🔄 Detected an active session. Resuming your exam...")
-                        time.sleep(1)
-                        st.rerun()
-                except Exception as e:
-                    print(f"Failed to check DNF: {e}")
-                    st.session_state.exam_step = 3
-                    st.rerun()
-              else:
-                st.session_state.exam_step = 1
-                st.rerun()
+              st.session_state.exam_step = 1
+              st.rerun()
           else:
             st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
                   
@@ -423,7 +433,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (修復違規次數同步計數)
+# Step 3 - 核心問答模組
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -436,18 +446,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     TOTAL_QUESTIONS = 75
 
-    # 處理違規回呼函式（會自動重新整理畫面並更新計數）
     def handle_focus_loss():
         log_violation_to_sheet(st.session_state.voucher_code)
 
-    # 隱藏按鈕容器
     placeholder_container = st.empty()
     with placeholder_container.container():
         if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
             pass
     placeholder_container.empty()
 
-    # 注入防作弊 JS，偵測切換頁籤、blur 或滑鼠移出視窗
     st.components.v1.html("""
         <script>
             if (!parent.document.getElementById('global-warning-banner')) {
@@ -475,7 +482,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     }, 8000);
                 }
                 
-                // 自動點擊隱藏按鈕以觸發後端計數更新與重新整理
                 const buttons = parent.document.querySelectorAll('button');
                 buttons.forEach(btn => {
                     if (btn.innerText.includes('TriggerViolationBackend')) {
@@ -502,7 +508,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
 
-    # 頂部標頭區
     header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
     
     with header_col1:
@@ -588,7 +593,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.divider()
 
-    # 側邊欄狀態
     with st.sidebar:
         st.markdown("### 📹 Security Status")
         st.markdown(f"""
@@ -613,7 +617,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         st.session_state.current_q = q_num
                         st.rerun()
 
-    # 主畫面答題區
     q_idx = st.session_state.current_q
 
     st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
