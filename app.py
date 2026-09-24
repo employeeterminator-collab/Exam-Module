@@ -826,7 +826,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
- elif question_type.upper() == "ORDER":
+        elif question_type.upper() == "ORDER":
             # 確保能安全抓到當前列的資料變數 (如果您的迴圈變數叫 q 或 row，這裡統一相容)
             current_row = row if 'row' in locals() else (q if 'q' in locals() else df.iloc[st.session_state.get('current_question_index', 0)])
             
