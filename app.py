@@ -856,7 +856,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     st.rerun()
             st.divider()
 
-    st.markdown("---")
     st.warning("⚠️ Once you click **Confirm and Submit Exam**, your answers will be finalized and sent to the examination database. You cannot make any further changes.")
 
     col_sub1, col_sub2 = st.columns(2)
