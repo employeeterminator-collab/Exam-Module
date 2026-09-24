@@ -826,17 +826,19 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        elif q_type == "ORDER":
-            # 修正：使用最安全的欄位檢查與取值方式
-            q_text = row['QuestionText'] if 'QuestionText' in row else ''
+ elif question_type.upper() == "ORDER":
+            # 確保能安全抓到當前列的資料變數 (如果您的迴圈變數叫 q 或 row，這裡統一相容)
+            current_row = row if 'row' in locals() else (q if 'q' in locals() else df.iloc[st.session_state.get('current_question_index', 0)])
+            
+            q_text = current_row['QuestionText'] if 'QuestionText' in current_row else ''
             st.markdown(f"**{q_text}**")
             
             # 1. 自動抓取有內容的選項 (OptionA 到 OptionD)
             options_dict = {}
             for col in ['OptionA', 'OptionB', 'OptionC', 'OptionD']:
-                if col in row and pd.notna(row[col]) and str(row[col]).strip() != "":
+                if col in current_row and pd.notna(current_row[col]) and str(current_row[col]).strip() != "":
                     letter = col.replace("Option", "") # 取得代號，例如 'A', 'B', 'C', 'D'
-                    options_dict[letter] = str(row[col])
+                    options_dict[letter] = str(current_row[col])
             
             st.info("💡 請依照正確的順序，分別為每個排名選擇對應的項目：")
             
@@ -865,8 +867,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if "user_answers" not in st.session_state:
                 st.session_state.user_answers = {}
             st.session_state.user_answers[st.session_state.get('current_question_index', 0)] = user_answer
-
-        # 底部導航按鈕
+            
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
