@@ -917,7 +917,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     answered_count = len(st.session_state.get("answers", {}))
                     focus_losses = st.session_state.get("focus_loss_count", 0)
                     
-correct_count = 0
+        correct_count = 0
         for idx, q_data in enumerate(exam_questions, start=1):
             user_ans = user_answers.get(idx, "")
             q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
