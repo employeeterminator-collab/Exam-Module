@@ -472,7 +472,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (雙重固定 Review 按鈕版)
+# Step 3 - 核心問答模組 (修正型別錯誤與穩定按鈕版)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -584,7 +584,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
 
-    # 頂端導航與 Review 按鈕區塊（確保一定看得見）
+    # 頂端導航與 Review 按鈕區塊
     top_col1, top_col2, top_col3, top_col4 = st.columns([1.5, 1, 0.8, 0.8])
     
     with top_col1:
@@ -632,17 +632,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.components.v1.html(timer_html, height=55)
 
     with top_col3:
-        st.markdown("""
+        # 修正：改用正確的 st.components.v1.html 渲染視訊框，避免 TypeError
+        st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 6px; background-color: #f0fdf4; text-align: center; padding: 2px;">
                 <div style="color: #15803d; font-weight: bold; font-size: 9px;">🟢 PROCTOR</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 40px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
+                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 35px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
             </div>
             <script>
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                     .then(stream => { document.getElementById('top-webcam').srcObject = stream; })
                     .catch(e => console.error("Camera error", e));
             </script>
-        """, height=65)
+        """, height=55)
 
     with top_col4:
         # 頂端常駐 Review 按鈕
