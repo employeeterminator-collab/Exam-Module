@@ -472,7 +472,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (終極欄位容錯修正版)
+# Step 3 - 核心問答模組 (圖片修復與常駐 Review 按鈕版)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -504,14 +504,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         for idx, q_data in enumerate(exam_questions, start=1):
             user_ans = str(user_answers.get(idx, "")).strip()
             
-            # 彈性尋找正確答案欄位
             correct_letter = ""
             for k, v in q_data.items():
                 if k.strip().lower() in ["correctanswer", "correct_answer", "answer"]:
                     correct_letter = str(v).strip().upper()
                     break
             
-            # 尋對應選項的文字內容
             correct_text = ""
             if correct_letter:
                 for k, v in q_data.items():
@@ -649,7 +647,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.divider()
 
-    # 彈性欄位抓取 Helper 函式
     def get_val(data_dict, *possible_keys):
         for pk in possible_keys:
             for actual_k, val in data_dict.items():
@@ -659,6 +656,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         return ""
 
     with st.sidebar:
+        # 讓 Review 按鈕常駐在側邊欄上方，隨時可點擊檢查
+        if st.button("📋 Go to Review Page", type="primary", use_container_width=True):
+            st.session_state.exam_step = 4
+            st.rerun()
+
+        st.markdown("---")
         st.markdown("### 📹 Security Status")
         st.markdown(f"""
             <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
@@ -687,7 +690,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         q_idx = st.session_state.current_q
         current_q_data = exam_questions[q_idx - 1]
         
-        # 彈性抓取各欄位
         q_type = get_val(current_q_data, "QuestionType", "Type", "QType").upper() or "MC"
         q_text = get_val(current_q_data, "QuestionText", "Question", "Text", "QText")
         media_url = get_val(current_q_data, "MediaURL", "Media", "ImageURL")
@@ -700,11 +702,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
+        # 強化圖片顯示：若圖片無法載入，改用 HTML 圖片與連結確保看得到
         if media_url:
-            if media_url.endswith((".mp4", ".mov", ".webm")):
-                st.video(media_url)
-            else:
+            st.markdown(f"**📎 Attached Media / Image:**")
+            try:
                 st.image(media_url, use_column_width=True)
+            except Exception:
+                st.warning("⚠️ Image could not be rendered directly. You can view it via the link below:")
+            st.markdown(f'<a href="{media_url}" target="_blank">🔗 Open Image in New Tab</a>', unsafe_allow_html=True)
+            st.markdown("---")
 
         user_answers = st.session_state.get("answers", {})
         current_answer = user_answers.get(q_idx, None)
@@ -763,7 +769,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if st.button("📋 Go to Review Page", type="primary", use_container_width=True):
                     st.session_state.exam_step = 4
                     st.rerun()
-
 # ==========================================
 # Step 4 - 考試總結與詳細清單確認頁面 (Upgraded Review Page)
 # ==========================================
