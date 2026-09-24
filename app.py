@@ -811,9 +811,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     exam_questions = st.session_state.get("exam_questions", [])
                     
                     for idx, q_data in enumerate(exam_questions, start=1):
-                        user_ans = user_answers.get(idx, "")
-                        correct_ans = str(q_data.get("CorrectAnswer", "")).strip()
-                        if user_ans and user_ans == correct_ans:
+                        user_ans = str(user_answers.get(idx, "")).strip()
+                        correct_letter = str(q_data.get("CorrectAnswer", "")).strip().upper()
+                        
+                        # Get the actual text matching the correct letter from the sheet (e.g., if 'A', get q_data['OptionA'])
+                        correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
+                        
+                        # Match if user answered with the letter OR typed/selected the exact option text
+                        if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
                             correct_count += 1
                     
                     passing_score_percentage = 70.0
