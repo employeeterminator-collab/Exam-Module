@@ -736,7 +736,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-    if media_url:
+        if media_url:
             st.markdown(f"**📎 Attached Media / Image:**")
             try:
                 # 嘗試使用 HTML 圖片標籤顯示
