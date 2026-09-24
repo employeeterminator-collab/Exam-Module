@@ -245,6 +245,10 @@ if not st.session_state.authenticated:
                     l_name = str(matched_record.get("EnglishLastName", "")).strip()
                     j_name = str(matched_record.get("JapaneseName", "")).strip()
 
+                    # ✨ 新增：計算從開始到現在已經過左幾多秒，得出剩餘秒數
+                    elapsed_seconds_since_commit = int(elapsed_seconds)
+                    remaining_allowed_seconds = max(0, EXAM_TIME_LIMIT - elapsed_seconds_since_commit)
+
                     st.session_state.authenticated = True
                     st.session_state.candidate_email = email_input.strip()
                     st.session_state.voucher_code = voucher_input.strip()
@@ -252,6 +256,10 @@ if not st.session_state.authenticated:
                     st.session_state.candidate_last_name = l_name
                     st.session_state.candidate_japanese_name = j_name
                     st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+
+                    # ✨ 新增：把準確嘅剩餘時間同計時基準注入 session_state
+                    st.session_state.exam_remaining_seconds = remaining_allowed_seconds
+                    st.session_state.exam_timer_start_local = time.time()
 
                     st.session_state.exam_step = 3
                     st.success("🔄 Resuming your active examination session...")
@@ -601,7 +609,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if "exam_remaining_seconds" not in st.session_state:
             st.session_state.exam_remaining_seconds = 5400
             st.session_state.exam_timer_start_local = time.time()
-
+            
         elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
         remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
 
