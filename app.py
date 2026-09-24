@@ -738,7 +738,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-       # 統一的媒體渲染區塊 (修正 f-string 大括號跳脫問題)
+      # 統一的媒體渲染區塊 (使用唯一 ID 確保播放按鈕正常運作)
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
@@ -749,19 +749,23 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     
                 # 檢查是否為一般影片格式 (如 GitHub 內的 .mp4)
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
+                    # 為每個影片建立一個獨一無二的 ID，避免多題時 ID 衝突
+                    import hashlib
+                    unique_id = f"vid_{hashlib.md5(media_url.encode()).hexdigest()[:8]}"
+                    
                     video_html = f'''
                         <div style="position: relative; display: inline-block; width: 100%;">
-                            <!-- 影片本身 -->
-                            <video id="securedVideo" autoplay loop playsinline oncontextmenu="return false;" style="width: 100%; max-height: 450px; border-radius: 6px; background: #000;">
+                            <!-- 影片本身 (使用 unique_id) -->
+                            <video id="{unique_id}" autoplay loop playsinline oncontextmenu="return false;" style="width: 100%; max-height: 450px; border-radius: 6px; background: #000;">
                                 <source src="{media_url}" type="video/mp4">
                                 Your browser does not support the video tag.
                             </video>
                             <!-- 透明防護層 -->
                             <div oncontextmenu="return false;" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent;"></div>
                         </div>
-                        <!-- 自定義播放/暫停按鈕 (JavaScript 的大括號已改為雙大括號 {{ }}) -->
+                        <!-- 自定義播放/暫停按鈕 (對應唯一的 unique_id) -->
                         <div style="text-align: center; margin-top: 8px;">
-                            <button onclick="var v=document.getElementById('securedVideo'); if(v.paused){{v.play();}}else{{v.pause();}}" style="padding: 6px 16px; font-size: 13px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background-color: #f0f2f6; color: #31333F; font-weight: 500;">Play / Pause</button>
+                            <button onclick="var v=document.getElementById('{unique_id}'); if(v.paused){{v.play();}}else{{v.pause();}}" style="padding: 6px 16px; font-size: 13px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background-color: #f0f2f6; color: #31333F; font-weight: 500;">Play / Pause</button>
                         </div>
                     '''
                     st.markdown(video_html, unsafe_allow_html=True)
@@ -780,7 +784,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.warning(f"⚠️ Could not load media: {e}")
                 
             st.markdown("---")
-            
         user_answers = st.session_state.get("answers", {})
         current_answer = user_answers.get(q_idx, None)
 
