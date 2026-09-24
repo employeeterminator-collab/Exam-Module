@@ -585,7 +585,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     """, height=0)
 
     # 頂端導航與 Review 按鈕區塊
-    top_col1, top_col2, top_col3 = st.columns([1.3, 1.2, 0.8, ])
+    top_col1, top_col2, top_col3 = st.columns([1.3, 1.2, 1.3, ])
     
     with top_col1:
         st.markdown(f"**👤 {st.session_state.get('candidate_name', 'User')}**")
@@ -643,15 +643,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         # 修正：改用正確的 st.components.v1.html 渲染視訊框，避免 TypeError
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 6px; background-color: #f0fdf4; text-align: center; padding: 2px;">
-                <div style="color: #15803d; font-weight: bold; font-size: 9px;">🟢 PROCTOR</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 85px; object-fit: cover; border-radius: 3px; background: #000; display: block;"></video>
+                <div style="color: #15803d; font-weight: bold; font-size: 7px;">🟢 PROCTOR</div>
+                <video id="top-webcam" autoplay playsinline muted style="width: 90%; height: 80px; object-fit: cover; border-radius: 3px; background: #000; display: block;"></video>
             </div>
             <script>
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                     .then(stream => { document.getElementById('top-webcam').srcObject = stream; })
                     .catch(e => console.error("Camera error", e));
             </script>
-        """, height=100)
+        """, height=90)
 
     
     st.divider()
