@@ -749,7 +749,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     
                 # 檢查是否為影片格式 (例如 GitHub 專案內的 .mp4 直鏈)
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
-                    st.video(media_url)
+                    video_html = f'''
+                        <video controls style="width: 100%; max-height: 450px; border-radius: 6px; background: #000;">
+                            <source src="{media_url}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    '''
+                    st.markdown(video_html, unsafe_allow_html=True)
                     
                 else:
                     # 預設當作圖片處理 (使用純 HTML 確保沒有惱人的放大鏡按鈕)
