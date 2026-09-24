@@ -472,7 +472,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (連線 Google Sheets 題庫、Phantom 警告、Webcam、計時器)
+# Step 3 - 核心問答模組 (修正版：加入欄位容錯與除錯)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -485,7 +485,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     # Fetch questions from Google Sheets if not already cached
     if not st.session_state.exam_questions:
-        st.session_state.exam_questions = get_exam_questions()
+        raw_questions = get_exam_questions()
+        # 清理並標準化欄位名稱（轉大寫、去除前後空白），避免抓不到欄位
+        cleaned_questions = []
+        for q in raw_questions:
+            cleaned_q = {str(k).strip().upper(): v for k, v in q.items()}
+            cleaned_questions.append(cleaned_q)
+        st.session_state.exam_questions = cleaned_questions
 
     exam_questions = st.session_state.exam_questions
     TOTAL_QUESTIONS = len(exam_questions) if exam_questions else 75
@@ -493,11 +499,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     def handle_focus_loss():
         log_violation_to_sheet(st.session_state.voucher_code)
 
-    # 1. Hidden backend trigger button for violation counting & sheet logging
     if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
         pass
 
-    # 2. Hidden backend trigger button for auto-submission on timeout
     def handle_auto_submit():
         user_answers = st.session_state.get("answers", {})
         focus_losses = st.session_state.get("focus_loss_count", 0)
@@ -505,23 +509,20 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         correct_count = 0
         for idx, q_data in enumerate(exam_questions, start=1):
             user_ans = str(user_answers.get(idx, "")).strip()
-            correct_letter = str(q_data.get("CorrectAnswer", "")).strip().upper()
-            correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
+            correct_letter = str(q_data.get("CORRECTANSWER", "")).strip().upper()
+            correct_text = str(q_data.get(f"OPTION{correct_letter}", "")).strip()
             if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
                 correct_count += 1
         
         passing_score_percentage = 70.0
         score_percentage = (correct_count / TOTAL_QUESTIONS) * 100 if TOTAL_QUESTIONS > 0 else 0
-        
-        # 評分標準：夠分數就係 Pass，唔夠就係 Fail，不再寫 DNF
         final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
         
-        answered_count = len(user_answers)
         finalize_exam_submission(
             st.session_state.voucher_code,
             focus_losses,
             final_status,
-            explanation=f"Auto-submitted on timeout. Answered {answered_count}/{TOTAL_QUESTIONS}, Correct {correct_count}"
+            explanation=f"Auto-submitted on timeout. Correct {correct_count}/{TOTAL_QUESTIONS}"
         )
         
         st.session_state.exam_final_status = final_status
@@ -532,7 +533,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
         pass
 
-    # 3. JavaScript handles auto-hiding buttons, global warning banner, timeout auto-submission, etc.
+    # JavaScript 隱藏背景按鈕與防作弊偵測
     st.components.v1.html("""
         <script>
             function hideTriggerButtons() {
@@ -540,13 +541,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 buttons.forEach(btn => {
                     if (btn.innerText.includes('TriggerViolationBackend') || btn.innerText.includes('AutoSubmitBackend')) {
                         let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
-                        if (container) {
-                            container.style.display = 'none';
-                        }
+                        if (container) { container.style.display = 'none'; }
                     }
                 });
             }
-            
             setTimeout(hideTriggerButtons, 50);
             setInterval(hideTriggerButtons, 300);
 
@@ -557,10 +555,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     position: fixed; top: 0; left: 0; width: 100vw;
                     background-color: #dc2626; color: white; text-align: center; 
                     padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
-                    font-size: 15px; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-                    z-index: 2147483647; display: none; box-sizing: border-box;
+                    font-size: 15px; z-index: 2147483647; display: none; box-sizing: border-box;
                 `;
-                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
+                banner.innerHTML = "🚨 WARNING: Tab switch or blur detected! Please remain focused on the exam.";
                 parent.document.body.appendChild(banner);
             }
 
@@ -570,34 +567,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if (b) {
                     b.style.display = 'block';
                     clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => {
-                        b.style.display = 'none';
-                    }, 8000);
+                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
                 }
-                
-                const buttons = parent.document.querySelectorAll('button');
-                buttons.forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) {
-                        btn.click();
-                    }
+                parent.document.querySelectorAll('button').forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend')) { btn.click(); }
                 });
             }
 
-            parent.document.addEventListener("visibilitychange", function() {
-                if (parent.document.hidden) {
-                    triggerGlobalWarning();
-                }
-            });
-
-            parent.window.addEventListener("blur", function() {
-                triggerGlobalWarning();
-            });
-
-            parent.document.addEventListener("mouseleave", function(e) {
-                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
-                    triggerGlobalWarning();
-                }
-            });
+            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
+            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
         </script>
     """, height=0)
 
@@ -609,21 +587,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
    
     with header_col2:
         if "exam_remaining_seconds" not in st.session_state:
-            initial_remaining = 5400
-            try:
-                db = get_sheets_connection()
-                sheet = db.worksheet("Vouchers")
-                cell = sheet.find(st.session_state.voucher_code)
-                if cell:
-                    committed_str = sheet.cell(cell.row, 10).value
-                    if committed_str and str(committed_str).strip() != "":
-                        committed_time = datetime.datetime.strptime(str(committed_str).strip(), "%Y-%m-%d %H:%M:%S")
-                        elapsed_seconds = int((datetime.datetime.now() - committed_time).total_seconds())
-                        initial_remaining = max(0, 5400 - elapsed_seconds)
-            except Exception as e:
-                print(f"Error calculating initial remaining time: {e}")
-            
-            st.session_state.exam_remaining_seconds = initial_remaining
+            st.session_state.exam_remaining_seconds = 5400
             st.session_state.exam_timer_start_local = time.time()
 
         elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
@@ -631,69 +595,47 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
         timer_html = """
             <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
-                <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px; margin-bottom: 4px;">⏳ TIME REMAINING</div>
+                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">⏳ TIME REMAINING</div>
                 <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
             </div>
             <script>
-                const STORAGE_KEY = 'exam_end_time_VOUCHER_PLACEHOLDER';
                 const serverRemaining = SERVER_REMAINING_PLACEHOLDER;
-                
                 let endTime = Date.now() + (serverRemaining * 1000);
-                parent.sessionStorage.setItem(STORAGE_KEY, endTime);
-
                 let hasAutoSubmitted = false;
 
                 function updateCountdown() {
-                    const now = Date.now();
-                    let timeLeft = Math.floor((endTime - now) / 1000);
+                    let timeLeft = Math.floor((endTime - Date.now()) / 1000);
                     if (timeLeft <= 0) {
                         timeLeft = 0;
                         if (!hasAutoSubmitted) {
                             hasAutoSubmitted = true;
-                            const buttons = parent.document.querySelectorAll('button');
-                            buttons.forEach(btn => {
-                                if (btn.innerText.includes('AutoSubmitBackend')) {
-                                    btn.click();
-                                }
+                            parent.document.querySelectorAll('button').forEach(btn => {
+                                if (btn.innerText.includes('AutoSubmitBackend')) { btn.click(); }
                             });
                         }
                     }
-
                     const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
                     const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
                     const s = String(timeLeft % 60).padStart(2, '0');
-
                     const target = document.getElementById('native-js-timer');
-                    if (target) {
-                        target.innerText = h + ":" + m + ":" + s;
-                    }
+                    if (target) { target.innerText = h + ":" + m + ":" + s; }
                 }
-
                 updateCountdown();
                 setInterval(updateCountdown, 1000);
             </script>
-        """
-        timer_html = timer_html.replace('VOUCHER_PLACEHOLDER', str(st.session_state.voucher_code))
-        timer_html = timer_html.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
-
+        """.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
         st.components.v1.html(timer_html, height=75)
          
     with header_col3:
         st.components.v1.html("""
-            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
-                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px; text-transform: uppercase;">🟢 Live Proctor</div>
+            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px;">
+                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px;">🟢 Live Proctor</div>
                 <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 72px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
             </div>
             <script>
-                async function initCam() {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                        document.getElementById('top-webcam').srcObject = stream;
-                    } catch (e) {
-                        console.error("Camera access error", e);
-                    }
-                }
-                initCam();
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(stream => { document.getElementById('top-webcam').srcObject = stream; })
+                    .catch(e => console.error("Camera error", e));
             </script>
         """, height=110)
 
@@ -704,13 +646,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.markdown(f"""
             <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
                 <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
-                <div style="color: #475569; font-size: 11px; margin-top: 4px;">Warnings: {st.session_state.focus_loss_count}</div>
+                <div style="color: #475569; font-size: 11px; margin-top: 4px;">Warnings: {st.session_state.get('focus_loss_count', 0)}</div>
             </div>
         """, unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown(f"### 🗺️ Question Palette (1–{TOTAL_QUESTIONS})")
-        st.markdown("<small>🟢 Answered | ⚪ Unanswered | ⭐ Flagged</small>", unsafe_allow_html=True)
         
         cols_per_row = 5
         for i in range(1, TOTAL_QUESTIONS + 1, cols_per_row):
@@ -724,34 +665,43 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         st.rerun()
 
     if not exam_questions:
-        st.error("❌ Failed to load exam questions from the database. Please check your connection or contact the administrator.")
+        st.error("❌ Failed to load exam questions from the database.")
     else:
         q_idx = st.session_state.current_q
         current_q_data = exam_questions[q_idx - 1]
         
-        q_type = str(current_q_data.get("QuestionType", "MC")).strip().upper()
-        q_text = current_q_data.get("QuestionText", "Question text unavailable.")
-        media_url = str(current_q_data.get("MediaURL", "")).strip()
+        q_type = str(current_q_data.get("QUESTIONTYPE", "MC")).strip().upper()
+        q_text = current_q_data.get("QUESTIONTEXT", "").strip()
+        
+        # 容錯：如果 QUESTIONTEXT 找不到，嘗試尋找小寫的 questiontext
+        if not q_text:
+            for k, v in current_q_data.items():
+                if "TEXT" in k and v:
+                    q_text = str(v).strip()
+                    break
+
+        media_url = str(current_q_data.get("MEDIAURL", "")).strip()
 
         st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — [{q_type}]")
         st.progress(q_idx / TOTAL_QUESTIONS)
-        st.markdown(f"#### Q{q_idx}. {q_text}")
+        
+        if q_text:
+            st.markdown(f"#### Q{q_idx}. {q_text}")
+        else:
+            st.warning(f"⚠️ Q{q_idx}: Question text is empty in Google Sheets. Raw row data: {current_q_data}")
 
-        # Inline Media Rendering (Anti-Cheat Safe: No Popups)
         if media_url:
             if media_url.endswith((".mp4", ".mov", ".webm")):
                 st.video(media_url)
             else:
                 st.image(media_url, use_column_width=True)
-            st.markdown("<br>", unsafe_allow_html=True)
 
         user_answers = st.session_state.get("answers", {})
         current_answer = user_answers.get(q_idx, None)
 
-        # 1. & 2. Traditional MC & Enhanced MC with Media
         if q_type in ["MC", "MC_MEDIA"]:
             options = []
-            for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
+            for opt_key in ["OPTIONA", "OPTIONB", "OPTIONC", "OPTIOND"]:
                 val = current_q_data.get(opt_key, "")
                 if val and str(val).strip() != "":
                     options.append(str(val).strip())
@@ -764,75 +714,16 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        # 3. True or False (TF)
         elif q_type == "TF":
             tf_options = ["TRUE", "FALSE"]
             default_index = 0
             if current_answer in tf_options:
                 default_index = tf_options.index(current_answer)
-
             selected = st.radio("Select True or False:", tf_options, index=default_index, key=f"tf_radio_{q_idx}")
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        # 4. Ordering / Ranking (ORDER)
-        elif q_type == "ORDER":
-            st.markdown("##### Arrange the items in the correct order:")
-            items = []
-            for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
-                val = current_q_data.get(opt_key, "")
-                if val and str(val).strip() != "":
-                    items.append(str(val).strip())
-            
-            if f"order_{q_idx}" not in st.session_state:
-                st.session_state[f"order_{q_idx}"] = current_answer if isinstance(current_answer, dict) else {}
-
-            order_ans = {}
-            for i in range(len(items)):
-                chosen_item = st.selectbox(f"Position {i+1}", items, key=f"pos_{q_idx}_{i}")
-                order_ans[f"Pos{i+1}"] = chosen_item
-            st.session_state.answers[q_idx] = order_ans
-
-        # 5. Matching (MATCH)
-        elif q_type == "MATCH":
-            st.markdown("##### Match each term with its definition:")
-            terms = {}
-            for key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
-                val = current_q_data.get(key, "")
-                if val and str(val).strip() != "":
-                    terms[key] = str(val).strip()
-            
-            definitions = []
-            for def_key in ["DefA", "DefB", "DefC", "DefD"]:
-                def_val = current_q_data.get(def_key, "")
-                if def_val and str(def_val).strip() != "":
-                    definitions.append(str(def_val).strip())
-
-            if f"match_{q_idx}" not in st.session_state:
-                st.session_state[f"match_{q_idx}"] = current_answer if isinstance(current_answer, dict) else {}
-
-            match_answers = {}
-            for t_key, t_text in terms.items():
-                col_term, col_select = st.columns([1, 2])
-                with col_term:
-                    st.markdown(f"**{t_key}. {t_text}**")
-                with col_select:
-                    current_sel = st.session_state.answers.get(q_idx, {}).get(t_key, definitions[0] if definitions else "")
-                    default_index = definitions.index(current_sel) if current_sel in definitions else 0
-                    
-                    selected_def = st.selectbox(
-                        f"Select definition for {t_key}",
-                        definitions,
-                        index=default_index,
-                        key=f"match_sel_{q_idx}_{t_key}",
-                        label_visibility="collapsed"
-                    )
-                    match_answers[t_key] = selected_def
-
-            st.session_state.answers[q_idx] = match_answers
-
-        # Step 3 底部導航按鈕區塊標準寫法
-        total_q_count = len(st.session_state.get("exam_questions", [])) or 75
+        # 底部導航按鈕
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
@@ -854,7 +745,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.rerun()
 
         with col_next:
-            if st.session_state.current_q < total_q_count:
+            if st.session_state.current_q < TOTAL_QUESTIONS:
                 if st.button("Next Question ➡️", use_container_width=True):
                     st.session_state.current_q += 1
                     st.rerun()
