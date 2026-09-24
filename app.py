@@ -588,8 +588,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     top_col1, top_col2, top_col3, top_col4 = st.columns([1.5, 1, 0.8, 0.8])
     
     with top_col1:
-        st.markdown(f"**👤 {st.session_state.get('candidate_name', 'User', 'Email')}**")
-   
+        st.markdown(f"**👤 {st.session_state.get('candidate_name', 'User')}**")
+        st.write(f"Email: {st.session_state.get('candidate_email', '')}")
     with top_col2:
         if "exam_remaining_seconds" not in st.session_state:
             st.session_state.exam_remaining_seconds = 5400
