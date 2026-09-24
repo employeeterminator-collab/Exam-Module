@@ -561,11 +561,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 });
             }
 
-            // 頁面變動時立即執行
             const observer = new MutationObserver(hideTriggers);
             observer.observe(parent.document.body, { childList: true, subtree: true });
-            
-            // 初始化執行一次
             hideTriggers();
 
             if (!parent.document.getElementById('global-warning-banner')) {
@@ -577,7 +574,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
                     font-size: 15px; z-index: 2147483647; display: none; box-sizing: border-box;
                 `;
-                banner.innerHTML = "🚨 WARNING: Tab switch or blur detected! Please remain focused on the exam.";
+                banner.innerHTML = "🚨 WARNING: Tab switch, blur, or mouse exit detected!";
                 parent.document.body.appendChild(banner);
             }
 
@@ -594,8 +591,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 });
             }
 
-            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
-            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
+            // 1. 偵測切換分頁或最小化
+            parent.document.addEventListener("visibilitychange", function() { 
+                if (parent.document.hidden) triggerGlobalWarning(); 
+            });
+            
+            // 2. 偵測視窗失去焦點 (點擊其他地方、切換視窗)
+            parent.window.addEventListener("blur", function() { 
+                triggerGlobalWarning(); 
+            });
+
+            // 3. 【新加入】偵測滑鼠移出主體網頁邊界 (例如往上移到網址列或分頁)
+            parent.document.addEventListener("mouseleave", function(e) {
+                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
+                    triggerGlobalWarning();
+                }
+            });
         </script>
     """, height=0)
     
