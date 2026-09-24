@@ -832,24 +832,36 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
             st.session_state.answers[q_idx] = match_answers
 
-        with col_btn2:
-            if st.button("⬅️ Previous", use_container_width=True, disabled=(q_idx == 1)):
-                st.session_state.current_q -= 1
-                st.rerun()
-
-        with col_btn3:
-            if st.button("Next ➡️", use_container_width=True, disabled=(q_idx == TOTAL_QUESTIONS)):
-                st.session_state.current_q += 1
-                st.rerun()
-
+        # Step 3 底部導航按鈕區塊標準寫法
         st.markdown("---")
+        col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
-        b_col1, b_col2, b_col3 = st.columns([2, 3, 2])
-        with b_col2:
-            if st.button("📋 Review & Finish Exam", type="primary", use_container_width=True):
-                st.session_state.exam_step = 4
+        with col_prev:
+            if st.session_state.current_q > 1:
+                if st.button("⬅️ Previous Question", use_container_width=True):
+                    st.session_state.current_q -= 1
+                    st.rerun()
+
+        with col_flag:
+            current_q = st.session_state.current_q
+            is_flagged = current_q in st.session_state.get("flagged_questions", set())
+            flag_label = "⭐ Unflag" if is_flagged else "☆ Flag for Review"
+            if st.button(flag_label, use_container_width=True):
+                if is_flagged:
+                    st.session_state.flagged_questions.remove(current_q)
+                else:
+                    st.session_state.flagged_questions.add(current_q)
                 st.rerun()
 
+        with col_next:
+            if st.session_state.current_q < total_q_count:
+                if st.button("Next Question ➡️", use_container_width=True):
+                    st.session_state.current_q += 1
+                    st.rerun()
+            else:
+                if st.button("📋 Go to Review Page", type="primary", use_container_width=True):
+                    st.session_state.exam_step = 4
+                    st.rerun()
 
 # ==========================================
 # Step 4 - 考試總結與詳細清單確認頁面 (Upgraded Review Page)
