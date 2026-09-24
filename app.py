@@ -738,7 +738,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-     # 統一的媒體渲染區塊 (影片使用原生穩定播放器，圖片使用安全防護)
+     # 統一的媒體渲染區塊 (使用元件確保防下載與播放按鈕皆正常運作)
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
@@ -747,12 +747,45 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if "youtube.com" in media_url.lower() or "youtu.be" in media_url.lower():
                     st.video(media_url)
                     
-                # 2. 檢查是否為一般影片格式 (.mp4, .webm, .ogg, .mov)
-                # 使用 Streamlit 內建的 st.video，確保聲音、播放鍵、控制列完全正常
+                # 2. 一般影片格式 (.mp4, .webm, .ogg, .mov) -> 透過 iframe 元件完整防護 + 自訂按鈕
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
-                    st.video(media_url)
+                    import streamlit.components.v1 as components
                     
-                # 3. 其他格式一律視為圖片 (.png, .jpg, .jpeg) -> 套用防右鍵與防拖曳保護
+                    video_component_html = f'''
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                    <style>
+                      body {{ margin: 0; background: transparent; font-family: sans-serif; text-align: center; }}
+                      .video-container {{ position: relative; display: inline-block; width: 100%; }}
+                      video {{ width: 100%; max-height: 420px; border-radius: 6px; background: #000; display: block; }}
+                      .overlay {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent; }}
+                      .btn-container {{ margin-top: 8px; }}
+                      button {{ padding: 6px 16px; font-size: 13px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background-color: #f0f2f6; color: #31333F; font-weight: 500; }}
+                      button:hover {{ background-color: #e0e2e6; }}
+                    </style>
+                    </head>
+                    <body>
+                      <div class="video-container">
+                        <!-- 影片本體：無原生控制列，禁止右鍵 -->
+                        <video id="securedVideo" autoplay loop playsinline oncontextmenu="return false;">
+                          <source src="{media_url}" type="video/mp4">
+                          Your browser does not support the video tag.
+                        </video>
+                        <!-- 透明防護層：攔截右鍵與另存選單 -->
+                        <div class="overlay" oncontextmenu="return false;"></div>
+                      </div>
+                      <!-- 正常運作的播放/暫停按鈕 -->
+                      <div class="btn-container">
+                        <button onclick="var v=document.getElementById('securedVideo'); if(v.paused){{v.play();}}else{{v.pause();}}">Play / Pause</button>
+                      </div>
+                    </body>
+                    </html>
+                    '''
+                    # 渲染元件 (高度設定約 480 像素以容納影片與按鈕)
+                    components.html(video_component_html, height=480)
+                    
+                # 3. 圖片格式 (.png, .jpg, .jpeg) -> 套用防右鍵與防拖曳保護
                 else:
                     img_html = f'''
                         <div style="position: relative; display: inline-block; width: 100%;">
