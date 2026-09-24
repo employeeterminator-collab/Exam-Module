@@ -917,56 +917,56 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     answered_count = len(st.session_state.get("answers", {}))
                     focus_losses = st.session_state.get("focus_loss_count", 0)
                     
-            correct_count = 0
-            for idx, q_data in enumerate(exam_questions, start=1):
-                user_ans = user_answers.get(idx, "")
-                q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
-                correct_val = str(q_data.get("CorrectAnswer", "")).strip()
+        correct_count = 0
+        for idx, q_data in enumerate(exam_questions, start=1):
+            user_ans = user_answers.get(idx, "")
+            q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
+            correct_val = str(q_data.get("CorrectAnswer", "")).strip()
+            
+            # Type 1 & 2: MC / MC_Media (Checks Letter or Option Text match)
+            if q_type in ["MC", "MC_MEDIA"]:
+                correct_letter = correct_val.upper()
+                correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
+                user_str = str(user_ans).strip()
+                if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
+                    correct_count += 1
+            
+            # Type 3: True / False
+            elif q_type == "TF":
+                if str(user_ans).strip().upper() == correct_val.upper():
+                    correct_count += 1
+                    
+            # Type 4: Ordering (Evaluates sequence like "D,B,C,A")
+            elif q_type == "ORDER":
+                option_map = {
+                    "A": str(q_data.get("OptionA", "")).strip(),
+                    "B": str(q_data.get("OptionB", "")).strip(),
+                    "C": str(q_data.get("OptionC", "")).strip(),
+                    "D": str(q_data.get("OptionD", "")).strip(),
+                }
+                correct_sequence = [option_map.get(l.strip(), "") for l in correct_val.split(",") if l.strip()]
+                user_sequence = [user_ans.get(f"Pos{i+1}", "") for i in range(len(correct_sequence))]
                 
-                # Type 1 & 2: MC / MC_Media (Checks Letter or Option Text match)
-                if q_type in ["MC", "MC_MEDIA"]:
-                    correct_letter = correct_val.upper()
-                    correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
-                    user_str = str(user_ans).strip()
-                    if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
-                        correct_count += 1
+                if user_sequence == correct_sequence and correct_sequence:
+                    correct_count += 1
+                    
+            # Type 5: Matching (Evaluates mappings like "A:DefB, B:DefA...")
+            elif q_type == "MATCH":
+                expected_mapping = {}
+                for pair in correct_val.split(","):
+                    if ":" in pair:
+                        term_key, def_col = pair.split(":")
+                        expected_mapping[term_key.strip()] = str(q_data.get(def_col.strip(), "")).strip()
                 
-                # Type 3: True / False
-                elif q_type == "TF":
-                    if str(user_ans).strip().upper() == correct_val.upper():
-                        correct_count += 1
-                        
-                # Type 4: Ordering (Evaluates sequence like "D,B,C,A")
-                elif q_type == "ORDER":
-                    option_map = {
-                        "A": str(q_data.get("OptionA", "")).strip(),
-                        "B": str(q_data.get("OptionB", "")).strip(),
-                        "C": str(q_data.get("OptionC", "")).strip(),
-                        "D": str(q_data.get("OptionD", "")).strip(),
-                    }
-                    correct_sequence = [option_map.get(l.strip(), "") for l in correct_val.split(",") if l.strip()]
-                    user_sequence = [user_ans.get(f"Pos{i+1}", "") for i in range(len(correct_sequence))]
-                    
-                    if user_sequence == correct_sequence and correct_sequence:
-                        correct_count += 1
-                        
-                # Type 5: Matching (Evaluates mappings like "A:DefB, B:DefA...")
-                elif q_type == "MATCH":
-                    expected_mapping = {}
-                    for pair in correct_val.split(","):
-                        if ":" in pair:
-                            term_key, def_col = pair.split(":")
-                            expected_mapping[term_key.strip()] = str(q_data.get(def_col.strip(), "")).strip()
-                    
-                    user_pairs = user_ans if isinstance(user_ans, dict) else {}
-                    is_match_correct = True
-                    for t_key, correct_text in expected_mapping.items():
-                        if user_pairs.get(t_key) != correct_text:
-                            is_match_correct = False
-                            break
-                    
-                    if is_match_correct and expected_mapping:
-                        correct_count += 1
+                user_pairs = user_ans if isinstance(user_ans, dict) else {}
+                is_match_correct = True
+                for t_key, correct_text in expected_mapping.items():
+                    if user_pairs.get(t_key) != correct_text:
+                        is_match_correct = False
+                        break
+                
+                if is_match_correct and expected_mapping:
+                    correct_count += 1
                     
                     passing_score_percentage = 70.0
                     score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
