@@ -738,7 +738,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-       # 統一的媒體渲染區塊 (同時對影片與圖片實施防下載、防右鍵保護)
+       # 統一的媒體渲染區塊 (進階防下載與防右鍵保護)
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
@@ -750,19 +750,29 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 # 檢查是否為一般影片格式 (如 GitHub 內的 .mp4)
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
                     video_html = f'''
-                        <video controls controlsList="nodownload" oncontextmenu="return false;" style="width: 100%; max-height: 450px; border-radius: 6px; background: #000;">
-                            <source src="{media_url}" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
+                        <div style="position: relative; display: inline-block; width: 100%;">
+                            <!-- 影片本身：移除 controls，禁止右鍵 -->
+                            <video id="securedVideo" autoplay loop playsinline oncontextmenu="return false;" style="width: 100%; max-height: 450px; border-radius: 6px; background: #000;">
+                                <source src="{media_url}" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                            <!-- 透明防護層：攔截所有直接點擊與右鍵選單，使「另存影片」無法觸發 -->
+                            <div oncontextmenu="return false;" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent;"></div>
+                        </div>
+                        <!-- 自定義的簡單播放/暫停控制列 -->
+                        <div style="text-align: center; margin-top: 5px;">
+                            <button onclick="var v=document.getElementById('securedVideo'); if(v.paused)v.play(); else v.paused;" style="padding: 4px 12px; font-size: 12px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc;">Play / Pause</button>
+                        </div>
                     '''
                     st.markdown(video_html, unsafe_allow_html=True)
                     
                 else:
-                    # 圖片防護設定：
-                    # 1. oncontextmenu="return false;" -> 禁止按右鍵跳出存圖選單
-                    # 2. draggable="false" -> 禁止用滑鼠直接把圖片拖曳到電腦桌面儲存
+                    # 圖片防護：加入透明防護層與禁止拖曳
                     img_html = f'''
-                        <img src="{media_url}" draggable="false" oncontextmenu="return false;" style="max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
+                        <div style="position: relative; display: inline-block; width: 100%;">
+                            <img src="{media_url}" draggable="false" oncontextmenu="return false;" style="max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
+                            <div oncontextmenu="return false;" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent;"></div>
+                        </div>
                     '''
                     st.markdown(img_html, unsafe_allow_html=True)
                     
