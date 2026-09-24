@@ -585,7 +585,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     """, height=0)
 
     # 頂端導航與 Review 按鈕區塊
-    top_col1, top_col2, top_col3, top_col4 = st.columns([1.5, 1, 0.8, 0.8])
+    top_col1, top_col2, top_col3, top_col4 = st.columns([1.5, 1, 0.8, 1.8])
     
     with top_col1:
         st.markdown(f"**👤 {st.session_state.get('candidate_name', 'User')}**")
@@ -643,7 +643,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     .then(stream => { document.getElementById('top-webcam').srcObject = stream; })
                     .catch(e => console.error("Camera error", e));
             </script>
-        """, height=110)
+        """, height=100)
 
     with top_col4:
         # 頂端常駐 Review 按鈕
