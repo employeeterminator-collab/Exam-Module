@@ -238,7 +238,7 @@ if not st.session_state.authenticated:
                 # 如果超過 90 分鐘，填入 DNF 到 Column 13 並拒絕登入
                 if elapsed_seconds > EXAM_TIME_LIMIT:
                     vouchers_sheet.update_cell(row_index, 13, "DNF")
-                    st.error("❌ **Access Denied:** Exam session expired (90-minute time limit exceeded). Status updated to DNF.")
+                    st.error("❌ **Access Denied:** Exam session expired. Status updated to Did Not Finish (DNF).")
                 else:
                     # 未超時，允許返回考試繼續作答
                     f_name = str(matched_record.get("EnglishFirstName", "")).strip()
@@ -911,7 +911,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
     col_res4.metric("Exam Outcome", "Completed")
     
     st.markdown("---")
-    st.info("💡 Your results and timestamps have been securely recorded in the official examination database (Google Sheets).")
+    st.info("💡 Your results and timestamps have been securely recorded in the official examination database.")
     
     if st.button("🚪 Exit Examination Portal", use_container_width=True):
         for key in list(st.session_state.keys()):
