@@ -646,10 +646,16 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         """, height=100)
 
     with top_col4:
-        # 頂端常駐 Review 按鈕
-        if st.button("📋 Review and End Exam", type="primary", use_container_width=True, key="top_review_btn"):
+        # ✨ 讓 Review 按鈕垂直置中對齊其他兩個方塊
+        st.markdown("""
+            <div style="display: flex; align-items: center; height: 60px;">
+        """, unsafe_allow_html=True)
+        
+        if st.button("📋 Review and End", type="primary", use_container_width=True, key="top_review_btn"):
             st.session_state.exam_step = 4
             st.rerun()
+            
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
 
