@@ -826,23 +826,23 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        elif q_type == "ORDER":
-            # 確保能安全抓到當前列的資料變數 (如果您的迴圈變數叫 q 或 row，這裡統一相容)
-            current_row = row if 'row' in locals() else (q if 'q' in locals() else df.iloc[st.session_state.get('current_question_index', 0)])
-            
-            q_text = current_row['QuestionText'] if 'QuestionText' in current_row else ''
+  elif q_type == "ORDER":
             st.markdown(f"**{q_text}**")
             
-            # 1. 自動抓取有內容的選項 (OptionA 到 OptionD)
+            # 1. 抓取有內容的選項 (OptionA 到 OptionD) 使用 get_val 輔助函式
             options_dict = {}
-            for col in ['OptionA', 'OptionB', 'OptionC', 'OptionD']:
-                if col in current_row and pd.notna(current_row[col]) and str(current_row[col]).strip() != "":
-                    letter = col.replace("Option", "") # 取得代號，例如 'A', 'B', 'C', 'D'
-                    options_dict[letter] = str(current_row[col])
+            for opt_letter in ["A", "B", "C", "D"]:
+                opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
+                if opt_val:
+                    options_dict[opt_letter] = opt_val
             
             st.info("💡 請依照正確的順序，分別為每個排名選擇對應的項目：")
             
-            # 2. 針對每一個名次建立下拉選單
+            # 2. 讀取先前儲存的答案 (如果有的話)
+            saved_ans = user_answers.get(q_idx, "")
+            saved_order = [x.strip() for x in saved_ans.split(",")] if isinstance(saved_ans, str) and saved_ans else []
+
+            # 3. 針對每一個名次建立下拉選單
             selected_letters = []
             num_options = len(options_dict)
             
@@ -850,9 +850,16 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 rank_num = i + 1
                 rank_choices = ["-- 請選擇 --"] + [f"{l}: {options_dict[l]}" for l in options_dict]
                 
-                widget_key = f"order_q_{st.session_state.get('current_question_index', 0)}_pos_{rank_num}"
+                default_idx = 0
+                if i < len(saved_order):
+                    matched_letter = saved_order[i]
+                    for idx, choice_str in enumerate(rank_choices):
+                        if choice_str.startswith(f"{matched_letter}:"):
+                            default_idx = idx
+                            break
                 
-                choice = st.selectbox(f"第 {rank_num} 順位 (Rank {rank_num})", rank_choices, key=widget_key)
+                widget_key = f"order_q_{q_idx}_pos_{rank_num}"
+                choice = st.selectbox(f"第 {rank_num} 順位 (Rank {rank_num})", rank_choices, index=default_idx, key=widget_key)
                 
                 if choice and choice != "-- 請選擇 --":
                     chosen_letter = choice.split(":")[0].strip()
@@ -860,13 +867,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 else:
                     selected_letters.append("")
             
-            # 3. 將使用者的排序結合成逗號分隔字串 (例如: "D,B,C,A")
-            user_answer = ",".join(selected_letters) if all(selected_letters) else ""
-            
-            # 儲存答案到使用者的作答紀錄中
-            if "user_answers" not in st.session_state:
-                st.session_state.user_answers = {}
-            st.session_state.user_answers[st.session_state.get('current_question_index', 0)] = user_answer
+            # 4. 儲存為逗號分隔字串到正確的 st.session_state.answers
+            if all(selected_letters):
+                st.session_state.answers[q_idx] = ",".join(selected_letters)
             
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
@@ -987,14 +990,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                                 
                         # Type 4: Ordering (Evaluates sequence like "D,B,C,A")
                         elif q_type == "ORDER":
-                            option_map = {
-                                "A": str(q_data.get("OptionA", "")).strip(),
-                                "B": str(q_data.get("OptionB", "")).strip(),
-                                "C": str(q_data.get("OptionC", "")).strip(),
-                                "D": str(q_data.get("OptionD", "")).strip(),
-                            }
-                            correct_sequence = [option_map.get(l.strip(), "") for l in correct_val.split(",") if l.strip()]
-                            user_sequence = [user_ans.get(f"Pos{i+1}", "") for i in range(len(correct_sequence))]
+                            correct_sequence = [l.strip().upper() for l in correct_val.split(",") if l.strip()]
+                            user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
                             
                             if user_sequence == correct_sequence and correct_sequence:
                                 correct_count += 1
