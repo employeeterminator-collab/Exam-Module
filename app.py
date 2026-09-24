@@ -634,7 +634,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         # ✨ 讓 Review 按鈕垂直置中對齊其他兩個方塊
 
         
-        if st.button("📋 Review and End", type="primary", use_container_width=True, key="top_review_btn"):
+        if st.button("📋 Review and End Exam", type="primary", use_container_width=True, key="top_review_btn"):
             st.session_state.exam_step = 4
             st.rerun()
 
@@ -644,7 +644,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 6px; background-color: #f0fdf4; text-align: center; padding: 2px;">
                 <div style="color: #15803d; font-weight: bold; font-size: 9px;">🟢 PROCTOR</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 110px; height: 110px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
+                <video id="top-webcam" autoplay playsinline muted style="width: 110%; height: 80px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
             </div>
             <script>
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
