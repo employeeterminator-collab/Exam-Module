@@ -585,7 +585,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     """, height=0)
 
     # 頂端導航與 Review 按鈕區塊
-    top_col1, top_col2, top_col3 = st.columns([1.3, 1.2, 1.1, ])
+    top_col1, top_col2, top_col3 = st.columns([1.3, 1.2, 0.8, ])
     
     with top_col1:
         st.markdown(f"**👤 {st.session_state.get('candidate_name', 'User')}**")
