@@ -736,7 +736,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-        media_url = str(current_question.get("MediaURL", "")).strip()
+        media_url = str(row.get("MediaURL", "")).strip()
 
         if media_url and media_url != "nan" and media_url != "":
             st.markdown(f"**📎 Question Image:**")
