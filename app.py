@@ -896,7 +896,6 @@ elif question_type.upper() == "ORDER":
                 if st.button("📋 Go to Review Page", type="primary", use_container_width=True):
                     st.session_state.exam_step = 4
                     st.rerun()
-        st.markdown("---")            
         
 # ==========================================
 # Step 4 - 考試總結與詳細清單確認頁面 (Upgraded Review Page)
