@@ -826,9 +826,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        elif q_type == "ORDER":
-            # 修正：直接從 row 讀取 QuestionText
-            q_text = row.get('QuestionText', '')
+elif question_type.upper() == "ORDER":
+            # 修正：使用最安全的欄位檢查與取值方式
+            q_text = row['QuestionText'] if 'QuestionText' in row else ''
             st.markdown(f"**{q_text}**")
             
             # 1. 自動抓取有內容的選項 (OptionA 到 OptionD)
@@ -865,7 +865,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if "user_answers" not in st.session_state:
                 st.session_state.user_answers = {}
             st.session_state.user_answers[st.session_state.get('current_question_index', 0)] = user_answer
-
 
         # 底部導航按鈕
         st.markdown("---")
