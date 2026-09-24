@@ -472,7 +472,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (修正版：加入欄位容錯與除錯)
+# Step 3 - 核心問答模組 (終極欄位容錯修正版)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -485,13 +485,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     # Fetch questions from Google Sheets if not already cached
     if not st.session_state.exam_questions:
-        raw_questions = get_exam_questions()
-        # 清理並標準化欄位名稱（轉大寫、去除前後空白），避免抓不到欄位
-        cleaned_questions = []
-        for q in raw_questions:
-            cleaned_q = {str(k).strip().upper(): v for k, v in q.items()}
-            cleaned_questions.append(cleaned_q)
-        st.session_state.exam_questions = cleaned_questions
+        st.session_state.exam_questions = get_exam_questions()
 
     exam_questions = st.session_state.exam_questions
     TOTAL_QUESTIONS = len(exam_questions) if exam_questions else 75
@@ -509,8 +503,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         correct_count = 0
         for idx, q_data in enumerate(exam_questions, start=1):
             user_ans = str(user_answers.get(idx, "")).strip()
-            correct_letter = str(q_data.get("CORRECTANSWER", "")).strip().upper()
-            correct_text = str(q_data.get(f"OPTION{correct_letter}", "")).strip()
+            
+            # 彈性尋找正確答案欄位
+            correct_letter = ""
+            for k, v in q_data.items():
+                if k.strip().lower() in ["correctanswer", "correct_answer", "answer"]:
+                    correct_letter = str(v).strip().upper()
+                    break
+            
+            # 尋對應選項的文字內容
+            correct_text = ""
+            if correct_letter:
+                for k, v in q_data.items():
+                    if k.strip().lower() in [f"option{correct_letter.lower()}", f"opt{correct_letter.lower()}", correct_letter.lower()]:
+                        correct_text = str(v).strip()
+                        break
+
             if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
                 correct_count += 1
         
@@ -533,7 +541,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
         pass
 
-    # JavaScript 隱藏背景按鈕與防作弊偵測
+    # JavaScript 隱藏按鈕與防作弊
     st.components.v1.html("""
         <script>
             function hideTriggerButtons() {
@@ -641,6 +649,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     st.divider()
 
+    # 彈性欄位抓取 Helper 函式
+    def get_val(data_dict, *possible_keys):
+        for pk in possible_keys:
+            for actual_k, val in data_dict.items():
+                if actual_k.strip().lower() == pk.strip().lower():
+                    if val is not None and str(val).strip() != "":
+                        return str(val).strip()
+        return ""
+
     with st.sidebar:
         st.markdown("### 📹 Security Status")
         st.markdown(f"""
@@ -670,17 +687,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         q_idx = st.session_state.current_q
         current_q_data = exam_questions[q_idx - 1]
         
-        q_type = str(current_q_data.get("QUESTIONTYPE", "MC")).strip().upper()
-        q_text = current_q_data.get("QUESTIONTEXT", "").strip()
-        
-        # 容錯：如果 QUESTIONTEXT 找不到，嘗試尋找小寫的 questiontext
-        if not q_text:
-            for k, v in current_q_data.items():
-                if "TEXT" in k and v:
-                    q_text = str(v).strip()
-                    break
-
-        media_url = str(current_q_data.get("MEDIAURL", "")).strip()
+        # 彈性抓取各欄位
+        q_type = get_val(current_q_data, "QuestionType", "Type", "QType").upper() or "MC"
+        q_text = get_val(current_q_data, "QuestionText", "Question", "Text", "QText")
+        media_url = get_val(current_q_data, "MediaURL", "Media", "ImageURL")
 
         st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — [{q_type}]")
         st.progress(q_idx / TOTAL_QUESTIONS)
@@ -688,7 +698,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if q_text:
             st.markdown(f"#### Q{q_idx}. {q_text}")
         else:
-            st.warning(f"⚠️ Q{q_idx}: Question text is empty in Google Sheets. Raw row data: {current_q_data}")
+            st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
         if media_url:
             if media_url.endswith((".mp4", ".mov", ".webm")):
@@ -699,12 +709,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         user_answers = st.session_state.get("answers", {})
         current_answer = user_answers.get(q_idx, None)
 
-        if q_type in ["MC", "MC_MEDIA"]:
+        if q_type in ["MC", "MC_MEDIA", ""]:
             options = []
-            for opt_key in ["OPTIONA", "OPTIONB", "OPTIONC", "OPTIOND"]:
-                val = current_q_data.get(opt_key, "")
-                if val and str(val).strip() != "":
-                    options.append(str(val).strip())
+            for opt_letter in ["A", "B", "C", "D"]:
+                opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
+                if opt_val:
+                    options.append(opt_val)
             
             default_index = 0
             if current_answer in options:
