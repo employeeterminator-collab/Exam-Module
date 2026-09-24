@@ -931,7 +931,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
 
                 except Exception as e:
                     st.error(f"Submission error: {e}")
-
+  
+    st.divider()
 # ==========================================
 # Step 5 - 考試結果與結算頁面
 # ==========================================
