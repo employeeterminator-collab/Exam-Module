@@ -651,7 +651,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     .then(stream => { document.getElementById('top-webcam').srcObject = stream; })
                     .catch(e => console.error("Camera error", e));
             </script>
-        """, height=120)
+        """, height=150)
 
     
     st.divider()
