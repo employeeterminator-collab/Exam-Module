@@ -489,11 +489,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     exam_questions = st.session_state.exam_questions
     TOTAL_QUESTIONS = len(exam_questions) if exam_questions else 75
 
-    def handle_focus_loss():
-        log_violation_to_sheet(st.session_state.voucher_code)
-
-    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
-        pass
 
     def handle_auto_submit():
         user_answers = st.session_state.get("answers", {})
@@ -538,6 +533,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
         pass
 
+    def handle_focus_loss():
+        log_violation_to_sheet(st.session_state.voucher_code)
+
+    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
+        pass
     # JavaScript 隱藏按鈕與防作弊
     st.components.v1.html("""
         <script>
