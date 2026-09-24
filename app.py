@@ -154,7 +154,7 @@ def log_violation_to_sheet(voucher_code):
     except Exception as e:
         print(f"Failed to log violation globally: {e}")
 
-# 完成考試時更新狀態
+# 完成考試時更新狀態 (修改後：即使 Timeout 自動交卷，也正常計分並寫入 Pass 或 Fail)
 def finalize_exam_submission(voucher_code, warning_count, exam_status, explanation=""):
     try:
         db = get_sheets_connection()
@@ -164,7 +164,7 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             sheet.update_cell(cell.row, 12, completed_time)  # CompletedExam time
             sheet.update_cell(cell.row, 11, warning_count) # WarningCount
-            sheet.update_cell(cell.row, 13, exam_status)   # ExamStatus / EndTime ("Pass", "Fail", "DNF")
+            sheet.update_cell(cell.row, 13, exam_status)   # ExamStatus / EndTime ("Pass" or "Fail")
             sheet.update_cell(cell.row, 14, explanation)   # Explanation
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
@@ -513,6 +513,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         
         passing_score_percentage = 70.0
         score_percentage = (correct_count / TOTAL_QUESTIONS) * 100 if TOTAL_QUESTIONS > 0 else 0
+        
+        # 評分標準：夠分數就係 Pass，唔夠就係 Fail，不再寫 DNF
         final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
         
         answered_count = len(user_answers)
