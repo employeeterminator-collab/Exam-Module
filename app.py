@@ -538,20 +538,23 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
         pass
-    # JavaScript 隱藏按鈕與防作弊
+    # 2. JavaScript handles auto-hiding the button, global warning banner, visibility/blur/mouseleave detectors
     st.components.v1.html("""
         <script>
-            function hideTriggerButtons() {
+            function hideTriggerButton() {
                 const buttons = parent.document.querySelectorAll('button');
                 buttons.forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend') || btn.innerText.includes('AutoSubmitBackend')) {
+                    if (btn.innerText.includes('TriggerViolationBackend')) {
                         let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
-                        if (container) { container.style.display = 'none'; }
+                        if (container) {
+                            container.style.display = 'none';
+                        }
                     }
                 });
             }
-            setTimeout(hideTriggerButtons, 50);
-            setInterval(hideTriggerButtons, 300);
+            
+            setTimeout(hideTriggerButton, 50);
+            setInterval(hideTriggerButton, 300);
 
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
@@ -560,9 +563,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     position: fixed; top: 0; left: 0; width: 100vw;
                     background-color: #dc2626; color: white; text-align: center; 
                     padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
-                    font-size: 15px; z-index: 2147483647; display: none; box-sizing: border-box;
+                    font-size: 15px; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                    z-index: 2147483647; display: none; box-sizing: border-box;
                 `;
-                banner.innerHTML = "🚨 WARNING: Tab switch or blur detected! Please remain focused on the exam.";
+                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
                 parent.document.body.appendChild(banner);
             }
 
@@ -572,18 +576,37 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if (b) {
                     b.style.display = 'block';
                     clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
+                    bannerTimer = setTimeout(() => {
+                        b.style.display = 'none';
+                    }, 8000);
                 }
-                parent.document.querySelectorAll('button').forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) { btn.click(); }
+                
+                const buttons = parent.document.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend')) {
+                        btn.click();
+                    }
                 });
             }
 
-            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
-            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
+            parent.document.addEventListener("visibilitychange", function() {
+                if (parent.document.hidden) {
+                    triggerGlobalWarning();
+                }
+            });
+
+            parent.window.addEventListener("blur", function() {
+                triggerGlobalWarning();
+            });
+
+            parent.document.addEventListener("mouseleave", function(e) {
+                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
+                    triggerGlobalWarning();
+                }
+            });
         </script>
     """, height=0)
-
+    
     # 頂端導航與 Review 按鈕區塊
     top_col1, top_col2, top_col3 = st.columns([1.3, 1.2, 1.3, ])
     
