@@ -729,46 +729,108 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     else:
         q_idx = st.session_state.current_q
         current_q_data = exam_questions[q_idx - 1]
+        
+        q_type = str(current_q_data.get("QuestionType", "MC")).strip().upper()
+        q_text = current_q_data.get("QuestionText", "Question text unavailable.")
+        media_url = str(current_q_data.get("MediaURL", "")).strip()
 
-        st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — Multiple Choice")
+        st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — [{q_type}]")
         st.progress(q_idx / TOTAL_QUESTIONS)
-
-        q_text = current_q_data.get("Question", "Question text unavailable.")
         st.markdown(f"#### Q{q_idx}. {q_text}")
 
-        options = []
-        for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
-            val = current_q_data.get(opt_key, "")
-            if val and str(val).strip() != "":
-                options.append(str(val).strip())
-
-        current_answer = st.session_state.answers.get(q_idx, None)
-        default_index = 0
-        if current_answer in options:
-            default_index = options.index(current_answer)
-
-        selected = st.radio(
-            "Select your answer:", 
-            options, 
-            index=default_index, 
-            key=f"q_radio_{q_idx}"
-        )
-
-        if selected:
-            st.session_state.answers[q_idx] = selected
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-
-        with col_btn1:
-            is_flagged = q_idx in st.session_state.flagged_questions
-            flag_label = "🚩 Flagged for Review" if is_flagged else "🏳️ Flag Question"
-
-            if st.checkbox(flag_label, value=is_flagged, key=f"flag_box_{q_idx}"):
-                st.session_state.flagged_questions.add(q_idx)
+        # Inline Media Rendering (Anti-Cheat Safe: No Popups)
+        if media_url:
+            if media_url.endswith((".mp4", ".mov", ".webm")):
+                st.video(media_url)
             else:
-                st.session_state.flagged_questions.discard(q_idx)
+                st.image(media_url, use_column_width=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+        user_answers = st.session_state.get("answers", {})
+        current_answer = user_answers.get(q_idx, None)
+
+        # 1. & 2. Traditional MC & Enhanced MC with Media
+        if q_type in ["MC", "MC_MEDIA"]:
+            options = []
+            for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
+                val = current_q_data.get(opt_key, "")
+                if val and str(val).strip() != "":
+                    options.append(str(val).strip())
+            
+            default_index = 0
+            if current_answer in options:
+                default_index = options.index(current_answer)
+
+            selected = st.radio("Select your answer:", options, index=default_index, key=f"q_radio_{q_idx}")
+            if selected:
+                st.session_state.answers[q_idx] = selected
+
+        # 3. True or False (TF)
+        elif q_type == "TF":
+            tf_options = ["TRUE", "FALSE"]
+            default_index = 0
+            if current_answer in tf_options:
+                default_index = tf_options.index(current_answer)
+
+            selected = st.radio("Select True or False:", tf_options, index=default_index, key=f"tf_radio_{q_idx}")
+            if selected:
+                st.session_state.answers[q_idx] = selected
+
+        # 4. Ordering / Ranking (ORDER)
+        elif q_type == "ORDER":
+            st.markdown("##### Arrange the items in the correct order:")
+            items = []
+            for opt_key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
+                val = current_q_data.get(opt_key, "")
+                if val and str(val).strip() != "":
+                    items.append(str(val).strip())
+            
+            if f"order_{q_idx}" not in st.session_state:
+                st.session_state[f"order_{q_idx}"] = current_answer if isinstance(current_answer, dict) else {}
+
+            order_ans = {}
+            for i in range(len(items)):
+                chosen_item = st.selectbox(f"Position {i+1}", items, key=f"pos_{q_idx}_{i}")
+                order_ans[f"Pos{i+1}"] = chosen_item
+            st.session_state.answers[q_idx] = order_ans
+
+        # 5. Matching (MATCH)
+        elif q_type == "MATCH":
+            st.markdown("##### Match each term with its definition:")
+            terms = {}
+            for key in ["OptionA", "OptionB", "OptionC", "OptionD"]:
+                val = current_q_data.get(key, "")
+                if val and str(val).strip() != "":
+                    terms[key] = str(val).strip()
+            
+            definitions = []
+            for def_key in ["DefA", "DefB", "DefC", "DefD"]:
+                def_val = current_q_data.get(def_key, "")
+                if def_val and str(def_val).strip() != "":
+                    definitions.append(str(def_val).strip())
+
+            if f"match_{q_idx}" not in st.session_state:
+                st.session_state[f"match_{q_idx}"] = current_answer if isinstance(current_answer, dict) else {}
+
+            match_answers = {}
+            for t_key, t_text in terms.items():
+                col_term, col_select = st.columns([1, 2])
+                with col_term:
+                    st.markdown(f"**{t_key}. {t_text}**")
+                with col_select:
+                    current_sel = st.session_state.answers.get(q_idx, {}).get(t_key, definitions[0] if definitions else "")
+                    default_index = definitions.index(current_sel) if current_sel in definitions else 0
+                    
+                    selected_def = st.selectbox(
+                        f"Select definition for {t_key}",
+                        definitions,
+                        index=default_index,
+                        key=f"match_sel_{q_idx}_{t_key}",
+                        label_visibility="collapsed"
+                    )
+                    match_answers[t_key] = selected_def
+
+            st.session_state.answers[q_idx] = match_answers
 
         with col_btn2:
             if st.button("⬅️ Previous", use_container_width=True, disabled=(q_idx == 1)):
@@ -855,15 +917,56 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     answered_count = len(st.session_state.get("answers", {}))
                     focus_losses = st.session_state.get("focus_loss_count", 0)
                     
-                    correct_count = 0
-                    exam_questions = st.session_state.get("exam_questions", [])
+correct_count = 0
+        for idx, q_data in enumerate(exam_questions, start=1):
+            user_ans = user_answers.get(idx, "")
+            q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
+            correct_val = str(q_data.get("CorrectAnswer", "")).strip()
+            
+            # Type 1 & 2: MC / MC_Media (Checks Letter or Option Text match)
+            if q_type in ["MC", "MC_MEDIA"]:
+                correct_letter = correct_val.upper()
+                correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
+                user_str = str(user_ans).strip()
+                if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
+                    correct_count += 1
+            
+            # Type 3: True / False
+            elif q_type == "TF":
+                if str(user_ans).strip().upper() == correct_val.upper():
+                    correct_count += 1
                     
-                    for idx, q_data in enumerate(exam_questions, start=1):
-                        user_ans = str(user_answers.get(idx, "")).strip()
-                        correct_letter = str(q_data.get("CorrectAnswer", "")).strip().upper()
-                        correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
-                        if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
-                            correct_count += 1
+            # Type 4: Ordering (Evaluates sequence like "D,B,C,A")
+            elif q_type == "ORDER":
+                option_map = {
+                    "A": str(q_data.get("OptionA", "")).strip(),
+                    "B": str(q_data.get("OptionB", "")).strip(),
+                    "C": str(q_data.get("OptionC", "")).strip(),
+                    "D": str(q_data.get("OptionD", "")).strip(),
+                }
+                correct_sequence = [option_map.get(l.strip(), "") for l in correct_val.split(",") if l.strip()]
+                user_sequence = [user_ans.get(f"Pos{i+1}", "") for i in range(len(correct_sequence))]
+                
+                if user_sequence == correct_sequence and correct_sequence:
+                    correct_count += 1
+                    
+            # Type 5: Matching (Evaluates mappings like "A:DefB, B:DefA...")
+            elif q_type == "MATCH":
+                expected_mapping = {}
+                for pair in correct_val.split(","):
+                    if ":" in pair:
+                        term_key, def_col = pair.split(":")
+                        expected_mapping[term_key.strip()] = str(q_data.get(def_col.strip(), "")).strip()
+                
+                user_pairs = user_ans if isinstance(user_ans, dict) else {}
+                is_match_correct = True
+                for t_key, correct_text in expected_mapping.items():
+                    if user_pairs.get(t_key) != correct_text:
+                        is_match_correct = False
+                        break
+                
+                if is_match_correct and expected_mapping:
+                    correct_count += 1
                     
                     passing_score_percentage = 70.0
                     score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
