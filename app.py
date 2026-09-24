@@ -98,11 +98,13 @@ def get_exam_questions():
                 continue
             normalized_records.append({
                 "Question": q_text,
+                "QuestionType": r.get("QuestionType", "MC"),  # 💡 補回題型
                 "OptionA": r.get("OptionA", ""),
                 "OptionB": r.get("OptionB", ""),
                 "OptionC": r.get("OptionC", ""),
                 "OptionD": r.get("OptionD", ""),
-                "CorrectAnswer": r.get("CorrectAnswer", "")
+                "CorrectAnswer": r.get("CorrectAnswer", ""),
+                "MediaURL": r.get("MediaURL", "")             # 💡 補回圖片網址欄位
             })
             
         if normalized_records:
