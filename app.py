@@ -162,9 +162,9 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
         cell = sheet.find(voucher_code)
         if cell:
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sheet.update_cell(cell.row, 12, completed_time)  # CompletedExam / Photo URL
+            sheet.update_cell(cell.row, 12, completed_time)  # CompletedExam time
             sheet.update_cell(cell.row, 11, warning_count) # WarningCount
-            sheet.update_cell(cell.row, 13, exam_status)   # ExamStatus / EndTime
+            sheet.update_cell(cell.row, 13, exam_status)   # ExamStatus / EndTime ("Pass", "Fail", "DNF")
             sheet.update_cell(cell.row, 14, explanation)   # Explanation
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
@@ -225,8 +225,8 @@ if not st.session_state.authenticated:
             exam_end_val = str(matched_record.get("ExamEndTime", "")).strip()
             committed_time = str(matched_record.get("Committed", "")).strip()
 
-            # 🛡️ STRICT BLOCK: If the exam was already finished, passed, failed, or DNF'd, deny entry permanently
-            if completed_exam_val not in ["", "DNF"] or exam_end_val in ["Pass", "Fail", "DNF"]:
+            # 🛡️ STRICT BLOCK: If the exam was already completed, passed, failed, or DNF'd, deny entry permanently
+            if exam_end_val in ["Pass", "Fail", "DNF"] or (completed_exam_val != "" and completed_exam_val != "DNF"):
               st.error("❌ **Access Denied:** This examination has already been completed, submitted, or expired using this voucher. Re-entry is strictly prohibited.")
             
             # Check if already timed out (DNF)
@@ -498,13 +498,46 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
         pass
 
-    # 2. JavaScript handles auto-hiding the button, global warning banner, visibility/blur/mouseleave detectors
+    # 2. Hidden backend trigger button for auto-submission on timeout
+    def handle_auto_submit():
+        user_answers = st.session_state.get("answers", {})
+        focus_losses = st.session_state.get("focus_loss_count", 0)
+        
+        correct_count = 0
+        for idx, q_data in enumerate(exam_questions, start=1):
+            user_ans = str(user_answers.get(idx, "")).strip()
+            correct_letter = str(q_data.get("CorrectAnswer", "")).strip().upper()
+            correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
+            if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
+                correct_count += 1
+        
+        passing_score_percentage = 70.0
+        score_percentage = (correct_count / TOTAL_QUESTIONS) * 100 if TOTAL_QUESTIONS > 0 else 0
+        final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
+        
+        answered_count = len(user_answers)
+        finalize_exam_submission(
+            st.session_state.voucher_code,
+            focus_losses,
+            final_status,
+            explanation=f"Auto-submitted on timeout. Answered {answered_count}/{TOTAL_QUESTIONS}, Correct {correct_count}"
+        )
+        
+        st.session_state.exam_final_status = final_status
+        st.session_state.exam_correct_count = correct_count
+        st.session_state.exam_step = 5
+        st.rerun()
+
+    if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
+        pass
+
+    # 3. JavaScript handles auto-hiding buttons, global warning banner, timeout auto-submission, etc.
     st.components.v1.html("""
         <script>
-            function hideTriggerButton() {
+            function hideTriggerButtons() {
                 const buttons = parent.document.querySelectorAll('button');
                 buttons.forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) {
+                    if (btn.innerText.includes('TriggerViolationBackend') || btn.innerText.includes('AutoSubmitBackend')) {
                         let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
                         if (container) {
                             container.style.display = 'none';
@@ -513,8 +546,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 });
             }
             
-            setTimeout(hideTriggerButton, 50);
-            setInterval(hideTriggerButton, 300);
+            setTimeout(hideTriggerButtons, 50);
+            setInterval(hideTriggerButtons, 300);
 
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
@@ -607,10 +640,24 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 let endTime = Date.now() + (serverRemaining * 1000);
                 parent.sessionStorage.setItem(STORAGE_KEY, endTime);
 
+                let hasAutoSubmitted = false;
+
                 function updateCountdown() {
                     const now = Date.now();
                     let timeLeft = Math.floor((endTime - now) / 1000);
-                    if (timeLeft < 0) timeLeft = 0;
+                    if (timeLeft <= 0) {
+                        timeLeft = 0;
+                        if (!hasAutoSubmitted) {
+                            hasAutoSubmitted = true;
+                            // Trigger auto-submit button click in parent
+                            const buttons = parent.document.querySelectorAll('button');
+                            buttons.forEach(btn => {
+                                if (btn.innerText.includes('AutoSubmitBackend')) {
+                                    btn.click();
+                                }
+                            });
+                        }
+                    }
 
                     const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
                     const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
@@ -813,11 +860,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     for idx, q_data in enumerate(exam_questions, start=1):
                         user_ans = str(user_answers.get(idx, "")).strip()
                         correct_letter = str(q_data.get("CorrectAnswer", "")).strip().upper()
-                        
-                        # Get the actual text matching the correct letter from the sheet (e.g., if 'A', get q_data['OptionA'])
                         correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
-                        
-                        # Match if user answered with the letter OR typed/selected the exact option text
                         if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
                             correct_count += 1
                     
