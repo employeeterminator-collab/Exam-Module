@@ -634,7 +634,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         # ✨ 讓 Review 按鈕垂直置中對齊其他兩個方塊
 
         
-        if st.button("📋 Review and End Exam", type="primary", use_container_width=True, key="top_review_btn"):
+        if st.button("📋 Go to Review Page", type="primary", use_container_width=True, key="top_review_btn"):
             st.session_state.exam_step = 4
             st.rerun()
 
