@@ -739,13 +739,29 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
         # ✅ 只保留這一個正確讀取圖片網址的邏輯
+        # 圖片或影片渲染區塊 (使用純 HTML 確保乾淨無按鈕，並支援影音檔案)
         if media_url and media_url.lower() != "nan" and media_url != "":
-            st.markdown(f"**📎 Question Image:**")
-            try:
-                st.image(media_url, caption="Question Media", use_container_width=True)
-            except Exception as e:
-                st.warning(f"⚠️ Could not load image: {e}")
-                st.markdown(f'<img src="{media_url}" style="max-width:100%; border-radius:5px;" />', unsafe_allow_html=True)
+            st.markdown(f"**📎 Question Media:**")
+            
+            # 檢查是否為影片格式 (例如 .mp4, .webm, .ogg)
+            is_video = any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov'])
+            
+            if is_video:
+                # 嵌入影片播放器 (自動播放、循環播放或帶控制列)
+                video_html = f'''
+                    <video controls autoplay muted style="width: 100%; max-height: 400px; border-radius: 6px; background: #000;">
+                        <source src="{media_url}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                '''
+                st.markdown(video_html, unsafe_allow_html=True)
+            else:
+                # 嵌入純淨圖片 (完全沒有放大鏡按鈕)
+                img_html = f'''
+                    <img src="{media_url}" style="max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
+                '''
+                st.markdown(img_html, unsafe_allow_html=True)
+                
             st.markdown("---")
             
         user_answers = st.session_state.get("answers", {})
