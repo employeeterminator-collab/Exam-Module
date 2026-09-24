@@ -826,7 +826,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        elif question_type.upper() == "ORDER":
+        elif q_type == "ORDER":
             # 修正：直接從 row 讀取 QuestionText
             q_text = row.get('QuestionText', '')
             st.markdown(f"**{q_text}**")
