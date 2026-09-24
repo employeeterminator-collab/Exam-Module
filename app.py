@@ -644,7 +644,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 6px; background-color: #f0fdf4; text-align: center; padding: 2px;">
                 <div style="color: #15803d; font-weight: bold; font-size: 8px;">🟢 PROCTOR</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 100px; object-fit: cover; border-radius: 3px; background: #000; display: block;"></video>
+                <video id="top-webcam" autoplay playsinline muted style="width: 80px; height: 90%; object-fit: cover; border-radius: 3px; background: #000; display: block;"></video>
             </div>
             <script>
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
