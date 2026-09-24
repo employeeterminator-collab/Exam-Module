@@ -738,7 +738,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-       # 統一的媒體渲染區塊 (同時支援圖片與 GitHub/直鏈 MP4 影片 / YouTube)
+       # 統一的媒體渲染區塊 (同時對影片與圖片實施防下載、防右鍵保護)
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
@@ -747,10 +747,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if "youtube.com" in media_url.lower() or "youtu.be" in media_url.lower():
                     st.video(media_url)
                     
-                # 檢查是否為影片格式 (例如 GitHub 專案內的 .mp4 直鏈)
+                # 檢查是否為一般影片格式 (如 GitHub 內的 .mp4)
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
                     video_html = f'''
-                        <video controls style="width: 100%; max-height: 450px; border-radius: 6px; background: #000;">
+                        <video controls controlsList="nodownload" oncontextmenu="return false;" style="width: 100%; max-height: 450px; border-radius: 6px; background: #000;">
                             <source src="{media_url}" type="video/mp4">
                             Your browser does not support the video tag.
                         </video>
@@ -758,9 +758,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     st.markdown(video_html, unsafe_allow_html=True)
                     
                 else:
-                    # 預設當作圖片處理 (使用純 HTML 確保沒有惱人的放大鏡按鈕)
+                    # 圖片防護設定：
+                    # 1. oncontextmenu="return false;" -> 禁止按右鍵跳出存圖選單
+                    # 2. draggable="false" -> 禁止用滑鼠直接把圖片拖曳到電腦桌面儲存
                     img_html = f'''
-                        <img src="{media_url}" style="max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
+                        <img src="{media_url}" draggable="false" oncontextmenu="return false;" style="max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
                     '''
                     st.markdown(img_html, unsafe_allow_html=True)
                     
