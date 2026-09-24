@@ -739,7 +739,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
         # 圖片載入與顯示區塊
-        if media_url and media_url.lower() != "nan" and media_url != "":
+       
             st.markdown(f"**📎 Question Image:**")
             try:
                 # 使用 st.image 讀取圖片直鏈
