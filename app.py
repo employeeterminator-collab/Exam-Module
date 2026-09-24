@@ -738,18 +738,16 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-        # 圖片載入與顯示區塊
-       
+        # ✅ 只保留這一個正確讀取圖片網址的邏輯
+        if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Image:**")
             try:
-                # 使用 st.image 讀取圖片直鏈
                 st.image(media_url, caption="Question Media", use_container_width=True)
             except Exception as e:
                 st.warning(f"⚠️ Could not load image: {e}")
-                # 備用方案：若 st.image 失敗，改用 HTML 顯示
                 st.markdown(f'<img src="{media_url}" style="max-width:100%; border-radius:5px;" />', unsafe_allow_html=True)
             st.markdown("---")
-
+            
         user_answers = st.session_state.get("answers", {})
         current_answer = user_answers.get(q_idx, None)
 
