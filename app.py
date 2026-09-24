@@ -736,15 +736,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-        if media_url:
-            st.markdown(f"**📎 Attached Media / Image:**")
+        media_url = str(current_question.get("MediaURL", "")).strip()
+
+        if media_url and media_url != "nan" and media_url != "":
+            st.markdown(f"**📎 Question Image:**")
             try:
-                # 嘗試使用 HTML 圖片標籤顯示
-                st.markdown(f'<img src="{media_url}" style="max-width: 100%; border-radius: 6px;" />', unsafe_allow_html=True)
-            except Exception:
-                st.warning("⚠️ Image could not be rendered directly.")
-            st.markdown(f'<a href="{media_url}" target="_blank">🔗 Open Image in New Tab</a>', unsafe_allow_html=True)
-            st.markdown("---")          
+                # 直接用 st.image 讀取 ImgBB 直鏈
+                st.image(media_url, caption="Question Media", use_column_width=True)
+            except Exception as e:
+                st.warning(f"⚠️ Could not load image: {e}")
+                # 備用方案：如果 st.image 失敗，用 HTML 顯示
+                st.markdown(f'<img src="{media_url}" style="max-width:100%; border-radius:5px;" />', unsafe_allow_html=True)
+                    st.markdown("---")          
 
         user_answers = st.session_state.get("answers", {})
         current_answer = user_answers.get(q_idx, None)
