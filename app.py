@@ -738,7 +738,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-       # 統一的媒體渲染區塊 (修正播放/暫停按鈕邏輯)
+       # 統一的媒體渲染區塊 (修正 f-string 大括號跳脫問題)
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
@@ -756,12 +756,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                                 <source src="{media_url}" type="video/mp4">
                                 Your browser does not support the video tag.
                             </video>
-                            <!-- 透明防護層：阻擋右鍵與直接下載 -->
+                            <!-- 透明防護層 -->
                             <div oncontextmenu="return false;" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent;"></div>
                         </div>
-                        <!-- 自定義播放/暫停按鈕 (已修正 JS 動作) -->
+                        <!-- 自定義播放/暫停按鈕 (JavaScript 的大括號已改為雙大括號 {{ }}) -->
                         <div style="text-align: center; margin-top: 8px;">
-                            <button onclick="var v=document.getElementById('securedVideo'); if(v.paused){v.play();}else{v.pause();}" style="padding: 6px 16px; font-size: 13px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background-color: #f0f2f6; color: #31333F; font-weight: 500;">Play / Pause</button>
+                            <button onclick="var v=document.getElementById('securedVideo'); if(v.paused){{v.play();}}else{{v.pause();}}" style="padding: 6px 16px; font-size: 13px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background-color: #f0f2f6; color: #31333F; font-weight: 500;">Play / Pause</button>
                         </div>
                     '''
                     st.markdown(video_html, unsafe_allow_html=True)
