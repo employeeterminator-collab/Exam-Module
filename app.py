@@ -543,20 +543,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     # 2. JavaScript handles auto-hiding the button, global warning banner, visibility/blur/mouseleave detectors
     st.components.v1.html("""
         <script>
-            function hideTriggerButton() {
+            function hideTriggers() {
                 const buttons = parent.document.querySelectorAll('button');
                 buttons.forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) {
+                    if (btn.innerText.includes('TriggerViolationBackend') || btn.innerText.includes('AutoSubmitBackend')) {
                         let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
-                        if (container) {
-                            container.style.display = 'none';
-                        }
+                        if (container) { container.style.display = 'none'; }
                     }
                 });
             }
+
+            // 頁面變動時立即執行
+            const observer = new MutationObserver(hideTriggers);
+            observer.observe(parent.document.body, { childList: true, subtree: true });
             
-            setTimeout(hideTriggerButton, 50);
-            setInterval(hideTriggerButton, 300);
+            // 初始化執行一次
+            hideTriggers();
 
             if (!parent.document.getElementById('global-warning-banner')) {
                 const banner = parent.document.createElement('div');
@@ -565,10 +567,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     position: fixed; top: 0; left: 0; width: 100vw;
                     background-color: #dc2626; color: white; text-align: center; 
                     padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
-                    font-size: 15px; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-                    z-index: 2147483647; display: none; box-sizing: border-box;
+                    font-size: 15px; z-index: 2147483647; display: none; box-sizing: border-box;
                 `;
-                banner.innerHTML = "🚨 WARNING: Tab switch, screen blur, or cursor out of bounds detected! Please remain focused on the exam.";
+                banner.innerHTML = "🚨 WARNING: Tab switch or blur detected! Please remain focused on the exam.";
                 parent.document.body.appendChild(banner);
             }
 
@@ -578,34 +579,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if (b) {
                     b.style.display = 'block';
                     clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => {
-                        b.style.display = 'none';
-                    }, 8000);
+                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
                 }
-                
-                const buttons = parent.document.querySelectorAll('button');
-                buttons.forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) {
-                        btn.click();
-                    }
+                parent.document.querySelectorAll('button').forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend')) { btn.click(); }
                 });
             }
 
-            parent.document.addEventListener("visibilitychange", function() {
-                if (parent.document.hidden) {
-                    triggerGlobalWarning();
-                }
-            });
-
-            parent.window.addEventListener("blur", function() {
-                triggerGlobalWarning();
-            });
-
-            parent.document.addEventListener("mouseleave", function(e) {
-                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
-                    triggerGlobalWarning();
-                }
-            });
+            parent.document.addEventListener("visibilitychange", function() { if (parent.document.hidden) triggerGlobalWarning(); });
+            parent.window.addEventListener("blur", function() { triggerGlobalWarning(); });
         </script>
     """, height=0)
     
