@@ -738,7 +738,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-       # 統一的媒體渲染區塊 (進階防下載與防右鍵保護)
+       # 統一的媒體渲染區塊 (修正播放/暫停按鈕邏輯)
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
@@ -751,23 +751,23 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
                     video_html = f'''
                         <div style="position: relative; display: inline-block; width: 100%;">
-                            <!-- 影片本身：移除 controls，禁止右鍵 -->
+                            <!-- 影片本身 -->
                             <video id="securedVideo" autoplay loop playsinline oncontextmenu="return false;" style="width: 100%; max-height: 450px; border-radius: 6px; background: #000;">
                                 <source src="{media_url}" type="video/mp4">
                                 Your browser does not support the video tag.
                             </video>
-                            <!-- 透明防護層：攔截所有直接點擊與右鍵選單，使「另存影片」無法觸發 -->
+                            <!-- 透明防護層：阻擋右鍵與直接下載 -->
                             <div oncontextmenu="return false;" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent;"></div>
                         </div>
-                        <!-- 自定義的簡單播放/暫停控制列 -->
-                        <div style="text-align: center; margin-top: 5px;">
-                            <button onclick="var v=document.getElementById('securedVideo'); if(v.paused)v.play(); else v.paused;" style="padding: 4px 12px; font-size: 12px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc;">Play / Pause</button>
+                        <!-- 自定義播放/暫停按鈕 (已修正 JS 動作) -->
+                        <div style="text-align: center; margin-top: 8px;">
+                            <button onclick="var v=document.getElementById('securedVideo'); if(v.paused){v.play();}else{v.pause();}" style="padding: 6px 16px; font-size: 13px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background-color: #f0f2f6; color: #31333F; font-weight: 500;">Play / Pause</button>
                         </div>
                     '''
                     st.markdown(video_html, unsafe_allow_html=True)
                     
                 else:
-                    # 圖片防護：加入透明防護層與禁止拖曳
+                    # 圖片防護
                     img_html = f'''
                         <div style="position: relative; display: inline-block; width: 100%;">
                             <img src="{media_url}" draggable="false" oncontextmenu="return false;" style="max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
