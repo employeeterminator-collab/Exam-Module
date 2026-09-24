@@ -747,7 +747,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.warning(f"⚠️ Could not load image: {e}")
                 # 備用方案：如果 st.image 失敗，用 HTML 顯示
                 st.markdown(f'<img src="{media_url}" style="max-width:100%; border-radius:5px;" />', unsafe_allow_html=True)
-                    st.markdown("---")          
+                st.markdown("---")          
 
         user_answers = st.session_state.get("answers", {})
         current_answer = user_answers.get(q_idx, None)
