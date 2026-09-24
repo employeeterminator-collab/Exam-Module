@@ -490,6 +490,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     TOTAL_QUESTIONS = len(exam_questions) if exam_questions else 75
 
 
+    def handle_focus_loss():
+        log_violation_to_sheet(st.session_state.voucher_code)
+
+    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
+        pass
+
     def handle_auto_submit():
         user_answers = st.session_state.get("answers", {})
         focus_losses = st.session_state.get("focus_loss_count", 0)
