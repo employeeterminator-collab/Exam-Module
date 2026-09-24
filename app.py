@@ -643,11 +643,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     .then(stream => { document.getElementById('top-webcam').srcObject = stream; })
                     .catch(e => console.error("Camera error", e));
             </script>
-        """, height=85)
+        """, height=110)
 
     with top_col4:
         # 頂端常駐 Review 按鈕
-        if st.button("📋 Review", type="primary", use_container_width=True, key="top_review_btn"):
+        if st.button("📋 Review and End Exam", type="primary", use_container_width=True, key="top_review_btn"):
             st.session_state.exam_step = 4
             st.rerun()
 
