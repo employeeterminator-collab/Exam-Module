@@ -826,8 +826,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        elif q_type == "ORDER":
-            st.markdown(f"**{question_text}**")
+        elif question_type.upper() == "ORDER":
+            # 修正：直接從 row 讀取 QuestionText
+            q_text = row.get('QuestionText', '')
+            st.markdown(f"**{q_text}**")
             
             # 1. 自動抓取有內容的選項 (OptionA 到 OptionD)
             options_dict = {}
@@ -842,15 +844,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             selected_letters = []
             num_options = len(options_dict)
             
-            # 從 session state 讀取或初始化作答紀錄
-            answer_key = f"answer_{st.session_state.get('current_question_index', 0)}"
-            
             for i in range(num_options):
                 rank_num = i + 1
-                # 建立選項清單格式 (例如: "A: Japan", "B: Canada" ...)
                 rank_choices = ["-- 請選擇 --"] + [f"{l}: {options_dict[l]}" for l in options_dict]
                 
-                # 建立唯一的 widget key 確保狀態穩定
                 widget_key = f"order_q_{st.session_state.get('current_question_index', 0)}_pos_{rank_num}"
                 
                 choice = st.selectbox(f"第 {rank_num} 順位 (Rank {rank_num})", rank_choices, key=widget_key)
