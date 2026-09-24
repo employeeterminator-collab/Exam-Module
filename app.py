@@ -767,22 +767,21 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     </head>
                     <body>
                       <div class="video-container">
-                        <!-- 影片本體：無原生控制列，禁止右鍵 -->
+                        <!-- 影片本體 -->
                         <video id="securedVideo" autoplay loop playsinline oncontextmenu="return false;">
                           <source src="{media_url}" type="video/mp4">
                           Your browser does not support the video tag.
                         </video>
-                        <!-- 透明防護層：攔截右鍵與另存選單 -->
+                        <!-- 透明防護層 -->
                         <div class="overlay" oncontextmenu="return false;"></div>
                       </div>
-                      <!-- 正常運作的播放/暫停按鈕 -->
+                      <!-- 加入 type="button" 避免觸發預設表單行為或警告 -->
                       <div class="btn-container">
-                        <button onclick="var v=document.getElementById('securedVideo'); if(v.paused){{v.play();}}else{{v.pause();}}">Play / Pause</button>
+                        <button type="button" onclick="var v=document.getElementById('securedVideo'); if(v.paused){{v.play();}}else{{v.pause();}}">Play / Pause</button>
                       </div>
                     </body>
                     </html>
                     '''
-                    # 渲染元件 (高度設定約 480 像素以容納影片與按鈕)
                     components.html(video_component_html, height=480)
                     
                 # 3. 圖片格式 (.png, .jpg, .jpeg) -> 套用防右鍵與防拖曳保護
