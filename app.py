@@ -833,6 +833,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.answers[q_idx] = match_answers
 
         # Step 3 底部導航按鈕區塊標準寫法
+        total_q_count = len(st.session_state.get("exam_questions", [])) or 75
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
