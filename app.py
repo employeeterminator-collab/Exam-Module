@@ -738,36 +738,21 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-        # ✅ 只保留這一個正確讀取圖片網址的邏輯
-        # 圖片或 Google Drive/一般影片渲染區塊
+       # 統一的媒體渲染區塊 (同時支援圖片與 GitHub/直鏈 MP4 影片 / YouTube)
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
             try:
-                # 處理 Google Drive 連結轉為直鏈/嵌入格式
-                if "drive.google.com" in media_url.lower():
-                    # 從 Google Drive 網址中擷取 File ID
-                    import re
-                    file_id_match = re.search(r'/d/([a-zA-Z0-9_-]+)', media_url)
-                    if file_id_match:
-                        file_id = file_id_match.group(1)
-                        # 使用 Google Drive 預覽/嵌入格式
-                        embed_url = f"https://drive.google.com/file/d/{file_id}/preview"
-                        video_html = f'''
-                            <iframe src="{embed_url}" width="100%" height="400" allow="autoplay" style="border: none; border-radius: 6px;"></iframe>
-                        '''
-                        st.markdown(video_html, unsafe_allow_html=True)
-                    else:
-                        st.error("⚠️ Invalid Google Drive link format.")
-                
-                elif "youtube.com" in media_url.lower() or "youtu.be" in media_url.lower():
+                # 檢查是否為 YouTube 影片
+                if "youtube.com" in media_url.lower() or "youtu.be" in media_url.lower():
                     st.video(media_url)
                     
+                # 檢查是否為影片格式 (例如 GitHub 專案內的 .mp4 直鏈)
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
                     st.video(media_url)
                     
                 else:
-                    # 顯示純淨圖片
+                    # 預設當作圖片處理 (使用純 HTML 確保沒有惱人的放大鏡按鈕)
                     img_html = f'''
                         <img src="{media_url}" style="max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
                     '''
