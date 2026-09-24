@@ -826,6 +826,50 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
+        elif q_type == "ORDER":
+            st.markdown(f"**{question_text}**")
+            
+            # 1. 自動抓取有內容的選項 (OptionA 到 OptionD)
+            options_dict = {}
+            for col in ['OptionA', 'OptionB', 'OptionC', 'OptionD']:
+                if col in row and pd.notna(row[col]) and str(row[col]).strip() != "":
+                    letter = col.replace("Option", "") # 取得代號，例如 'A', 'B', 'C', 'D'
+                    options_dict[letter] = str(row[col])
+            
+            st.info("💡 請依照正確的順序，分別為每個排名選擇對應的項目：")
+            
+            # 2. 針對每一個名次建立下拉選單
+            selected_letters = []
+            num_options = len(options_dict)
+            
+            # 從 session state 讀取或初始化作答紀錄
+            answer_key = f"answer_{st.session_state.get('current_question_index', 0)}"
+            
+            for i in range(num_options):
+                rank_num = i + 1
+                # 建立選項清單格式 (例如: "A: Japan", "B: Canada" ...)
+                rank_choices = ["-- 請選擇 --"] + [f"{l}: {options_dict[l]}" for l in options_dict]
+                
+                # 建立唯一的 widget key 確保狀態穩定
+                widget_key = f"order_q_{st.session_state.get('current_question_index', 0)}_pos_{rank_num}"
+                
+                choice = st.selectbox(f"第 {rank_num} 順位 (Rank {rank_num})", rank_choices, key=widget_key)
+                
+                if choice and choice != "-- 請選擇 --":
+                    chosen_letter = choice.split(":")[0].strip()
+                    selected_letters.append(chosen_letter)
+                else:
+                    selected_letters.append("")
+            
+            # 3. 將使用者的排序結合成逗號分隔字串 (例如: "D,B,C,A")
+            user_answer = ",".join(selected_letters) if all(selected_letters) else ""
+            
+            # 儲存答案到使用者的作答紀錄中
+            if "user_answers" not in st.session_state:
+                st.session_state.user_answers = {}
+            st.session_state.user_answers[st.session_state.get('current_question_index', 0)] = user_answer
+
+
         # 底部導航按鈕
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
@@ -856,7 +900,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if st.button("📋 Go to Review Page", type="primary", use_container_width=True):
                     st.session_state.exam_step = 4
                     st.rerun()
-                    
+        st.markdown("---")            
+        
 # ==========================================
 # Step 4 - 考試總結與詳細清單確認頁面 (Upgraded Review Page)
 # ==========================================
