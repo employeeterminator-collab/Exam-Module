@@ -585,7 +585,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     """, height=0)
 
     # 頂端導航與 Review 按鈕區塊
-    top_col1, top_col2, top_col3, top_col4 = st.columns([1.3, 1, 0.8, 1.2])
+    top_col1, top_col2, top_col3 = st.columns([1.3, 1.2, 1.1, ])
     
     with top_col1:
         st.markdown(f"**👤 {st.session_state.get('candidate_name', 'User')}**")
@@ -631,6 +631,17 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         """.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
         st.components.v1.html(timer_html, height=55)
 
+        # ✨ 讓 Review 按鈕垂直置中對齊其他兩個方塊
+        st.markdown("""
+            <div style="display: flex; align-items: center; height: 60px;">
+        """, unsafe_allow_html=True)
+        
+        if st.button("📋 Review and End", type="primary", use_container_width=True, key="top_review_btn"):
+            st.session_state.exam_step = 4
+            st.rerun()
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+    
     with top_col3:
         # 修正：改用正確的 st.components.v1.html 渲染視訊框，避免 TypeError
         st.components.v1.html("""
@@ -645,18 +656,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             </script>
         """, height=100)
 
-    with top_col4:
-        # ✨ 讓 Review 按鈕垂直置中對齊其他兩個方塊
-        st.markdown("""
-            <div style="display: flex; align-items: center; height: 60px;">
-        """, unsafe_allow_html=True)
-        
-        if st.button("📋 Review and End", type="primary", use_container_width=True, key="top_review_btn"):
-            st.session_state.exam_step = 4
-            st.rerun()
-            
-        st.markdown("</div>", unsafe_allow_html=True)
-
+    
     st.divider()
 
     def get_val(data_dict, *possible_keys):
