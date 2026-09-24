@@ -739,8 +739,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
         # ✅ 只保留這一個正確讀取圖片網址的邏輯
-        # 圖片或影片渲染區塊 (使用純 HTML 確保乾淨無按鈕，並支援影音檔案)
-# 圖片或 Google Drive/一般影片渲染區塊
+        # 圖片或 Google Drive/一般影片渲染區塊
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
