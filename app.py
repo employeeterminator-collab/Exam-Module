@@ -742,10 +742,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
 
 # ==========================================
-# Step 4 - 考試總結與提交確認頁面
+# Step 4 - 考試總結與詳細清單確認頁面 (Upgraded Review Page)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Final Submission</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Question Checklist</h2>", unsafe_allow_html=True)
+    st.write("Review your answered, unanswered, and flagged questions below. Click **'Go to Q...'** next to any question to instantly jump back to it and revise your answer.")
     st.write("---")
 
     total_q_count = len(st.session_state.get("exam_questions", [])) or 75
@@ -754,13 +755,41 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     flagged_cnt = len(st.session_state.get("flagged_questions", set()))
     focus_warnings = st.session_state.get("focus_loss_count", 0)
 
-    st.markdown(f"""
-    ### Summary Status:
-    - **Questions Answered:** {answered_cnt} / {total_q_count}
-    - **Unanswered Questions:** {unanswered_cnt}
-    - **Flagged Questions:** {flagged_cnt}
-    - **Focus Loss Warnings Recorded:** {focus_warnings}
-    """)
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+    col_m1.metric("Answered", answered_cnt)
+    col_m2.metric("Unanswered", unanswered_cnt)
+    col_m3.metric("Flagged", flagged_cnt)
+    col_m4.metric("Warnings", focus_warnings)
+
+    st.markdown("---")
+    st.markdown("### Detailed Question Status List")
+
+    # Render an itemized review list with jump buttons for every question
+    user_answers = st.session_state.get("answers", {})
+    flagged_set = st.session_state.get("flagged_questions", set())
+
+    for q_num in range(1, total_q_count + 1):
+        is_answered = q_num in user_answers
+        is_flagged = q_num in flagged_set
+        
+        status_badge = "🟢 Answered" if is_answered else "⚪ Unanswered"
+        if is_flagged:
+            status_badge += " | ⭐ Flagged"
+
+        ans_preview = user_answers.get(q_num, "No answer selected yet")
+        if len(str(ans_preview)) > 60:
+            ans_preview = str(ans_preview)[:57] + "..."
+
+        with st.container():
+            col_info, col_action = st.columns([4, 1])
+            with col_info:
+                st.markdown(f"**Q{q_num}** [{status_badge}]<br><small style='color: #64748b;'>Selected: {ans_preview}</small>", unsafe_allow_html=True)
+            with col_action:
+                if st.button(f"Go to Q{q_num}", key=f"review_jump_{q_num}", use_container_width=True):
+                    st.session_state.current_q = q_num
+                    st.session_state.exam_step = 3
+                    st.rerun()
+            st.divider()
 
     st.markdown("---")
     st.warning("⚠️ Once you click **Confirm and Submit Exam**, your answers will be finalized and sent to the examination database. You cannot make any further changes.")
@@ -779,7 +808,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     focus_losses = st.session_state.get("focus_loss_count", 0)
                     
                     correct_count = 0
-                    user_answers = st.session_state.get("answers", {})
                     exam_questions = st.session_state.get("exam_questions", [])
                     
                     for idx, q_data in enumerate(exam_questions, start=1):
