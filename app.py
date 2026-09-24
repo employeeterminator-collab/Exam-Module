@@ -650,7 +650,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         timeLeft = 0;
                         if (!hasAutoSubmitted) {
                             hasAutoSubmitted = true;
-                            // Trigger auto-submit button click in parent
                             const buttons = parent.document.querySelectorAll('button');
                             buttons.forEach(btn => {
                                 if (btn.innerText.includes('AutoSubmitBackend')) {
@@ -678,7 +677,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         timer_html = timer_html.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
 
         st.components.v1.html(timer_html, height=75)
-           
+         
     with header_col3:
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box;">
