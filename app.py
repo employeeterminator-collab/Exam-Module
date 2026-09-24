@@ -472,7 +472,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (圖片修復與常駐 Review 按鈕版)
+# Step 3 - 核心問答模組 (雙重固定 Review 按鈕版)
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -483,7 +483,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if "flagged_questions" not in st.session_state:
         st.session_state.flagged_questions = set()  
 
-    # Fetch questions from Google Sheets if not already cached
     if not st.session_state.exam_questions:
         st.session_state.exam_questions = get_exam_questions()
 
@@ -585,13 +584,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
 
-    header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
+    # 頂端導航與 Review 按鈕區塊（確保一定看得見）
+    top_col1, top_col2, top_col3, top_col4 = st.columns([1.5, 1, 0.8, 0.8])
     
-    with header_col1:
-        st.markdown(f"### 👤 Candidate: {st.session_state.get('candidate_name', 'User')}")
-        st.write(f"Email: {st.session_state.get('candidate_email', '')}")
+    with top_col1:
+        st.markdown(f"**👤 {st.session_state.get('candidate_name', 'User')}**")
    
-    with header_col2:
+    with top_col2:
         if "exam_remaining_seconds" not in st.session_state:
             st.session_state.exam_remaining_seconds = 5400
             st.session_state.exam_timer_start_local = time.time()
@@ -600,9 +599,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
 
         timer_html = """
-            <div style="background-color: #1e293b; padding: 10px; border-radius: 8px; text-align: center; color: white; font-family: sans-serif;">
-                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">⏳ TIME REMAINING</div>
-                <div id="native-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
+            <div style="background-color: #1e293b; padding: 6px; border-radius: 6px; text-align: center; color: white; font-family: sans-serif;">
+                <div style="font-size: 9px; color: #94a3b8;">⏳ TIME REMAINING</div>
+                <div id="native-js-timer" style="font-size: 16px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
             </div>
             <script>
                 const serverRemaining = SERVER_REMAINING_PLACEHOLDER;
@@ -630,20 +629,26 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 setInterval(updateCountdown, 1000);
             </script>
         """.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
-        st.components.v1.html(timer_html, height=75)
-         
-    with header_col3:
-        st.components.v1.html("""
-            <div style="border: 2px solid #22c55e; border-radius: 8px; background-color: #f0fdf4; text-align: center; padding: 4px;">
-                <div style="color: #15803d; font-weight: bold; font-size: 10px; margin-bottom: 2px;">🟢 Live Proctor</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 72px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
+        st.components.v1.html(timer_html, height=55)
+
+    with top_col3:
+        st.markdown("""
+            <div style="border: 2px solid #22c55e; border-radius: 6px; background-color: #f0fdf4; text-align: center; padding: 2px;">
+                <div style="color: #15803d; font-weight: bold; font-size: 9px;">🟢 PROCTOR</div>
+                <video id="top-webcam" autoplay playsinline muted style="width: 100%; height: 40px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
             </div>
             <script>
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                     .then(stream => { document.getElementById('top-webcam').srcObject = stream; })
                     .catch(e => console.error("Camera error", e));
             </script>
-        """, height=110)
+        """, height=65)
+
+    with top_col4:
+        # 頂端常駐 Review 按鈕
+        if st.button("📋 Review", type="primary", use_container_width=True, key="top_review_btn"):
+            st.session_state.exam_step = 4
+            st.rerun()
 
     st.divider()
 
@@ -656,8 +661,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         return ""
 
     with st.sidebar:
-        # 讓 Review 按鈕常駐在側邊欄上方，隨時可點擊檢查
-        if st.button("📋 Go to Review Page", type="primary", use_container_width=True):
+        if st.button("📋 Go to Review Page", type="primary", use_container_width=True, key="sidebar_review_btn"):
             st.session_state.exam_step = 4
             st.rerun()
 
@@ -702,13 +706,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-        # 強化圖片顯示：若圖片無法載入，改用 HTML 圖片與連結確保看得到
         if media_url:
             st.markdown(f"**📎 Attached Media / Image:**")
             try:
                 st.image(media_url, use_column_width=True)
             except Exception:
-                st.warning("⚠️ Image could not be rendered directly. You can view it via the link below:")
+                st.warning("⚠️ Image could not be rendered directly.")
             st.markdown(f'<a href="{media_url}" target="_blank">🔗 Open Image in New Tab</a>', unsafe_allow_html=True)
             st.markdown("---")
 
@@ -769,6 +772,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if st.button("📋 Go to Review Page", type="primary", use_container_width=True):
                     st.session_state.exam_step = 4
                     st.rerun()
+                    
 # ==========================================
 # Step 4 - 考試總結與詳細清單確認頁面 (Upgraded Review Page)
 # ==========================================
