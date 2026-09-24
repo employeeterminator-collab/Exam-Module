@@ -826,7 +826,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-  elif q_type == "ORDER":
+        elif q_type == "ORDER":
             st.markdown(f"**{q_text}**")
             
             # 1. 抓取有內容的選項 (OptionA 到 OptionD) 使用 get_val 輔助函式
