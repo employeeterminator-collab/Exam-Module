@@ -682,8 +682,8 @@ def handle_auto_submit():
         st.rerun()
   
 
-    if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
-        pass
+if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
+    pass
 
     st.components.v1.html("""
         <script>
