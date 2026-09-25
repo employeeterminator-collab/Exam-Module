@@ -795,7 +795,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        elif q_type == "ORDER":
+elif q_type == "ORDER":
             st.markdown("##### 🖱️ Interactive Drag-and-Drop Ranker")
             st.write("Drag and drop the options into the **Drop Box** in your desired order:")
 
@@ -807,19 +807,21 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
             import json
             items_json = json.dumps([{"id": k, "text": f"{k}: {v}"} for k, v in options_dict.items()])
-            current_val = str(current_answer) if current_answer else ""
+            
+            # Retrieve existing saved answer from session state
+            current_val = str(st.session_state.answers.get(q_idx, ""))
 
             sync_key = f"order_sync_{q_idx}"
-            if sync_key not in st.session_state:
-                st.session_state[sync_key] = current_val
-
-            # Synced text input to capture the drop box sequence securely
+            
+            # Persistent Streamlit text input acting as the backend storage
             user_sequence = st.text_input(
                 "Current Drop Box Sequence (Synced)", 
-                value=st.session_state.get(sync_key, current_val), 
+                value=current_val, 
                 key=sync_key,
                 help="Automatically updated from the drag-and-drop box above."
             )
+            
+            # Save immediately to answers dict
             st.session_state.answers[q_idx] = user_sequence
 
             dnd_html = f"""
@@ -965,14 +967,19 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     function syncToStreamlit() {{
                         const seq = boxItems.map(i => i.id).join(',');
                         try {{
-                            const inputs = parent.document.querySelectorAll('input[aria-label*="Current Drop Box Sequence"]');
-                            for (let input of inputs) {{
-                                if (input && input.value !== seq) {{
-                                    input.value = seq;
-                                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            const iframe = window.frameElement;
+                            if (iframe) {{
+                                const container = iframe.closest('[data-testid="stVerticalBlock"]') || iframe.parentElement;
+                                const textInput = container.querySelector('input[type="text"]');
+                                if (textInput && textInput.value !== seq) {{
+                                    textInput.value = seq;
+                                    textInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                    textInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
                                 }}
                             }}
-                        }} catch (err) {{}}
+                        }} catch (err) {{
+                            console.error("Sync error:", err);
+                        }}
                     }}
 
                     render();
@@ -980,7 +987,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             </body>
             </html>
             """
-            components.html(dnd_html, height=240)
+            components.html(dnd_html, height=270)
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
