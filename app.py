@@ -830,7 +830,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
 
-       elif q_type == "MATCH":
+        elif q_type == "MATCH":
             st.markdown("##### 🔗 Matching Exercise")
             st.write("Match each item with its correct definition:")
 
