@@ -232,11 +232,11 @@ def render_drag_and_drop_order(question_key, options_dict):
         }}
     </style>
 
-    <div style="font-weight: bold; margin-bottom: 5px;">請將左側選項拖曳至右側進行排序：</div>
+    <div style="font-weight: bold; margin-bottom: 5px;">Please drag the options on the left to the right for correct order.：</div>
     <div class="drag-container">
         <!-- 左側：可用選項池 -->
         <div class="column" id="source-col" ondragover="allowDrop(event)" ondrop="dropToSource(event)">
-            <div class="column-title">可用選項</div>
+            <div class="column-title">Options</div>
             {options_html}
         </div>
         
