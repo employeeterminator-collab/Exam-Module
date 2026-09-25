@@ -899,6 +899,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     del st.session_state.answers[q_idx]
 
         elif q_type == "MATCH":
+            # Show full definitions legend at top
+            st.markdown("#### 📖 Definitions Reference")
+            for d_letter, d_text in defs_dict.items():
+                st.markdown(f"**Def {d_letter}:** {d_text}")
+            
+            st.divider()
+            
+            # Clean short dropdown choices
+            def_choices = ["-- Select Definition --"] + [f"Def {d_letter}" for d_letter in defs_dict.keys()]
             st.markdown("##### 🔗 Matching Exercise")
             st.write("Match each item with its correct definition:")
 
