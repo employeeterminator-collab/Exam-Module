@@ -177,96 +177,197 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
  
  
 
-def render_drag_and_drop_order(question_key, options_dict, existing_ans=""):
+def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
     """
-    Renders the complete ORDER question interface with drag-and-drop,
-    live preview, and a dedicated save button.
+    支援 HTML5 拖曳排序的互動介面（左側為可用選項，右側為答案排列區），並完美同步至 Python 計分與預覽。
     """
-    # Initialize session state value if not already present
+    # 嚴格過濾掉空白、None 或 nan 的選項，徹底解決多餘空白選項顯示的問題
+    valid_options = {}
+    for k, v in options_dict.items():
+        if v is not None:
+            v_str = str(v).strip()
+            if v_str != "" and v_str.lower() != "nan":
+                valid_options[k] = v_str
+    
+    # 1. 確保 session_state 中有初始答案
     if question_key not in st.session_state:
-        st.session_state[question_key] = existing_ans
+        st.session_state[question_key] = current_answer if current_answer else ""
 
-    # Format options for the HTML component
-    # options_dict can be a dictionary or list of options (e.g., {"A": "Japan", "B": "Canada", ...})
-    if isinstance(options_dict, dict):
-        items_html = "".join([
-            f'<div class="draggable-item" draggable="true" data-value="{k}" ondragstart="drag(event)" '
-            f'style="background: white; border: 1px solid #ccc; padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; cursor: grab; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">'
-            f'<b>{k}.</b> {v}</div>' 
-            for k, v in options_dict.items()
-        ])
+    hidden_input_key = f"{question_key}_hidden_bridge"
+    if hidden_input_key not in st.session_state:
+        st.session_state[hidden_input_key] = st.session_state[question_key]
+
+    current_val = str(st.session_state.get(hidden_input_key, ""))
+    
+    if current_val:
+        target_keys = [x.strip() for x in current_val.split(",") if x.strip() in valid_options]
     else:
-        # Fallback if it's a list
-        items_html = "".join([
-            f'<div class="draggable-item" draggable="true" data-value="{item}" ondragstart="drag(event)" '
-            f'style="background: white; border: 1px solid #ccc; padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; cursor: grab;">'
-            f'{item}</div>' 
-            for item in options_dict
-        ])
+        target_keys = []
 
-    # HTML/JS Drag-and-Drop Component
+    source_keys = [k for k in valid_options.keys() if k not in target_keys]
+
+    source_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in source_keys])
+    target_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in target_keys])
+
     component_code = f"""
-    <div style="font-family: sans-serif; display: flex; gap: 20px;">
-        <div id="source-box" ondrop="drop(event)" ondragover="allowDrop(event)" 
-             style="border: 2px dashed #b0b0b0; padding: 12px; width: 45%; min-height: 160px; border-radius: 8px; background: #fafafa;">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #555; text-align: center; font-size: 14px;">Options</div>
-            {items_html}
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        body {{
+            font-family: sans-serif;
+            margin: 0;
+            padding: 5px;
+            background-color: transparent;
+        }}
+        .drag-container {{
+            display: flex;
+            gap: 15px;
+        }}
+        .column {{
+            flex: 1;
+            border: 2px dashed #666;
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 220px;
+            background: #fdfdfd;
+            box-sizing: border-box;
+        }}
+        .column-title {{
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #444;
+        }}
+        .draggable-item {{
+            background: white;
+            border: 2px solid #333;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            cursor: grab;
+            font-weight: 500;
+            font-size: 13px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            user-select: none;
+        }}
+        .draggable-item:active {{
+            cursor: grabbing;
+        }}
+        .draggable-item.dragging {{
+            opacity: 0.4;
+        }}
+    </style>
+    </head>
+    <body>
+
+    <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px;">請將左側選項拖曳至右側進行排序：</div>
+    <div class="drag-container">
+        <!-- 左側：可用選項 -->
+        <div class="column" id="source-col" ondragover="allowDrop(event)" ondrop="dropToSource(event)">
+            <div class="column-title">Options</div>
+            {source_html}
         </div>
         
-        <div id="target-box" ondrop="drop(event)" ondragover="allowDrop(event)" 
-             style="border: 2px dashed #b0b0b0; padding: 12px; width: 45%; min-height: 160px; border-radius: 8px; background: #fafafa;">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #555; text-align: center; font-size: 14px;">Drag your answer here</div>
+        <!-- 右側：排序答案區 -->
+        <div class="column" id="target-col" ondragover="allowDrop(event)" ondrop="dropToTarget(event)">
+            <div class="column-title">Drag your answer here</div>
+            {target_html}
         </div>
     </div>
-    
-    <input type="hidden" id="{question_key}_bridge" value="" />
 
     <script>
-        function allowDrop(ev) {{
-            ev.preventDefault();
+        let draggedItem = null;
+
+        function attachEvents() {{
+            const items = document.querySelectorAll('.draggable-item');
+            items.forEach(item => {{
+                item.removeEventListener('dragstart', handleDragStart);
+                item.removeEventListener('dragend', handleDragEnd);
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragend', handleDragEnd);
+            }});
         }}
-        function drag(ev) {{
-            ev.dataTransfer.setData("text", ev.target.outerHTML);
-            ev.dataTransfer.setData("id", ev.target.id || Math.random());
-            window.draggedEl = ev.target;
+
+        function handleDragStart(e) {{
+            draggedItem = this;
+            setTimeout(() => this.classList.add('dragging'), 0);
         }}
-        function drop(ev) {{
-            ev.preventDefault();
-            let dropTarget = ev.target.closest('#target-box') || ev.target.closest('#source-box') || ev.target;
-            if (window.draggedEl && dropTarget) {{
-                dropTarget.appendChild(window.draggedEl);
-                updateBridge();
+
+        function handleDragEnd(e) {{
+            this.classList.remove('dragging');
+            draggedItem = null;
+            updateResult();
+        }}
+
+        function allowDrop(e) {{
+            e.preventDefault();
+        }}
+
+        function dropToTarget(e) {{
+            e.preventDefault();
+            const targetCol = document.getElementById('target-col');
+            if (draggedItem) {{
+                targetCol.appendChild(draggedItem);
+                updateResult();
             }}
         }}
-        function updateBridge() {{
-            const targetBox = document.getElementById('target-box');
-            const items = targetBox.querySelectorAll('.draggable-item');
-            const values = Array.from(items).map(item => item.getAttribute('data-value'));
-            const bridge = document.getElementById('{question_key}_bridge');
-            bridge.value = values.join(',');
-            bridge.dispatchEvent(new Event('input'));
+
+        function dropToSource(e) {{
+            e.preventDefault();
+            const sourceCol = document.getElementById('source-col');
+            if (draggedItem) {{
+                sourceCol.appendChild(draggedItem);
+                updateResult();
+            }}
         }}
+
+        function updateResult() {{
+            const targetCol = document.getElementById('target-col');
+            const currentItems = targetCol.querySelectorAll('.draggable-item');
+            let keys = [];
+            currentItems.forEach(item => {{
+                keys.push(item.getAttribute('data-key'));
+            }});
+            
+            const resultString = keys.join(',');
+            // 透過 Streamlit 元件通訊將結果送回 Python
+            window.parent.postMessage({{type: 'streamlit:setComponentValue', value: resultString}}, '*');
+        }}
+
+        attachEvents();
     </script>
+    </body>
+    </html>
     """
 
-    # Render the interactive component
-    # (Note: component value can be captured or you can rely on the session state saving below)
-    components.html(component_code, height=220)
+    # 渲染拖曳元件並接收前端回傳值
+    drag_result = components.html(component_code, height=320)
 
-    # Get current arrangement from session state for preview
-    current_arrangement = st.session_state.get(question_key, existing_ans)
+    if drag_result is not None and isinstance(drag_result, str):
+        st.session_state[hidden_input_key] = drag_result
 
-    # Live Preview Display
-    display_text = current_arrangement if current_arrangement else "尚無 (請將選項拖至右側)"
-    st.markdown(f"**目前拖曳排序結果預覽：** `{display_text}`")
+    current_arrangement = str(st.session_state.get(hidden_input_key, ""))
+    
+    # 即時預覽排序結果
+    st.markdown(f"**目前拖曳排序結果預覽：** `{current_arrangement if current_arrangement else '尚無（請將選項拖至右側）'}`")
 
-    # Save Answer Button
-    col1, col2 = st.columns([1, 4])
-    with col1:
+    # 儲存按鈕
+    col_btn1, col_btn2 = st.columns([1, 4])
+    with col_btn1:
         if st.button("💾 Save Answer", key=f"{question_key}_save_btn"):
             if current_arrangement:
                 st.session_state[question_key] = current_arrangement
-                st.success("排序答案已成功儲存！")
+                # 同步寫入 answers 字典確保最終交卷計分能抓取到
+                if "answers" not in st.session_state:
+                    st.session_state.answers = {}
+                try:
+                    q_idx_int = int(question_key.replace("q_", ""))
+                    st.session_state.answers[q_idx_int] = current_arrangement
+                except ValueError:
+                    pass
+                st.success("答案已成功儲存並計入成績！")
                 st.rerun()
             else:
                 st.warning("請先將選項拖曳到右側的排序區再儲存。")
