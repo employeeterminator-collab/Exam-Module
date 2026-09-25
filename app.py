@@ -179,34 +179,34 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
 
 def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
     """
-    保留原本美觀的拖曳方塊介面，並透過隱藏欄位與 Streamlit session_state 雙向同步。
+    結合流暢的 HTML5 拖曳介面，並透過隱藏欄位與按鈕將順序寫入 session_state 進行計分。
     """
     valid_options = {k: v for k, v in options_dict.items() if v and str(v).strip() != ""}
     
-    # 1. 處理目前的答案順序（如果是已儲存的，依照儲存的順序排列，否則按預設）
-    if isinstance(current_answer, str) and current_answer:
-        current_keys = [x.strip() for x in current_answer.split(",") if x.strip() in valid_options]
-        # 補上可能漏掉的新選項
-        for k in valid_options.keys():
-            if k not in current_keys:
-                current_keys.append(k)
-    else:
-        current_keys = list(valid_options.keys())
-
-    # 2. 建立 Streamlit 隱藏狀態欄位（或文字框），用來接收前端 JS 傳回的排序結果
-    # 我們用 session_state 來儲存這個值
+    # 1. 確保 session_state 中有初始答案
     if question_key not in st.session_state:
-        st.session_state[question_key] = ",".join(current_keys)
+        # 如果已有歷史答案就用歷史的，否則預設全部在左側或按順序
+        st.session_state[question_key] = current_answer if current_answer else ""
 
-    # 3. 產生左右欄的 HTML 內容
-    # 根據目前的排序狀態，決定哪些在目標區（右側），哪些在可用區（左側）
-    target_keys = current_keys
-    source_keys = [k for k in valid_options.keys() if k not in target_keys] # 正常來說剛開始全在右邊或左邊
-    
-    # 為了讓畫面符合您的截圖，我們把所有項目初始放在右側（或依使用者習慣）
-    # 這裡我們用前端 JS 來維持拖曳，並將結果即時回傳給 Streamlit
-    target_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in target_keys])
+    # 用一個隱藏的文字輸入框或 session_state 來接收前端 JS 傳回的排序字串
+    # 我們這裡用 st.text_input 配合 hidden style 來當作與 JS 溝通的橋樑
+    hidden_input_key = f"{question_key}_hidden_bridge"
+    if hidden_input_key not in st.session_state:
+        st.session_state[hidden_input_key] = st.session_state[question_key]
+
+    # 解析目前的排序名單
+    current_val = st.session_state[hidden_input_key]
+    if current_val:
+        target_keys = [x.strip() for x in current_val.split(",") if x.strip() in valid_options]
+    else:
+        target_keys = [] # 剛開始全部在左側，讓使用者自己拖曳
+
+    # 剩下的選項留在左側可用區
+    source_keys = [k for k in valid_options.keys() if k not in target_keys]
+
+    # 產生左右兩欄的 HTML 項目
     source_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in source_keys])
+    target_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in target_keys])
 
     component_code = f"""
     <style>
@@ -222,7 +222,7 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
             border: 2px solid #333;
             border-radius: 8px;
             padding: 12px;
-            min-height: 250px;
+            min-height: 280px;
             background: #fafafa;
             box-sizing: border-box;
         }}
@@ -252,11 +252,11 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
         }}
     </style>
 
-    <div style="font-weight: bold; margin-bottom: 5px;">請將選項拖曳排列至右側正確順序：</div>
+    <div style="font-weight: bold; margin-bottom: 5px;">請將左側選項拖曳至右側進行正確排序：</div>
     <div class="drag-container">
-        <!-- 左側：備用區 -->
+        <!-- 左側：可用選項 -->
         <div class="column" id="source-col" ondragover="allowDrop(event)" ondrop="dropToSource(event)">
-            <div class="column-title">可用選項池</div>
+            <div class="column-title">Options</div>
             {source_html}
         </div>
         
@@ -322,20 +322,36 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
             }});
             
             const resultString = keys.join(',');
-            // 透過 Streamlit 的 setComponentValue 回傳數值給 Python
+            // 透過 Streamlit 的 postMessage 將拖曳結果傳回 Python 端
             window.parent.postMessage({{type: 'streamlit:setComponentValue', value: resultString}}, '*');
         }}
 
         attachEvents();
     </script>
     """
-    
-    # 4. 使用 streamlit.components.v1.html 接收回傳值
-    # 只要使用者拖曳，component 就會回傳新的字串並更新 session_state
-    component_value = components.html(component_code, height=380)
-    
-    if component_value is not None:
-        st.session_state[question_key] = component_value
+
+    # 渲染拖曳元件並接收前端傳回的最新排序字串
+    drag_result = components.html(component_code, height=380)
+
+    # 如果使用者有進行拖曳，就更新暫存橋樑值
+    if drag_result is not None:
+        st.session_state[hidden_input_key] = drag_result
+
+    # 顯示目前抓取到的排列預覽
+    current_arrangement = st.session_state[hidden_input_key]
+    st.markdown(f"**目前拖曳排序結果預覽：** `{current_arrangement if current_arrangement else '尚無（請將選項拖至右側）'}`")
+
+    # 增加您要求的「Save Answer」按鈕
+    col_btn1, col_btn2 = st.columns([1, 4])
+    with col_btn1:
+        if st.button("💾 Save Answer", key=f"{question_key}_save_btn"):
+            if current_arrangement:
+                # 正式寫入題目對應的 session_state，觸發計分與已作答狀態！
+                st.session_state[question_key] = current_arrangement
+                st.success("答案已成功儲存並計入成績！")
+                st.rerun()
+            else:
+                st.warning("請先將選項拖曳到右側的排序區再儲存。")
 
 
 # ==========================================
