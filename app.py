@@ -834,24 +834,33 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.markdown("##### 🔗 Matching Exercise")
             st.write("Match each item with its correct definition:")
 
-            # Gather options
+            # Helper to safely extract values from row/dict whether pandas Series or dict
+            def get_cell(data, *keys):
+                for k in keys:
+                    try:
+                        if hasattr(data, "get"):
+                            val = data.get(k)
+                        else:
+                            val = data[k]
+                        if val is not None and str(val).strip() and str(val).strip().lower() != "nan":
+                            return str(val).strip()
+                    except Exception:
+                        continue
+                return ""
+
+            # Gather options A to H
             options_dict = {}
             for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", "")
-                if opt_val and str(opt_val).strip():
-                    options_dict[opt_letter] = str(opt_val).strip()
+                val = get_cell(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
+                if val:
+                    options_dict[opt_letter] = val
 
-            # Gather definitions robustly across potential naming variations
+            # Gather definitions A to H explicitly based on your sheet columns DefA, DefB, DefC...
             defs_dict = {}
             for def_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                def_val = None
-                for col_candidate in [f"Def{def_letter}", f"Definition{def_letter}", f"def{def_letter}"]:
-                    val = get_val(current_q_data, col_candidate, col_candidate, "")
-                    if val and str(val).strip():
-                        def_val = str(val).strip()
-                        break
-                if def_val:
-                    defs_dict[def_letter] = def_val
+                val = get_cell(current_q_data, f"Def{def_letter}", f"Definition{def_letter}", f"def{def_letter}")
+                if val:
+                    defs_dict[def_letter] = val
 
             # Parse existing saved answers (e.g., "A:DefB,B:DefA")
             current_saved = str(st.session_state.answers.get(q_idx, ""))
@@ -863,17 +872,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
             matching_results = {}
 
-            # Render a selectbox for each option item
+            # Render a clear selectbox for each option item
             for opt_letter, opt_text in options_dict.items():
                 def_choices = ["-- Select Definition --"] + [f"Def{d_letter}: {d_text}" for d_letter, d_text in defs_dict.items()]
                 
-                # Determine default selection index if previously answered
                 default_idx = 0
                 saved_def = saved_pairs.get(opt_letter, "")
                 if saved_def:
                     for idx, (d_letter, d_text) in enumerate(defs_dict.items()):
-                        target_key = f"DEF{d_letter}" if not saved_def.upper().startswith("DEF") else saved_def.upper()
-                        if f"DEF{d_letter}" == target_key or d_letter.upper() == saved_def.upper() or f"DEF{d_letter}" == f"DEF{saved_def}":
+                        if saved_def.upper() in [f"DEF{d_letter}", d_letter.upper()]:
                             default_idx = idx + 1
                             break
 
@@ -885,7 +892,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 )
 
                 if choice and choice != "-- Select Definition --":
-                    # Extract definition prefix (e.g., "DefB" from "DefB: A small, flat...")
                     prefix = choice.split(":")[0].strip()
                     if not prefix.upper().startswith("DEF"):
                         prefix = f"Def{prefix}"
@@ -893,7 +899,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         prefix = f"Def{prefix[-1].upper()}"
                     matching_results[opt_letter] = prefix
 
-            # Save strictly formatted string to session state matching sheet format (e.g., "A:DefB,B:DefA")
+            # Save strictly formatted string to session state (e.g., "A:DefB,B:DefA")
             if matching_results:
                 sorted_keys = sorted(matching_results.keys())
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
