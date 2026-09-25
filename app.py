@@ -602,7 +602,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               st.rerun()
 
 # ==========================================
-# Step 3 - 核心問答模組[cite: 8]
+# Step 3 - 核心問答模組
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -622,10 +622,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     def handle_focus_loss():
         log_violation_to_sheet(st.session_state.voucher_code)
 
-    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
-        pass
-
-def handle_auto_submit():
+    def handle_auto_submit():
         user_answers = st.session_state.get("answers", {})
         focus_losses = st.session_state.get("focus_loss_count", 0)
         
@@ -646,14 +643,14 @@ def handle_auto_submit():
                         correct_text = str(v).strip()
                         break
 
-            if user_ans and (user_ans.upper() == correct_letter or user_str == correct_text if 'user_str' in locals() else user_ans == correct_text):
+            if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
                 correct_count += 1
         
         passing_score_percentage = 70.0
         score_percentage = (correct_count / TOTAL_QUESTIONS) * 100 if TOTAL_QUESTIONS > 0 else 0
         final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
         
-        # 1. Record submission
+        # 1. Record submission in Sheets
         finalize_exam_submission(
             st.session_state.voucher_code,
             focus_losses,
@@ -680,6 +677,14 @@ def handle_auto_submit():
         st.session_state.exam_correct_count = correct_count
         st.session_state.exam_step = 5
         st.rerun()
+
+    # CSS-enforced hidden container to ensure backend buttons never display visually
+    st.markdown('<div style="display: none !important; visibility: hidden !important; height: 0px; width: 0px; overflow: hidden;">', unsafe_allow_html=True)
+    if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
+        pass
+    if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
+        pass
+    st.markdown('</div>', unsafe_allow_html=True)
   
 
 if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
@@ -1157,7 +1162,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
         if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
             with st.spinner("Submitting exam and recording results..."):
                 try:
-                    answered_count = len(st.session_state.get("answers", {}))
+                    user_answers = st.session_state.get("answers", {})
+                    answered_count = len(user_answers)
                     focus_losses = st.session_state.get("focus_loss_count", 0)
                     
                     correct_count = 0
@@ -1181,7 +1187,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             if user_sequence == correct_sequence and correct_sequence:
                                 correct_count += 1
                         elif q_type == "MATCH":
-                            # Compares saved answer string against CorrectAnswer column
                             user_clean = str(user_ans).upper().replace(" ", "").replace("DEF", "")
                             correct_clean = str(correct_val).upper().replace(" ", "").replace("DEF", "")
                             if user_clean and user_clean == correct_clean:
@@ -1191,7 +1196,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
                     final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
                     
-                    # 1. Record submission in Google Sheets / Backend
+                    # 1. Record submission in Google Sheets
                     finalize_exam_submission(
                         st.session_state.voucher_code,
                         focus_losses,
@@ -1200,9 +1205,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     )
                     
                     # 2. Send Pass / Fail Email Notification
-                    user_email = st.session_state.get("user_email", st.session_state.get("candidate_email", ""))
-                    user_name = st.session_state.get("user_name", st.session_state.get("candidate_name", "Candidate"))
-    
+                    user_email = st.session_state.get("candidate_email", "")
+                    user_name = st.session_state.get("candidate_name", "Candidate")
+
                     if user_email:
                         send_exam_result_email(
                             user_email=user_email,
@@ -1210,15 +1215,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             score=correct_count,
                             total=total_q_count,
                             pass_percentage=passing_score_percentage,
-                            exam_title="Shisa Kanko-Shi™ Exam"
+                            exam_title="Shisa Kanko-Shi Examination"
                         )
                     
-                    # 3. Update Session State and navigate to Step 5 (Results view)
+                    # 3. Update Session State and navigate to Step 5
                     st.session_state.exam_final_status = final_status
                     st.session_state.exam_correct_count = correct_count
                     st.session_state.exam_step = 5
                     st.rerun()
-    
+
                 except Exception as e:
                     st.error(f"Submission error: {e}")
   
