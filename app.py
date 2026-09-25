@@ -680,6 +680,8 @@ def handle_auto_submit():
         st.session_state.exam_correct_count = correct_count
         st.session_state.exam_step = 5
         st.rerun()
+  
+
     if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
         pass
 
