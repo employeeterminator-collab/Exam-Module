@@ -687,8 +687,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     st.markdown('</div>', unsafe_allow_html=True)
   
 
-if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
-    pass
+    if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
+        pass
 
     st.components.v1.html("""
         <script>
