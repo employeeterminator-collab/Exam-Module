@@ -834,21 +834,26 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.markdown("##### 🔗 Matching Exercise")
             st.write("Match each item with its correct definition:")
 
-            # Gather options (e.g., OptionA: Coin, OptionB: Currency Note)
+            # Gather options
             options_dict = {}
             for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
                 opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", "")
-                if opt_val:
-                    options_dict[opt_letter] = opt_val
+                if opt_val and str(opt_val).strip():
+                    options_dict[opt_letter] = str(opt_val).strip()
 
-            # Gather definitions (e.g., DefA, DefB, etc.)
+            # Gather definitions robustly across potential naming variations
             defs_dict = {}
             for def_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                def_val = get_val(current_q_data, f"Def{def_letter}", f"Definition{def_letter}", "")
+                def_val = None
+                for col_candidate in [f"Def{def_letter}", f"Definition{def_letter}", f"def{def_letter}"]:
+                    val = get_val(current_q_data, col_candidate, col_candidate, "")
+                    if val and str(val).strip():
+                        def_val = str(val).strip()
+                        break
                 if def_val:
                     defs_dict[def_letter] = def_val
 
-            # Parse existing saved answers (e.g., "A:DefB, B:DefA, C:DefD, D:DefC")
+            # Parse existing saved answers (e.g., "A:DefB,B:DefA")
             current_saved = str(st.session_state.answers.get(q_idx, ""))
             saved_pairs = {}
             for pair in current_saved.split(","):
@@ -867,8 +872,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 saved_def = saved_pairs.get(opt_letter, "")
                 if saved_def:
                     for idx, (d_letter, d_text) in enumerate(defs_dict.items()):
-                        target_key = f"DEF{d_letter}" if not saved_def.startswith("DEF") else saved_def
-                        if f"DEF{d_letter}" == target_key or d_letter == saved_def:
+                        target_key = f"DEF{d_letter}" if not saved_def.upper().startswith("DEF") else saved_def.upper()
+                        if f"DEF{d_letter}" == target_key or d_letter.upper() == saved_def.upper() or f"DEF{d_letter}" == f"DEF{saved_def}":
                             default_idx = idx + 1
                             break
 
@@ -880,18 +885,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 )
 
                 if choice and choice != "-- Select Definition --":
-                    # Extract definition prefix (e.g., "DefA" or "A") and normalize to "DefA" format
+                    # Extract definition prefix (e.g., "DefB" from "DefB: A small, flat...")
                     prefix = choice.split(":")[0].strip()
                     if not prefix.upper().startswith("DEF"):
                         prefix = f"Def{prefix}"
                     else:
-                        # Normalize case to match sheet style (e.g., "DefA")
                         prefix = f"Def{prefix[-1].upper()}"
                     matching_results[opt_letter] = prefix
 
-            # Save formatted string to session state (e.g., "A:DefB, B:DefA")
+            # Save strictly formatted string to session state matching sheet format (e.g., "A:DefB,B:DefA")
             if matching_results:
-                pairs_str = ", ".join([f"{k}:{v}" for k, v in matching_results.items()])
+                sorted_keys = sorted(matching_results.keys())
+                pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
                 st.session_state.answers[q_idx] = pairs_str
             else:
                 if q_idx in st.session_state.answers:
