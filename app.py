@@ -147,6 +147,18 @@ def get_exam_questions():
         
     return []
 
+def clean_match_key(val):
+    if not val or "--" in val:
+        return ""
+    # Extract the label before the colon (e.g. "DefB: A piece..." -> "B")
+    prefix = val.split(":")[0].strip()
+    return prefix.replace("Def", "").strip().upper()
+
+def parse_correct_answers(correct_str):
+    import re
+    # Extract letters like A, B, C, D from "B, A, D, C" or "DefB, DefA"
+    return [x.replace("DEF", "").strip().upper() for x in re.findall(r'(?:DEF)?[A-H]', str(correct_str).upper())]
+
 
 # 記錄第一次開始考試的時間 (Committed)[cite: 8]
 def update_voucher_committed(voucher_code):
@@ -865,40 +877,29 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
             raw_row = current_q_data.get("raw_row", [])
 
-            # Gather options A to H with positional & name fallbacks
+            # Gather options A to H
             options_dict = {}
             for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                val = ""
-                v = current_q_data.get(f"Option{opt_letter}", "")
-                if v and str(v).lower() != "nan":
-                    val = str(v).strip()
-                elif raw_row and len(raw_row) > (2 + i):
+                val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
+                if not val and raw_row and len(raw_row) > (2 + i):
                     v = raw_row[2 + i]
                     if v and str(v).lower() != "nan":
                         val = str(v).strip()
                 if val:
                     options_dict[opt_letter] = val
 
-            # Gather definitions reading explicitly up to Column P and beyond (Column M = index 12)
+            # Gather definitions DefA to DefH
             defs_dict = {}
             for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                val = ""
-                idx = 12 + i  # Column M = 12 (DefA), N = 13 (DefB), O = 14 (DefC), P = 15 (DefD)
-                
-                # 1. Try named lookup first
-                v = current_q_data.get(f"Def{def_letter}", "")
-                if v and str(v).lower() != "nan":
-                    val = str(v).strip()
-                # 2. Fallback to positional columns M through P+
-                elif raw_row and len(raw_row) > idx:
-                    v = raw_row[idx]
+                val = get_val(current_q_data, f"Def{def_letter}", f"Definition{def_letter}")
+                if not val and raw_row and len(raw_row) > (12 + i):
+                    v = raw_row[12 + i]
                     if v and str(v).lower() != "nan":
                         val = str(v).strip()
-                
                 if val:
                     defs_dict[def_letter] = val
 
-            # Parse existing saved answers (e.g., "A:DefB,B:DefA")
+            # Parse saved answer string (e.g., "A:DefB,B:DefA")
             current_saved = str(st.session_state.answers.get(q_idx, ""))
             saved_pairs = {}
             for pair in current_saved.split(","):
@@ -911,17 +912,17 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if not options_dict:
                 st.warning("⚠️ No options found for this question.")
             if not defs_dict:
-                st.warning("⚠️ No definitions found. Please verify columns M through P in your Google Sheet.")
+                st.warning("⚠️ No definitions found. Please check columns M through P.")
 
-            # Render a clear selectbox for each option item
+            # Render dropdown selectbox for each item
             for opt_letter, opt_text in options_dict.items():
                 def_choices = ["-- Select Definition --"] + [f"Def{d_letter}: {d_text}" for d_letter, d_text in defs_dict.items()]
                 
                 default_idx = 0
                 saved_def = saved_pairs.get(opt_letter, "")
                 if saved_def:
-                    for idx_pos, (d_letter, d_text) in enumerate(defs_dict.items()):
-                        if saved_def.upper() in [f"DEF{d_letter}", d_letter.upper()]:
+                    for idx_pos, d_letter in enumerate(defs_dict.keys()):
+                        if saved_def.upper() in [f"DEF{d_letter.upper()}", d_letter.upper()]:
                             default_idx = idx_pos + 1
                             break
 
@@ -933,14 +934,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 )
 
                 if choice and choice != "-- Select Definition --":
-                    prefix = choice.split(":")[0].strip()
-                    if not prefix.upper().startswith("DEF"):
-                        prefix = f"Def{prefix}"
-                    else:
-                        prefix = f"Def{prefix[-1].upper()}"
-                    matching_results[opt_letter] = prefix
+                    def_code = choice.split(":")[0].strip()  # Extracts "DefA", "DefB", etc.
+                    matching_results[opt_letter] = def_code
 
-            # Save strictly formatted string to session state matching your sheet format (e.g., "A:DefB,B:DefA")
+            # Save clean formatted result string to session state (e.g. "A:DefB,B:DefA")
             if matching_results:
                 sorted_keys = sorted(matching_results.keys())
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
@@ -1068,7 +1065,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
                             if user_sequence == correct_sequence and correct_sequence:
                                 correct_count += 1
-
+                        elif q_type == "MATCH":
+                            # Compares saved answer string against CorrectAnswer column
+                            user_clean = str(user_ans).upper().replace(" ", "").replace("DEF", "")
+                            correct_clean = str(correct_val).upper().replace(" ", "").replace("DEF", "")
+                            if user_clean and user_clean == correct_clean:
+                                correct_count += 1
+                    
                     passing_score_percentage = 70.0
                     score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
                     final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
