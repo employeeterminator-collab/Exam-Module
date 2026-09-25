@@ -898,7 +898,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
 
-        elif q_type == "MATCH":
+elif q_type == "MATCH":
             st.markdown("##### 🔗 Matching Exercise")
             st.write("Match each item with its correct definition:")
 
@@ -926,18 +926,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if val:
                     defs_dict[def_letter] = val
 
-            if not options_dict:
-                st.warning("⚠️ No options found for this question.")
-            if not defs_dict:
-                st.warning("⚠️ No definitions found. Please check columns M through P.")
-
-            # 3. Display Definition Reference Legend
-            if defs_dict:
-                st.markdown("#### 📖 Definitions Reference")
-                for d_letter, d_text in defs_dict.items():
-                    st.markdown(f"**Def{d_letter}:** {d_text}")
-                st.divider()
-
             # Parse saved answer string (e.g., "A:DefB,B:DefA")
             current_saved = str(st.session_state.answers.get(q_idx, ""))
             saved_pairs = {}
@@ -947,10 +935,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     saved_pairs[parts[0].strip().upper()] = parts[1].strip().upper()
 
             matching_results = {}
-
-            # 4. Render clean dropdown selectboxes
             def_choices = ["-- Select Definition --"] + [f"Def{d_letter}" for d_letter in defs_dict.keys()]
 
+            # Render questions with Instant Live Preview below each dropdown
             for opt_letter, opt_text in options_dict.items():
                 default_idx = 0
                 saved_def = saved_pairs.get(opt_letter, "")
@@ -969,8 +956,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
                 if choice and choice != "-- Select Definition --":
                     matching_results[opt_letter] = choice.strip()
+                    selected_key = choice.replace("Def", "").strip()
+                    # Live preview callout box
+                    if selected_key in defs_dict:
+                        st.caption(f"💡 **Selected {choice}:** {defs_dict[selected_key]}")
 
-            # Save clean formatted result string to session state (e.g. "A:DefB,B:DefA")
+            # Save clean formatted result string
             if matching_results:
                 sorted_keys = sorted(matching_results.keys())
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
