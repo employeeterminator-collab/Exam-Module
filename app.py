@@ -971,8 +971,8 @@ elif q_type == "MATCH":
                     del st.session_state.answers[q_idx]
        
         
-        st.markdown("---")
-        col_prev, col_flag, col_next = st.columns([1, 1, 1])
+      st.markdown("---")
+      col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
         with col_prev:
             if st.session_state.current_q > 1:
