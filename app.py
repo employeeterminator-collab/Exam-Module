@@ -102,6 +102,7 @@ def get_exam_questions():
                     return header.index(name.lower())
             return None
 
+        # Standard column mappings with safe defaults
         q_text_idx = find_col("questiontext", "question", "text", "qtext") or 0
         q_type_idx = find_col("questiontype", "type", "qtype") or 1
         correct_idx = find_col("correctanswer", "correct_answer", "answer") or 10
@@ -113,21 +114,28 @@ def get_exam_questions():
                 continue
             
             record = {
-                "raw_row": row,  # Exact positional row values from Google Sheets
+                "raw_row": row,  # Preserve exact row data for fallbacks
                 "Question": row[q_text_idx] if len(row) > q_text_idx else "",
                 "QuestionType": row[q_type_idx] if len(row) > q_type_idx else "MC",
                 "CorrectAnswer": row[correct_idx] if len(row) > correct_idx else "",
                 "MediaURL": row[media_idx] if len(row) > media_idx else "",
             }
             
-            # Options A-H (Columns C through J, indices 2 to 9)
+            # Dynamic + positional fallback for Options A through H
             for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                col_idx = 2 + i
+                # Try finding header names like "optiona", "opt_a", "choice_a", or fallback to index (2 + i)
+                col_idx = find_col(f"option{opt_letter.lower()}", f"opt_{opt_letter.lower()}", f"choice{opt_letter.lower()}", f"option {opt_letter.lower()}")
+                if col_idx is None:
+                    col_idx = 2 + i  # Standard fallback index
+                
                 record[f"Option{opt_letter}"] = row[col_idx] if len(row) > col_idx else ""
             
-            # Definitions A-H (Columns M through T, indices 12 to 19)
+            # Dynamic + positional fallback for Definitions A through H (Columns M onwards / index 12+)
             for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                col_idx = 12 + i  # Column M = 12, N = 13, O = 14, P = 15, etc.
+                col_idx = find_col(f"def{def_letter.lower()}", f"definition{def_letter.lower()}", f"def_{def_letter.lower()}")
+                if col_idx is None:
+                    col_idx = 12 + i  # Column M = 12, N = 13, O = 14, P = 15, etc.
+                
                 record[f"Def{def_letter}"] = row[col_idx] if len(row) > col_idx else ""
 
             normalized_records.append(record)
