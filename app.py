@@ -826,50 +826,79 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-        elif q_type == "ORDER":
+elif q_type == "ORDER":
             st.markdown(f"**{q_text}**")
             
-            # 1. 抓取有內容的選項 (OptionA 到 OptionD) 使用 get_val 輔助函式
+            # 1. 動態抓取所有有內容的選項 (從 A 檢查到 H，支援 8 個步驟或更多)
             options_dict = {}
-            for opt_letter in ["A", "B", "C", "D"]:
+            import string
+            # 這裡檢查 A 到 H (總共 8 個選項)，如果你需要更多可以改成 10 或 12 個
+            for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
                 opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
                 if opt_val:
                     options_dict[opt_letter] = opt_val
             
-            st.info("💡 請依照正確的順序，分別為每個排名選擇對應的項目：")
+            st.info(f"💡 這是一題排序題，共有 {len(options_dict)} 個項目需要排序。已選過的項目會自動隱藏：")
             
-            # 2. 讀取先前儲存的答案 (如果有的話)
+            # 2. 讀取先前儲存的答案
             saved_ans = user_answers.get(q_idx, "")
             saved_order = [x.strip() for x in saved_ans.split(",")] if isinstance(saved_ans, str) and saved_ans else []
 
-            # 3. 針對每一個名次建立下拉選單
-            selected_letters = []
             num_options = len(options_dict)
+            selected_letters = [""] * num_options
             
+            # 3. 針對每一個名次建立下拉選單，自動聯動過濾
             for i in range(num_options):
                 rank_num = i + 1
-                rank_choices = ["-- 請選擇 --"] + [f"{l}: {options_dict[l]}" for l in options_dict]
+                widget_key = f"order_q_{q_idx}_pos_{rank_num}"
                 
+                # 檢查其他行已經選了什麼字母，將其過濾
+                other_selected = set()
+                for other_i in range(num_options):
+                    if other_i != i:
+                        other_key = f"order_q_{q_idx}_pos_{other_i + 1}"
+                        val = st.session_state.get(other_key, "-- 請選擇 --")
+                        if val and val != "-- 請選擇 --":
+                            letter = val.split(":")[0].strip()
+                            other_selected.add(letter)
+                
+                # 組裝當前選單可用的選項
+                available_options = ["-- 請選擇 --"]
+                for l, text in options_dict.items():
+                    if l not in other_selected:
+                        available_options.append(f"{l}: {text}")
+                
+                # 計算預設 index 保持穩定
                 default_idx = 0
-                if i < len(saved_order):
-                    matched_letter = saved_order[i]
-                    for idx, choice_str in enumerate(rank_choices):
-                        if choice_str.startswith(f"{matched_letter}:"):
+                current_val = st.session_state.get(widget_key, None)
+                
+                if current_val is None and i < len(saved_order):
+                    target_letter = saved_order[i]
+                    for idx, opt_str in enumerate(available_options):
+                        if opt_str.startswith(f"{target_letter}:"):
+                            default_idx = idx
+                            break
+                elif current_val:
+                    for idx, opt_str in enumerate(available_options):
+                        if opt_str == current_val:
                             default_idx = idx
                             break
                 
-                widget_key = f"order_q_{q_idx}_pos_{rank_num}"
-                choice = st.selectbox(f"第 {rank_num} 順位 (Rank {rank_num})", rank_choices, index=default_idx, key=widget_key)
+                # 渲染動態數量的下拉選單
+                choice = st.selectbox(f"第 {rank_num} 順位 (Rank {rank_num})", available_options, index=default_idx, key=widget_key)
                 
                 if choice and choice != "-- 請選擇 --":
                     chosen_letter = choice.split(":")[0].strip()
-                    selected_letters.append(chosen_letter)
+                    selected_letters[i] = chosen_letter
                 else:
-                    selected_letters.append("")
+                    selected_letters[i] = ""
             
-            # 4. 儲存為逗號分隔字串到正確的 st.session_state.answers
+            # 4. 當所有名次都選好後儲存
             if all(selected_letters):
                 st.session_state.answers[q_idx] = ",".join(selected_letters)
+            else:
+                if q_idx in st.session_state.answers:
+                    del st.session_state.answers[q_idx]
             
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
