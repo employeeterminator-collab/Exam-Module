@@ -332,7 +332,7 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
     
     # 4. 使用 streamlit.components.v1.html 接收回傳值
     # 只要使用者拖曳，component 就會回傳新的字串並更新 session_state
-    component_value = components.html(component_code, height=380, default=st.session_state[question_key])
+    component_value = components.html(component_code, height=380)
     
     if component_value is not None:
         st.session_state[question_key] = component_value
