@@ -5,6 +5,10 @@ import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
 import streamlit.components.v1 as components
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 
 st.markdown("""
     <style>
@@ -240,6 +244,63 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
             sheet.update_cell(cell.row, 14, explanation)   
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
+
+def send_exam_result_email(user_email, user_name, score, total, pass_percentage=70, exam_title="Exam"):
+    try:
+        percentage = round((score / total) * 100, 1) if total > 0 else 0
+        is_passed = percentage >= pass_percentage
+        status_text = "PASSED" if is_passed else "FAILED"
+        status_color = "#2e7d32" if is_passed else "#c62828"
+
+        # Email Setup
+        smtp_config = st.secrets["smtp"]
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"[{status_text}] Your Exam Results - {exam_title}"
+        msg["From"] = smtp_config["sender_email"]
+        msg["To"] = user_email
+
+        # HTML Body
+        html_content = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+            <div style="max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
+              <h2 style="color: {status_color}; margin-top: 0;">Exam Result: {status_text}</h2>
+              <p>Dear <strong>{user_name}</strong>,</p>
+              <p>Thank you for completing <strong>{exam_title}</strong>. Below is your performance summary:</p>
+              
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <tr style="background-color: #f8f9fa;">
+                  <td style="padding: 10px; border: 1px solid #ddd;"><strong>Score</strong></td>
+                  <td style="padding: 10px; border: 1px solid #ddd;">{score} / {total}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ddd;"><strong>Percentage</strong></td>
+                  <td style="padding: 10px; border: 1px solid #ddd;">{percentage}%</td>
+                </tr>
+                <tr style="background-color: #f8f9fa;">
+                  <td style="padding: 10px; border: 1px solid #ddd;"><strong>Status</strong></td>
+                  <td style="padding: 10px; border: 1px solid #ddd; color: {status_color}; font-weight: bold;">{status_text}</td>
+                </tr>
+              </table>
+
+              <p style="font-size: 13px; color: #777;">This is an automated notification. Please do not reply directly to this email.</p>
+            </div>
+          </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(html_content, "html"))
+
+        # Send via SMTP
+        with smtplib.SMTP(smtp_config["server"], smtp_config["port"]) as server:
+            server.starttls()
+            server.login(smtp_config["sender_email"], smtp_config["sender_password"])
+            server.send_message(msg)
+
+        return True
+    except Exception as e:
+        st.error(f"Failed to send email notification: {e}")
+        return False
 
 # ==========================================
 # Step 0 - 考生身分驗證[cite: 8]
@@ -1076,57 +1137,73 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
             st.rerun()
 
     with col_sub2:
-        if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
-            with st.spinner("Submitting exam and recording results..."):
-                try:
-                    answered_count = len(st.session_state.get("answers", {}))
-                    focus_losses = st.session_state.get("focus_loss_count", 0)
+    if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
+        with st.spinner("Submitting exam and recording results..."):
+            try:
+                answered_count = len(st.session_state.get("answers", {}))
+                focus_losses = st.session_state.get("focus_loss_count", 0)
+                
+                correct_count = 0
+                for idx, q_data in enumerate(exam_questions, start=1):
+                    user_ans = user_answers.get(idx, "")
+                    q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
+                    correct_val = str(q_data.get("CorrectAnswer", "")).strip()
                     
-                    correct_count = 0
-                    for idx, q_data in enumerate(exam_questions, start=1):
-                        user_ans = user_answers.get(idx, "")
-                        q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
-                        correct_val = str(q_data.get("CorrectAnswer", "")).strip()
-                        
-                        if q_type in ["MC", "MC_MEDIA"]:
-                            correct_letter = correct_val.upper()
-                            correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
-                            user_str = str(user_ans).strip()
-                            if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
-                                correct_count += 1
-                        elif q_type == "TF":
-                            if str(user_ans).strip().upper() == correct_val.upper():
-                                correct_count += 1
-                        elif q_type == "ORDER":
-                            correct_sequence = [l.strip().upper() for l in correct_val.split(",") if l.strip()]
-                            user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
-                            if user_sequence == correct_sequence and correct_sequence:
-                                correct_count += 1
-                        elif q_type == "MATCH":
-                            # Compares saved answer string against CorrectAnswer column
-                            user_clean = str(user_ans).upper().replace(" ", "").replace("DEF", "")
-                            correct_clean = str(correct_val).upper().replace(" ", "").replace("DEF", "")
-                            if user_clean and user_clean == correct_clean:
-                                correct_count += 1
-                    
-                    passing_score_percentage = 70.0
-                    score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
-                    final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
-                    
-                    finalize_exam_submission(
-                        st.session_state.voucher_code,
-                        focus_losses,
-                        final_status,
-                        explanation=f"Answered {answered_count}/{total_q_count}, Correct {correct_count}"
-                    )
-                    
-                    st.session_state.exam_final_status = final_status
-                    st.session_state.exam_correct_count = correct_count
-                    st.session_state.exam_step = 5
-                    st.rerun()
+                    if q_type in ["MC", "MC_MEDIA"]:
+                        correct_letter = correct_val.upper()
+                        correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
+                        user_str = str(user_ans).strip()
+                        if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
+                            correct_count += 1
+                    elif q_type == "TF":
+                        if str(user_ans).strip().upper() == correct_val.upper():
+                            correct_count += 1
+                    elif q_type == "ORDER":
+                        correct_sequence = [l.strip().upper() for l in correct_val.split(",") if l.strip()]
+                        user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
+                        if user_sequence == correct_sequence and correct_sequence:
+                            correct_count += 1
+                    elif q_type == "MATCH":
+                        # Compares saved answer string against CorrectAnswer column
+                        user_clean = str(user_ans).upper().replace(" ", "").replace("DEF", "")
+                        correct_clean = str(correct_val).upper().replace(" ", "").replace("DEF", "")
+                        if user_clean and user_clean == correct_clean:
+                            correct_count += 1
+                
+                passing_score_percentage = 70.0
+                score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
+                final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
+                
+                # 1. Record submission in Google Sheets / Backend
+                finalize_exam_submission(
+                    st.session_state.voucher_code,
+                    focus_losses,
+                    final_status,
+                    explanation=f"Answered {answered_count}/{total_q_count}, Correct {correct_count}"
+                )
+                
+                # 2. Send Pass / Fail Email Notification
+                user_email = st.session_state.get("user_email", st.session_state.get("candidate_email", ""))
+                user_name = st.session_state.get("user_name", st.session_state.get("candidate_name", "Candidate"))
 
-                except Exception as e:
-                    st.error(f"Submission error: {e}")
+                if user_email:
+                    send_exam_result_email(
+                        user_email=user_email,
+                        user_name=user_name,
+                        score=correct_count,
+                        total=total_q_count,
+                        pass_percentage=passing_score_percentage,
+                        exam_title="FIRE™ Certification Exam"
+                    )
+                
+                # 3. Update Session State and navigate to Step 5 (Results view)
+                st.session_state.exam_final_status = final_status
+                st.session_state.exam_correct_count = correct_count
+                st.session_state.exam_step = 5
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"Submission error: {e}")
   
     st.divider()
 
