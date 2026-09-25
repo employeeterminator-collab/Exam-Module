@@ -1137,73 +1137,73 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
             st.rerun()
 
     with col_sub2:
-    if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
-        with st.spinner("Submitting exam and recording results..."):
-            try:
-                answered_count = len(st.session_state.get("answers", {}))
-                focus_losses = st.session_state.get("focus_loss_count", 0)
-                
-                correct_count = 0
-                for idx, q_data in enumerate(exam_questions, start=1):
-                    user_ans = user_answers.get(idx, "")
-                    q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
-                    correct_val = str(q_data.get("CorrectAnswer", "")).strip()
+        if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
+            with st.spinner("Submitting exam and recording results..."):
+                try:
+                    answered_count = len(st.session_state.get("answers", {}))
+                    focus_losses = st.session_state.get("focus_loss_count", 0)
                     
-                    if q_type in ["MC", "MC_MEDIA"]:
-                        correct_letter = correct_val.upper()
-                        correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
-                        user_str = str(user_ans).strip()
-                        if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
-                            correct_count += 1
-                    elif q_type == "TF":
-                        if str(user_ans).strip().upper() == correct_val.upper():
-                            correct_count += 1
-                    elif q_type == "ORDER":
-                        correct_sequence = [l.strip().upper() for l in correct_val.split(",") if l.strip()]
-                        user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
-                        if user_sequence == correct_sequence and correct_sequence:
-                            correct_count += 1
-                    elif q_type == "MATCH":
-                        # Compares saved answer string against CorrectAnswer column
-                        user_clean = str(user_ans).upper().replace(" ", "").replace("DEF", "")
-                        correct_clean = str(correct_val).upper().replace(" ", "").replace("DEF", "")
-                        if user_clean and user_clean == correct_clean:
-                            correct_count += 1
-                
-                passing_score_percentage = 70.0
-                score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
-                final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
-                
-                # 1. Record submission in Google Sheets / Backend
-                finalize_exam_submission(
-                    st.session_state.voucher_code,
-                    focus_losses,
-                    final_status,
-                    explanation=f"Answered {answered_count}/{total_q_count}, Correct {correct_count}"
-                )
-                
-                # 2. Send Pass / Fail Email Notification
-                user_email = st.session_state.get("user_email", st.session_state.get("candidate_email", ""))
-                user_name = st.session_state.get("user_name", st.session_state.get("candidate_name", "Candidate"))
-
-                if user_email:
-                    send_exam_result_email(
-                        user_email=user_email,
-                        user_name=user_name,
-                        score=correct_count,
-                        total=total_q_count,
-                        pass_percentage=passing_score_percentage,
-                        exam_title="FIRE™ Certification Exam"
+                    correct_count = 0
+                    for idx, q_data in enumerate(exam_questions, start=1):
+                        user_ans = user_answers.get(idx, "")
+                        q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
+                        correct_val = str(q_data.get("CorrectAnswer", "")).strip()
+                        
+                        if q_type in ["MC", "MC_MEDIA"]:
+                            correct_letter = correct_val.upper()
+                            correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
+                            user_str = str(user_ans).strip()
+                            if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
+                                correct_count += 1
+                        elif q_type == "TF":
+                            if str(user_ans).strip().upper() == correct_val.upper():
+                                correct_count += 1
+                        elif q_type == "ORDER":
+                            correct_sequence = [l.strip().upper() for l in correct_val.split(",") if l.strip()]
+                            user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
+                            if user_sequence == correct_sequence and correct_sequence:
+                                correct_count += 1
+                        elif q_type == "MATCH":
+                            # Compares saved answer string against CorrectAnswer column
+                            user_clean = str(user_ans).upper().replace(" ", "").replace("DEF", "")
+                            correct_clean = str(correct_val).upper().replace(" ", "").replace("DEF", "")
+                            if user_clean and user_clean == correct_clean:
+                                correct_count += 1
+                    
+                    passing_score_percentage = 70.0
+                    score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
+                    final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
+                    
+                    # 1. Record submission in Google Sheets / Backend
+                    finalize_exam_submission(
+                        st.session_state.voucher_code,
+                        focus_losses,
+                        final_status,
+                        explanation=f"Answered {answered_count}/{total_q_count}, Correct {correct_count}"
                     )
-                
-                # 3. Update Session State and navigate to Step 5 (Results view)
-                st.session_state.exam_final_status = final_status
-                st.session_state.exam_correct_count = correct_count
-                st.session_state.exam_step = 5
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"Submission error: {e}")
+                    
+                    # 2. Send Pass / Fail Email Notification
+                    user_email = st.session_state.get("user_email", st.session_state.get("candidate_email", ""))
+                    user_name = st.session_state.get("user_name", st.session_state.get("candidate_name", "Candidate"))
+    
+                    if user_email:
+                        send_exam_result_email(
+                            user_email=user_email,
+                            user_name=user_name,
+                            score=correct_count,
+                            total=total_q_count,
+                            pass_percentage=passing_score_percentage,
+                            exam_title="FIRE™ Certification Exam"
+                        )
+                    
+                    # 3. Update Session State and navigate to Step 5 (Results view)
+                    st.session_state.exam_final_status = final_status
+                    st.session_state.exam_correct_count = correct_count
+                    st.session_state.exam_step = 5
+                    st.rerun()
+    
+                except Exception as e:
+                    st.error(f"Submission error: {e}")
   
     st.divider()
 
