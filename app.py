@@ -290,16 +290,14 @@ def render_drag_and_drop_order(question_key, options_dict):
                 keys.push(item.getAttribute('data-key'));
             }});
             
-            // 透過 Streamlit 的 window.parent 溝通或隱藏 Input 傳遞數值
-            // 我們可以將結果寫入一個隱藏的 input 並觸發 Streamlit 更新
             const resultString = keys.join(',');
-            window.parent.postMessage({type: 'streamlit:setComponentValue', value: resultString}, '*');
+            // 修正處：將原本單層大括號改為雙層大括號 {{ }} 避免 f-string 衝突
+            window.parent.postMessage({{type: 'streamlit:setComponentValue', value: resultString}}, '*');
         }}
     </script>
     """
     
     # 利用 streamlit components 呈現
-    # 註：若需雙向綁定回傳值，通常會使用元件庫或將順序存在 session_state 中
     st.components.v1.html(component_code, height=450)
 
 
