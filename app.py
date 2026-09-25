@@ -796,22 +796,191 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.session_state.answers[q_idx] = selected
 
         elif q_type == "ORDER":
-            st.markdown("##### 📌 Available Options to Arrange:")
+            st.markdown("##### 🖱️ Interactive Drag-and-Drop Ranker")
+            st.write("Drag and drop the options into the **Drop Box** in your desired order:")
+
             options_dict = {}
             for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
                 opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
                 if opt_val:
                     options_dict[opt_letter] = opt_val
-                    st.markdown(f"- **{opt_letter}**: {opt_val}")
-            
-            st.markdown("---")
-            st.write("Enter your ordered sequence using the option letters separated by commas (e.g., `A,C,B,D`):")
-            
+
+            import json
+            items_json = json.dumps([{"id": k, "text": f"{k}: {v}"} for k, v in options_dict.items()])
             current_val = str(current_answer) if current_answer else ""
-            order_input = st.text_input("Your Ordered Sequence", value=current_val, key=f"order_input_{q_idx}")
-            
-            if order_input:
-                st.session_state.answers[q_idx] = order_input.strip().upper()
+
+            sync_key = f"order_sync_{q_idx}"
+            if sync_key not in st.session_state:
+                st.session_state[sync_key] = current_val
+
+            # Synced text input to capture the drop box sequence securely
+            user_sequence = st.text_input(
+                "Current Drop Box Sequence (Synced)", 
+                value=st.session_state.get(sync_key, current_val), 
+                key=sync_key,
+                help="Automatically updated from the drag-and-drop box above."
+            )
+            st.session_state.answers[q_idx] = user_sequence
+
+            dnd_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+            <style>
+                body {{
+                    font-family: sans-serif;
+                    background-color: #f8fafc;
+                    color: #1e293b;
+                    margin: 0;
+                    padding: 5px;
+                }}
+                .container {{
+                    display: flex;
+                    gap: 15px;
+                    flex-wrap: wrap;
+                }}
+                .pool, .dropbox {{
+                    flex: 1;
+                    min-width: 200px;
+                    background: #ffffff;
+                    border: 2px dashed #cbd5e1;
+                    border-radius: 8px;
+                    padding: 12px;
+                    min-height: 180px;
+                    box-sizing: border-box;
+                }}
+                .dropbox {{
+                    border: 2px solid #3b82f6;
+                    background-color: #eff6ff;
+                }}
+                h4 {{
+                    margin-top: 0;
+                    font-size: 13px;
+                    color: #475569;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }}
+                .draggable-item {{
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 6px;
+                    padding: 10px 12px;
+                    margin-bottom: 8px;
+                    cursor: grab;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                    font-size: 13px;
+                    user-select: none;
+                }}
+                .draggable-item:active {{
+                    cursor: grabbing;
+                }}
+                .placeholder {{
+                    color: #94a3b8;
+                    font-style: italic;
+                    text-align: center;
+                    margin-top: 40px;
+                    font-size: 13px;
+                }}
+            </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="pool" id="sourcePool" ondragover="allowDrop(event)" ondrop="dropToPool(event)">
+                        <h4>📦 Available Options</h4>
+                        <div id="sourceList"></div>
+                    </div>
+                    <div class="dropbox" id="dropBox" ondragover="allowDrop(event)" ondrop="dropToBox(event)">
+                        <h4>📥 Drop Box (Ranked Order)</h4>
+                        <div id="dropList">
+                            <div class="placeholder" id="placeholder">Drag items here in order</div>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    const allItems = {items_json};
+                    let initialSeq = "{current_val}".split(',').map(s => s.trim()).filter(s => s);
+
+                    const sourceList = document.getElementById('sourceList');
+                    const dropList = document.getElementById('dropList');
+                    const placeholder = document.getElementById('placeholder');
+
+                    let placedIds = new Set(initialSeq);
+                    let poolItems = allItems.filter(item => !placedIds.has(item.id));
+                    let boxItems = initialSeq.map(id => allItems.find(i => i.id === id)).filter(i => i);
+
+                    function render() {{
+                        sourceList.innerHTML = '';
+                        poolItems.forEach(item => {{ sourceList.appendChild(createEl(item)); }});
+
+                        dropList.innerHTML = '';
+                        if (boxItems.length === 0) {{
+                            dropList.appendChild(placeholder);
+                        }} else {{
+                            boxItems.forEach(item => {{ dropList.appendChild(createEl(item)); }});
+                        }}
+                        syncToStreamlit();
+                    }}
+
+                    function createEl(item) {{
+                        const div = document.createElement('div');
+                        div.className = 'draggable-item';
+                        div.draggable = true;
+                        div.innerText = item.text;
+                        div.dataset.id = item.id;
+
+                        div.addEventListener('dragstart', (e) => {{
+                            e.dataTransfer.setData('text/plain', item.id);
+                        }});
+                        return div;
+                    }}
+
+                    function allowDrop(e) {{ e.preventDefault(); }}
+
+                    function dropToBox(e) {{
+                        e.preventDefault();
+                        const id = e.dataTransfer.getData('text/plain');
+                        if (!id) return;
+
+                        poolItems = poolItems.filter(i => i.id !== id);
+                        boxItems = boxItems.filter(i => i.id !== id);
+                        const itemObj = allItems.find(i => i.id === id);
+                        if (itemObj) boxItems.push(itemObj);
+                        render();
+                    }}
+
+                    function dropToPool(e) {{
+                        e.preventDefault();
+                        const id = e.dataTransfer.getData('text/plain');
+                        if (!id) return;
+
+                        boxItems = boxItems.filter(i => i.id !== id);
+                        if (!poolItems.some(i => i.id === id)) {{
+                            const itemObj = allItems.find(i => i.id === id);
+                            if (itemObj) poolItems.push(itemObj);
+                        }}
+                        render();
+                    }}
+
+                    function syncToStreamlit() {{
+                        const seq = boxItems.map(i => i.id).join(',');
+                        try {{
+                            const inputs = parent.document.querySelectorAll('input[aria-label*="Current Drop Box Sequence"]');
+                            for (let input of inputs) {{
+                                if (input && input.value !== seq) {{
+                                    input.value = seq;
+                                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                }}
+                            }}
+                        }} catch (err) {{}}
+                    }}
+
+                    render();
+                </script>
+            </body>
+            </html>
+            """
+            components.html(dnd_html, height=240)
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
