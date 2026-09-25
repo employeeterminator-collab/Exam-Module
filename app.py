@@ -900,7 +900,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
         elif q_type == "MATCH":
             st.markdown("##### 🔗 Matching Exercise")
-            st.write("Match each item with its correct definition:")
+            st.write("Match each item on the left with its correct definition from the pool on the right:")
 
             raw_row = current_q_data.get("raw_row", [])
 
@@ -926,6 +926,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if val:
                     defs_dict[def_letter] = val
 
+            if not options_dict:
+                st.warning("⚠️ No options found for this question.")
+            if not defs_dict:
+                st.warning("⚠️ No definitions found. Please check columns M through P.")
+
             # Parse saved answer string (e.g., "A:DefB,B:DefA")
             current_saved = str(st.session_state.answers.get(q_idx, ""))
             saved_pairs = {}
@@ -937,31 +942,38 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             matching_results = {}
             def_choices = ["-- Select Definition --"] + [f"Def{d_letter}" for d_letter in defs_dict.keys()]
 
-            # Render questions with Instant Live Preview below each dropdown
-            for opt_letter, opt_text in options_dict.items():
-                default_idx = 0
-                saved_def = saved_pairs.get(opt_letter, "")
-                if saved_def:
-                    for idx_pos, d_letter in enumerate(defs_dict.keys()):
-                        if saved_def.upper() in [f"DEF{d_letter.upper()}", d_letter.upper()]:
-                            default_idx = idx_pos + 1
-                            break
+            # 3. Create Side-by-Side Split Panel Layout
+            col_left, col_right = st.columns([1, 1], gap="medium")
 
-                choice = st.selectbox(
-                    f"**{opt_letter}: {opt_text}**",
-                    def_choices,
-                    index=default_idx,
-                    key=f"match_{q_idx}_{opt_letter}"
-                )
+            # Left Column: Questions & Short Dropdowns
+            with col_left:
+                st.markdown("#### ✏️ Items")
+                for opt_letter, opt_text in options_dict.items():
+                    default_idx = 0
+                    saved_def = saved_pairs.get(opt_letter, "")
+                    if saved_def:
+                        for idx_pos, d_letter in enumerate(defs_dict.keys()):
+                            if saved_def.upper() in [f"DEF{d_letter.upper()}", d_letter.upper()]:
+                                default_idx = idx_pos + 1
+                                break
 
-                if choice and choice != "-- Select Definition --":
-                    matching_results[opt_letter] = choice.strip()
-                    selected_key = choice.replace("Def", "").strip()
-                    # Live preview callout box
-                    if selected_key in defs_dict:
-                        st.caption(f"💡 **Selected {choice}:** {defs_dict[selected_key]}")
+                    choice = st.selectbox(
+                        f"**{opt_letter}: {opt_text}**",
+                        def_choices,
+                        index=default_idx,
+                        key=f"match_{q_idx}_{opt_letter}"
+                    )
 
-            # Save clean formatted result string
+                    if choice and choice != "-- Select Definition --":
+                        matching_results[opt_letter] = choice.strip()
+
+            # Right Column: Full Definitions Reference Pool
+            with col_right:
+                st.markdown("#### 📖 Definitions Pool")
+                for d_letter, d_text in defs_dict.items():
+                    st.info(f"**Def{d_letter}:** {d_text}")
+
+            # 4. Save clean formatted result string (e.g. "A:DefB,B:DefA")
             if matching_results:
                 sorted_keys = sorted(matching_results.keys())
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
