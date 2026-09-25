@@ -8,15 +8,26 @@ import streamlit.components.v1 as components
 
 st.markdown("""
     <style>
-    div[data-baseweb="popover"] div[role="option"] {
+    /* Expand the popover container width */
+    div[data-baseweb="popover"] {
+        width: max-content !important;
+        max-width: 850px !important;
+    }
+    
+    div[data-baseweb="popover"] ul[role="listbox"] {
+        max-width: 850px !important;
+    }
+
+    /* Force all inner elements (spans, divs, options) to wrap text and auto-expand height */
+    div[data-baseweb="popover"] [role="option"],
+    div[data-baseweb="popover"] [role="option"] * {
         white-space: normal !important;
         word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        text-overflow: unset !important;
+        height: auto !important;
+        min-height: fit-content !important;
         line-height: 1.4 !important;
-        padding-top: 8px !important;
-        padding-bottom: 8px !important;
-    }
-    div[data-baseweb="popover"] {
-        max-width: 850px !important;
     }
     </style>
 """, unsafe_allow_html=True)
