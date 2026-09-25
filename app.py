@@ -796,22 +796,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.session_state.answers[q_idx] = selected
 
         elif q_type == "ORDER":
-            # Bug fix: use q_idx instead of undefined index[cite: 8]
-            options_dict = {
-                "A": current_q_data.get("OptionA", ""),
-                "B": current_q_data.get("OptionB", ""),
-                "C": current_q_data.get("OptionC", ""),
-                "D": current_q_data.get("OptionD", ""),
-                "E": current_q_data.get("OptionE", ""),
-                "F": current_q_data.get("OptionF", ""),
-                "G": current_q_data.get("OptionG", ""),
-                "H": current_q_data.get("OptionH", "")
-            }
-            valid_opts = [f"{k}: {v}" for k, v in options_dict.items() if v and str(v).strip() != ""]
-            st.write("Arrange the sequence (comma separated or ordered selection):")
-            order_input = st.text_input("Enter sequence (e.g. A,B,C,D)", value=str(current_answer) if current_answer else "", key=f"order_input_{q_idx}")
+            st.markdown("##### 📌 Available Options to Arrange:")
+            options_dict = {}
+            for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
+                opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
+                if opt_val:
+                    options_dict[opt_letter] = opt_val
+                    st.markdown(f"- **{opt_letter}**: {opt_val}")
+            
+            st.markdown("---")
+            st.write("Enter your ordered sequence using the option letters separated by commas (e.g., `A,C,B,D`):")
+            
+            current_val = str(current_answer) if current_answer else ""
+            order_input = st.text_input("Your Ordered Sequence", value=current_val, key=f"order_input_{q_idx}")
+            
             if order_input:
-                st.session_state.answers[q_idx] = order_input
+                st.session_state.answers[q_idx] = order_input.strip().upper()
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
