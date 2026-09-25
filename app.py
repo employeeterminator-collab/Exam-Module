@@ -6,7 +6,7 @@ from google.oauth2.service_account import Credentials
 import streamlit as st
 import streamlit.components.v1 as components
 
-# 1. 頁面基本設定
+# 1. 頁面基本設定[cite: 8]
 st.set_page_config(
     page_title="Shisa Kanko-Shi Examination Portal",
     page_icon="🛡️",
@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# 隱藏 Streamlit 預設選單、頁尾與標題的錨點連結符號
+# 隱藏 Streamlit 預設選單、頁尾與標題的錨點連結符號[cite: 8]
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -34,7 +34,7 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# 2. 初始化 Session State
+# 2. 初始化 Session State[cite: 8]
 if "authenticated" not in st.session_state:
   st.session_state.authenticated = False
 if "candidate_email" not in st.session_state:
@@ -63,7 +63,7 @@ if "exam_questions" not in st.session_state:
     st.session_state.exam_questions = []
 
 # ==========================================
-# 3. Google Sheets 連線與資料庫輔助函式
+# 3. Google Sheets 連線與資料庫輔助函式[cite: 8]
 # ==========================================
 def get_sheets_connection():
   scope = [
@@ -76,7 +76,7 @@ def get_sheets_connection():
   sheet = client.open("ShisaKanko_Exam_Database")
   return sheet
 
-# 動態載入獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")
+# 動態載入獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")[cite: 8]
 def get_exam_questions():
     try:
         scope = [
@@ -119,7 +119,7 @@ def get_exam_questions():
         
     return []
 
-# 記錄第一次開始考試的時間 (Committed)
+# 記錄第一次開始考試的時間 (Committed)[cite: 8]
 def update_voucher_committed(voucher_code):
     try:
         db = get_sheets_connection()
@@ -133,7 +133,7 @@ def update_voucher_committed(voucher_code):
     except Exception as e:
         print(f"Failed to update Committed time: {e}")
 
-# 記錄違規事件到 ViolationLogs Tab 同時即時更新 Vouchers 上的警告次數
+# 記錄違規事件到 ViolationLogs Tab 同時即時更新 Vouchers 上的警告次數[cite: 8]
 def log_violation_to_sheet(voucher_code):
     try:
         db = get_sheets_connection()
@@ -158,7 +158,7 @@ def log_violation_to_sheet(voucher_code):
     except Exception as e:
         print(f"Failed to log violation globally: {e}")
 
-# 完成考試時更新狀態
+# 完成考試時更新狀態[cite: 8]
 def finalize_exam_submission(voucher_code, warning_count, exam_status, explanation=""):
     try:
         db = get_sheets_connection()
@@ -166,251 +166,126 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
         cell = sheet.find(voucher_code)
         if cell:
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sheet.update_cell(cell.row, 12, completed_time)
-            sheet.update_cell(cell.row, 11, warning_count)
-            sheet.update_cell(cell.row, 13, exam_status)
-            sheet.update_cell(cell.row, 14, explanation)
+            sheet.update_cell(cell.row, 12, completed_time)  
+            sheet.update_cell(cell.row, 11, warning_count) 
+            sheet.update_cell(cell.row, 13, exam_status)   
+            sheet.update_cell(cell.row, 14, explanation)   
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
-def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
-    valid_options = {}
-    for k, v in options_dict.items():
-        if v is not None:
-            v_str = str(v).strip()
-            if v_str != "" and v_str.lower() != "nan":
-                valid_options[k] = v_str
-    
-    if question_key not in st.session_state:
-        st.session_state[question_key] = current_answer if current_answer else ""
-
-    hidden_input_key = f"{question_key}_hidden_bridge"
-    if hidden_input_key not in st.session_state:
-        st.session_state[hidden_input_key] = st.session_state[question_key]
-
-    current_val = str(st.session_state.get(hidden_input_key, ""))
-    
-    if current_val:
-        target_keys = [x.strip() for x in current_val.split(",") if x.strip() in valid_options]
-    else:
-        target_keys = []
-
-    source_keys = [k for k in valid_options.keys() if k not in target_keys]
-
-    source_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in source_keys])
-    target_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in target_keys])
-
-    component_code = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-        body {{
-            font-family: sans-serif;
-            margin: 0;
-            padding: 5px;
-            background-color: transparent;
-        }}
-        .drag-container {{
-            display: flex;
-            gap: 15px;
-        }}
-        .column {{
-            flex: 1;
-            border: 2px dashed #666;
-            border-radius: 8px;
-            padding: 10px;
-            min-height: 220px;
-            background: #fdfdfd;
-            box-sizing: border-box;
-        }}
-        .column-title {{
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 14px;
-            color: #444;
-        }}
-        .draggable-item {{
-            background: white;
-            border: 2px solid #333;
-            padding: 8px 10px;
-            margin-bottom: 8px;
-            border-radius: 6px;
-            cursor: grab;
-            font-weight: 500;
-            font-size: 13px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-            user-select: none;
-        }}
-        .draggable-item:active {{
-            cursor: grabbing;
-        }}
-        .draggable-item.dragging {{
-            opacity: 0.4;
-        }}
-    </style>
-    </head>
-    <body>
-
-    <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px;">請將左側選項拖曳至右側進行排序：</div>
-    <div class="drag-container">
-        <div class="column" id="source-col" ondragover="allowDrop(event)" ondrop="dropToSource(event)">
-            <div class="column-title">Options</div>
-            {source_html}
-        </div>
-        
-        <div class="column" id="target-col" ondragover="allowDrop(event)" ondrop="dropToTarget(event)">
-            <div class="column-title">Drag your answer here</div>
-            {target_html}
-        </div>
-    </div>
-
-    <script>
-        let draggedItem = null;
-
-        function attachEvents() {{
-            const items = document.querySelectorAll('.draggable-item');
-            items.forEach(item => {{
-                item.removeEventListener('dragstart', handleDragStart);
-                item.removeEventListener('dragend', handleDragEnd);
-                item.addEventListener('dragstart', handleDragStart);
-                item.addEventListener('dragend', handleDragEnd);
-            }});
-        }}
-
-        function handleDragStart(e) {{
-            draggedItem = this;
-            setTimeout(() => this.classList.add('dragging'), 0);
-        }}
-
-        function handleDragEnd(e) {{
-            this.classList.remove('dragging');
-            draggedItem = null;
-            updateResult();
-        }}
-
-        function allowDrop(e) {{
-            e.preventDefault();
-        }}
-
-        function dropToTarget(e) {{
-            e.preventDefault();
-            const targetCol = document.getElementById('target-col');
-            if (draggedItem) {{
-                targetCol.appendChild(draggedItem);
-                updateResult();
-            }}
-        }}
-
-        function dropToSource(e) {{
-            e.preventDefault();
-            const sourceCol = document.getElementById('source-col');
-            if (draggedItem) {{
-                sourceCol.appendChild(draggedItem);
-                updateResult();
-            }}
-        }}
-
-        function updateResult() {{
-            const targetCol = document.getElementById('target-col');
-            const currentItems = targetCol.querySelectorAll('.draggable-item');
-            let keys = [];
-            currentItems.forEach(item => {{
-                keys.push(item.getAttribute('data-key'));
-            }});
-            
-            const resultString = keys.join(',');
-            window.parent.postMessage({{type: 'streamlit:setComponentValue', value: resultString}}, '*');
-        }}
-
-        attachEvents();
-    </script>
-    </body>
-    </html>
-    """
-
-    drag_result = components.html(component_code, height=320)
-
-    if drag_result is not None and isinstance(drag_result, str):
-        st.session_state[hidden_input_key] = drag_result
-
-    current_arrangement = str(st.session_state.get(hidden_input_key, ""))
-    
-    st.markdown(f"**目前拖曳排序結果預覽：** `{current_arrangement if current_arrangement else '尚無（請將選項拖至右側）'}`")
-
-    col_btn1, col_btn2 = st.columns([1, 4])
-    with col_btn1:
-        if st.button("💾 Save Answer", key=f"{question_key}_save_btn"):
-            if current_arrangement:
-                st.session_state[question_key] = current_arrangement
-                if "answers" not in st.session_state:
-                    st.session_state.answers = {}
-                try:
-                    q_idx_int = int(question_key.replace("q_", ""))
-                    st.session_state.answers[q_idx_int] = current_arrangement
-                except ValueError:
-                    pass
-                st.success("答案已成功儲存並計入成績！")
-                st.rerun()
-            else:
-                st.warning("請先將選項拖曳到右側的排序區再儲存。")
-
-
 # ==========================================
-# 0. 登入畫面 (Voucher + Email 雙重驗證)
+# Step 0 - 考生身分驗證[cite: 8]
 # ==========================================
 if not st.session_state.authenticated:
-    st.markdown("<h2 style='text-align: center;'>🛡️ Shisa Kanko-Shi Examination Portal</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Please enter your Examination Voucher Code and Registered Email to log in.</p>", unsafe_allow_html=True)
-    st.write("---")
+  st.markdown(
+      "<h1 style='text-align: center;'>Shisa Kanko-Shi Examination Portal</h1>",
+      unsafe_allow_html=True,
+  )
+  st.markdown(
+      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling Specialist)</h3>",
+      unsafe_allow_html=True,
+  )
+  st.write("---")
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        voucher_input = st.text_input("Voucher Code", placeholder="Enter your voucher code here...")
-        email_input = st.text_input("Registered Email Address", placeholder="Enter your registered email here...")
-        
-        if st.button("🔑 Login to Exam", use_container_width=True):
-            if not voucher_input.strip() or not email_input.strip():
-                st.error("Please enter both your Voucher Code and Registered Email Address.")
+  st.markdown("### Candidate Authentication")
+  st.write("Please enter your registered Email and Voucher Code to enter the examination room.")
+
+  with st.form("auth_form"):
+    email_input = st.text_input("Registered Email Address", placeholder="e.g., candidate@example.com")
+    voucher_input = st.text_input("Voucher Code", type="password", placeholder="Enter your voucher code")
+
+    submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
+
+    if submitted:
+      if not email_input or not voucher_input or not email_input.strip() or not voucher_input.strip():
+        st.error("Please enter both your Email and Voucher Code.")
+      else:
+        try:
+          db = get_sheets_connection()
+          vouchers_sheet = db.worksheet("Vouchers")
+          records = vouchers_sheet.get_all_records()
+
+          matched_record = None
+          row_index = None
+
+          for idx, record in enumerate(records, start=2):
+            r_voucher = str(record.get("VoucherCode", "")).strip()
+            r_email = str(record.get("AssignedEmail", "")).strip()
+            r_status = str(record.get("Status", "")).strip()
+
+            if (
+                r_voucher == voucher_input.strip()
+                and r_email != ""
+                and r_email.lower() == email_input.strip().lower()
+                and r_status.lower() == "used"
+            ):
+              matched_record = record
+              row_index = idx
+              break
+
+          if matched_record:
+            exam_status_val = str(matched_record.get("ExamEndTime", "")).strip() 
+            committed_time = str(matched_record.get("Committed", "")).strip()     
+
+            if exam_status_val != "":
+              st.error(f"❌ **Access Denied:** This voucher has already been finalized with status: **{exam_status_val}**. Re-entry is strictly prohibited.")
+            
+            elif committed_time != "":
+              try:
+                committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
+                elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
+                EXAM_TIME_LIMIT = 5400  # 90 minutes
+
+                if elapsed_seconds > EXAM_TIME_LIMIT:
+                    vouchers_sheet.update_cell(row_index, 13, "DNF")
+                    st.error("❌ **Access Denied:** Exam session expired. Status updated to Did Not Finish (DNF).")
+                else:
+                    f_name = str(matched_record.get("EnglishFirstName", "")).strip()
+                    l_name = str(matched_record.get("EnglishLastName", "")).strip()
+                    j_name = str(matched_record.get("JapaneseName", "")).strip()
+
+                    elapsed_seconds_since_commit = int(elapsed_seconds)
+                    remaining_allowed_seconds = max(0, EXAM_TIME_LIMIT - elapsed_seconds_since_commit)
+
+                    st.session_state.authenticated = True
+                    st.session_state.candidate_email = email_input.strip()
+                    st.session_state.voucher_code = voucher_input.strip()
+                    st.session_state.candidate_first_name = f_name
+                    st.session_state.candidate_last_name = l_name
+                    st.session_state.candidate_japanese_name = j_name
+                    st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+
+                    st.session_state.exam_remaining_seconds = remaining_allowed_seconds
+                    st.session_state.exam_timer_start_local = time.time()
+
+                    st.session_state.exam_step = 3
+                    st.success("🔄 Resuming your active examination session...")
+                    time.sleep(1)
+                    st.rerun()
+              except Exception as e:
+                st.error(f"Time calculation error: {e}")
             else:
-                with st.spinner("Verifying credentials..."):
-                    try:
-                        db = get_sheets_connection()
-                        vouchers_sheet = db.worksheet("Vouchers")
-                        records = vouchers_sheet.get_all_records()
-                        
-                        matched_record = None
-                        for r in records:
-                            v_val = str(r.get("Voucher", r.get("VoucherCode", r.get("Code", "")))).strip()
-                            e_val = str(r.get("Email", r.get("CandidateEmail", ""))).strip()
-                            
-                            if v_val.lower() == voucher_input.strip().lower() and e_val.lower() == email_input.strip().lower():
-                                matched_record = r
-                                break
-                        
-                        if matched_record:
-                            completed_exam = matched_record.get("CompletedExam", matched_record.get("Completed", ""))
-                            if completed_exam and str(completed_exam).strip() != "":
-                                st.error("❌ This voucher and email combination has already been used to complete an exam.")
-                            else:
-                                st.session_state.authenticated = True
-                                st.session_state.voucher_code = voucher_input.strip()
-                                st.session_state.candidate_email = email_input.strip()
-                                st.session_state.candidate_first_name = str(matched_record.get("FirstName", matched_record.get("First Name", ""))).strip()
-                                st.session_state.candidate_last_name = str(matched_record.get("LastName", matched_record.get("Last Name", ""))).strip()
-                                st.session_state.candidate_japanese_name = str(matched_record.get("JapaneseName", matched_record.get("Japanese Name", ""))).strip()
-                                st.session_state.candidate_name = f"{st.session_state.candidate_first_name} {st.session_state.candidate_last_name}".strip()
-                                st.session_state.exam_step = 1
-                                st.rerun()
-                        else:
-                            st.error("❌ Invalid Voucher Code or Email Address combination. Please check your credentials and try again.")
-                    except Exception as e:
-                        st.error(f"Database verification error: {e}")
+              f_name = str(matched_record.get("EnglishFirstName", "")).strip()
+              l_name = str(matched_record.get("EnglishLastName", "")).strip()
+              j_name = str(matched_record.get("JapaneseName", "")).strip()
 
+              st.session_state.authenticated = True
+              st.session_state.candidate_email = email_input.strip()
+              st.session_state.voucher_code = voucher_input.strip()
+              st.session_state.candidate_first_name = f_name
+              st.session_state.candidate_last_name = l_name
+              st.session_state.candidate_japanese_name = j_name
+              st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+
+              st.session_state.exam_step = 1
+              st.rerun()
+          else:
+            st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
+        except Exception as e:
+          st.error(f"Connection error: {e}")
 
 # ==========================================
-# Step 1 - 身分核對與考試須知
+# Step 1 - 身分核對與考試須知[cite: 8]
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 1:
   st.markdown(f"### Welcome, {st.session_state.candidate_first_name} {st.session_state.candidate_last_name}!")
@@ -488,9 +363,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
 
   st.write("---")
 
-
 # ==========================================
-# Step 2 - 考生拍照驗證與倒數休息頁面
+# Step 2 - 考生拍照驗證與倒數休息頁面[cite: 8]
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 2:
   
@@ -598,9 +472,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
               st.error(f"An unexpected error occurred: {e}. ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)")
               st.rerun()
 
-
 # ==========================================
-# Step 3 - 核心問答模組
+# Step 3 - 核心問答模組[cite: 8]
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -616,7 +489,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
     exam_questions = st.session_state.exam_questions
     TOTAL_QUESTIONS = len(exam_questions) if exam_questions else 75
-
 
     def handle_focus_loss():
         log_violation_to_sheet(st.session_state.voucher_code)
@@ -715,7 +587,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             
             parent.window.addEventListener("blur", function() { 
                 if (parent.document.activeElement && parent.document.activeElement.tagName === 'IFRAME') {
-                    return;
+                    return; 
                 }
                 triggerGlobalWarning(); 
             });
@@ -854,8 +726,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if "youtube.com" in media_url.lower() or "youtu.be" in media_url.lower():
                     st.video(media_url)
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
-                    import streamlit.components.v1 as components
-                    
                     video_component_html = f'''
                     <!DOCTYPE html>
                     <html>
@@ -893,7 +763,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         </div>
                     '''
                     st.markdown(img_html, unsafe_allow_html=True)
-                    
             except Exception as e:
                 st.warning(f"⚠️ Could not load media: {e}")
                 
@@ -927,6 +796,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.session_state.answers[q_idx] = selected
 
         elif q_type == "ORDER":
+            # Bug fix: use q_idx instead of undefined index[cite: 8]
             options_dict = {
                 "A": current_q_data.get("OptionA", ""),
                 "B": current_q_data.get("OptionB", ""),
@@ -937,9 +807,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 "G": current_q_data.get("OptionG", ""),
                 "H": current_q_data.get("OptionH", "")
             }
-            
-            existing_ans = st.session_state.get(f"q_{q_idx}", "")
-            render_drag_and_drop_order(f"q_{q_idx}", options_dict, existing_ans)
+            valid_opts = [f"{k}: {v}" for k, v in options_dict.items() if v and str(v).strip() != ""]
+            st.write("Arrange the sequence (comma separated or ordered selection):")
+            order_input = st.text_input("Enter sequence (e.g. A,B,C,D)", value=str(current_answer) if current_answer else "", key=f"order_input_{q_idx}")
+            if order_input:
+                st.session_state.answers[q_idx] = order_input
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
@@ -972,9 +844,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     st.rerun()
         st.markdown("---")
 
-
 # ==========================================
-# Step 4 - 考試總結與詳細清單確認頁面
+# Step 4 - 考試總結與詳細清單確認頁面[cite: 8]
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Question Checklist</h2>", unsafe_allow_html=True)
@@ -1052,33 +923,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             user_str = str(user_ans).strip()
                             if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
                                 correct_count += 1
-                        
                         elif q_type == "TF":
                             if str(user_ans).strip().upper() == correct_val.upper():
                                 correct_count += 1
-                                
                         elif q_type == "ORDER":
                             correct_sequence = [l.strip().upper() for l in correct_val.split(",") if l.strip()]
                             user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
-                            
                             if user_sequence == correct_sequence and correct_sequence:
-                                correct_count += 1
-                                
-                        elif q_type == "MATCH":
-                            expected_mapping = {}
-                            for pair in correct_val.split(","):
-                                if ":" in pair:
-                                    term_key, def_col = pair.split(":")
-                                    expected_mapping[term_key.strip()] = str(q_data.get(def_col.strip(), "")).strip()
-                            
-                            user_pairs = user_ans if isinstance(user_ans, dict) else {}
-                            is_match_correct = True
-                            for t_key, correct_text in expected_mapping.items():
-                                if user_pairs.get(t_key) != correct_text:
-                                    is_match_correct = False
-                                    break
-                            
-                            if is_match_correct and expected_mapping:
                                 correct_count += 1
 
                     passing_score_percentage = 70.0
@@ -1102,9 +953,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
   
     st.divider()
 
-
 # ==========================================
-# Step 5 - 考試結果與結算頁面
+# Step 5 - 考試結果與結算頁面[cite: 8]
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 5:
     st.markdown("<h2 style='text-align: center;'>📋 Examination Result & Summary</h2>", unsafe_allow_html=True)
