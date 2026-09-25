@@ -598,8 +598,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if (parent.document.hidden) triggerGlobalWarning(); 
             });
             
-            // 2. 偵測視窗失去焦點 (點擊其他地方、切換視窗)
+            // 2. 偵測視窗失去焦點 (點擊其他地方、切換視窗)，並排除點擊 iframe 內部元件（如影片播放按鈕）的情況
             parent.window.addEventListener("blur", function() { 
+                if (parent.document.activeElement && parent.document.activeElement.tagName === 'IFRAME') {
+                    return; // 如果焦點轉移到 iframe 內，直接略過，不計入違規
+                }
                 triggerGlobalWarning(); 
             });
 
