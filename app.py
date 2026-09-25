@@ -6,6 +6,22 @@ from google.oauth2.service_account import Credentials
 import streamlit as st
 import streamlit.components.v1 as components
 
+st.markdown("""
+    <style>
+    div[data-baseweb="popover"] div[role="option"] {
+        white-space: normal !important;
+        word-break: break-word !important;
+        line-height: 1.4 !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+    }
+    div[data-baseweb="popover"] {
+        max-width: 850px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
 # 1. 頁面基本設定[cite: 8]
 st.set_page_config(
     page_title="Shisa Kanko-Shi Examination Portal",
