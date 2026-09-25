@@ -963,18 +963,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         elif q_type == "ORDER":
             # 組合該題的所有選項字典 (最多支援到 H)
             options_dict = {
-                "A": r.get("OptionA", ""),
-                "B": r.get("OptionB", ""),
-                "C": r.get("OptionC", ""),
-                "D": r.get("OptionD", ""),
-                "E": r.get("OptionE", ""),
-                "F": r.get("OptionF", ""),
-                "G": r.get("OptionG", ""),
-                "H": r.get("OptionH", "")
+                "A": current_q_data.get("OptionA", ""),
+                "B": current_q_data.get("OptionB", ""),
+                "C": current_q_data.get("OptionC", ""),
+                "D": current_q_data.get("OptionD", ""),
+                "E": current_q_data.get("OptionE", ""),
+                "F": current_q_data.get("OptionF", ""),
+                "G": current_q_data.get("OptionG", ""),
+                "H": current_q_data.get("OptionH", "")
             }
             
             # 呼叫剛剛建立的拖曳排序介面
-            render_drag_and_drop_order(f"q_{index}", options_dict)
+            render_drag_and_drop_order(f"q_{q_idx}", options_dict)
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
