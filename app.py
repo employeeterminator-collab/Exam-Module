@@ -826,7 +826,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected:
                 st.session_state.answers[q_idx] = selected
 
-elif q_type == "ORDER":
+        elif q_type == "ORDER":
             st.markdown(f"**{q_text}**")
             
             # 1. 動態抓取所有有內容的選項 (從 A 檢查到 H，支援 8 個步驟或更多)
@@ -900,8 +900,8 @@ elif q_type == "ORDER":
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
             
-            st.markdown("---")
-            col_prev, col_flag, col_next = st.columns([1, 1, 1])
+        st.markdown("---")
+        col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
         with col_prev:
             if st.session_state.current_q > 1:
