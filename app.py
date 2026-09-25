@@ -899,21 +899,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     del st.session_state.answers[q_idx]
 
         elif q_type == "MATCH":
-            # Show full definitions legend at top
-            st.markdown("#### 📖 Definitions Reference")
-            for d_letter, d_text in defs_dict.items():
-                st.markdown(f"**Def {d_letter}:** {d_text}")
-            
-            st.divider()
-            
-            # Clean short dropdown choices
-            def_choices = ["-- Select Definition --"] + [f"Def {d_letter}" for d_letter in defs_dict.keys()]
             st.markdown("##### 🔗 Matching Exercise")
             st.write("Match each item with its correct definition:")
 
             raw_row = current_q_data.get("raw_row", [])
 
-            # Gather options A to H
+            # 1. Gather options A to H
             options_dict = {}
             for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
@@ -924,7 +915,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if val:
                     options_dict[opt_letter] = val
 
-            # Gather definitions DefA to DefH
+            # 2. Gather definitions DefA to DefH
             defs_dict = {}
             for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 val = get_val(current_q_data, f"Def{def_letter}", f"Definition{def_letter}")
@@ -934,6 +925,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         val = str(v).strip()
                 if val:
                     defs_dict[def_letter] = val
+
+            if not options_dict:
+                st.warning("⚠️ No options found for this question.")
+            if not defs_dict:
+                st.warning("⚠️ No definitions found. Please check columns M through P.")
+
+            # 3. Display Definition Reference Legend
+            if defs_dict:
+                st.markdown("#### 📖 Definitions Reference")
+                for d_letter, d_text in defs_dict.items():
+                    st.markdown(f"**Def{d_letter}:** {d_text}")
+                st.divider()
 
             # Parse saved answer string (e.g., "A:DefB,B:DefA")
             current_saved = str(st.session_state.answers.get(q_idx, ""))
@@ -945,15 +948,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
             matching_results = {}
 
-            if not options_dict:
-                st.warning("⚠️ No options found for this question.")
-            if not defs_dict:
-                st.warning("⚠️ No definitions found. Please check columns M through P.")
+            # 4. Render clean dropdown selectboxes
+            def_choices = ["-- Select Definition --"] + [f"Def{d_letter}" for d_letter in defs_dict.keys()]
 
-            # Render dropdown selectbox for each item
             for opt_letter, opt_text in options_dict.items():
-                def_choices = ["-- Select Definition --"] + [f"Def{d_letter}: {d_text}" for d_letter, d_text in defs_dict.items()]
-                
                 default_idx = 0
                 saved_def = saved_pairs.get(opt_letter, "")
                 if saved_def:
@@ -970,8 +968,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 )
 
                 if choice and choice != "-- Select Definition --":
-                    def_code = choice.split(":")[0].strip()  # Extracts "DefA", "DefB", etc.
-                    matching_results[opt_letter] = def_code
+                    matching_results[opt_letter] = choice.strip()
 
             # Save clean formatted result string to session state (e.g. "A:DefB,B:DefA")
             if matching_results:
