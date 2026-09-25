@@ -625,7 +625,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
         pass
 
-    def handle_auto_submit():
+def handle_auto_submit():
         user_answers = st.session_state.get("answers", {})
         focus_losses = st.session_state.get("focus_loss_count", 0)
         
@@ -646,13 +646,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                         correct_text = str(v).strip()
                         break
 
-            if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
+            if user_ans and (user_ans.upper() == correct_letter or user_str == correct_text if 'user_str' in locals() else user_ans == correct_text):
                 correct_count += 1
         
         passing_score_percentage = 70.0
         score_percentage = (correct_count / TOTAL_QUESTIONS) * 100 if TOTAL_QUESTIONS > 0 else 0
         final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
         
+        # 1. Record submission
         finalize_exam_submission(
             st.session_state.voucher_code,
             focus_losses,
@@ -660,11 +661,25 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             explanation=f"Auto-submitted on timeout. Correct {correct_count}/{TOTAL_QUESTIONS}"
         )
         
+        # 2. Send Pass / Fail Email Notification
+        user_email = st.session_state.get("candidate_email", "")
+        user_name = st.session_state.get("candidate_name", "Candidate")
+
+        if user_email:
+            send_exam_result_email(
+                user_email=user_email,
+                user_name=user_name,
+                score=correct_count,
+                total=TOTAL_QUESTIONS,
+                pass_percentage=passing_score_percentage,
+                exam_title="Shisa Kanko-Shi Examination"
+            )
+        
+        # 3. Update session state & navigate to Step 5
         st.session_state.exam_final_status = final_status
         st.session_state.exam_correct_count = correct_count
         st.session_state.exam_step = 5
         st.rerun()
-
     if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
         pass
 
@@ -1193,7 +1208,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             score=correct_count,
                             total=total_q_count,
                             pass_percentage=passing_score_percentage,
-                            exam_title="FIRE™ Certification Exam"
+                            exam_title="Shisa Kanko-Shi™ Exam"
                         )
                     
                     # 3. Update Session State and navigate to Step 5 (Results view)
