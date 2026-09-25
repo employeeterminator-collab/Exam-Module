@@ -829,7 +829,74 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
-                    
+
+        elif q_type == "MATCH":
+            st.markdown("##### 🔗 Matching Exercise")
+            st.write("Match each item with its correct definition:")
+
+            # Gather options (e.g., OptionA: Coin, OptionB: Currency Note)
+            options_dict = {}
+            for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
+                opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", "")
+                if opt_val:
+                    options_dict[opt_letter] = opt_val
+
+            # Gather definitions (e.g., DefA, DefB, etc.)
+            defs_dict = {}
+            for def_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
+                def_val = get_val(current_q_data, f"Def{def_letter}", f"Definition{def_letter}", "")
+                if def_val:
+                    defs_dict[def_letter] = def_val
+
+            # Parse existing saved answers (e.g., "A:DefB, B:DefA, C:DefD, D:DefC")
+            current_saved = str(st.session_state.answers.get(q_idx, ""))
+            saved_pairs = {}
+            for pair in current_saved.split(","):
+                if ":" in pair:
+                    parts = pair.split(":")
+                    saved_pairs[parts[0].strip().upper()] = parts[1].strip().upper()
+
+            matching_results = {}
+
+            # Render a selectbox for each option item
+            for opt_letter, opt_text in options_dict.items():
+                def_choices = ["-- Select Definition --"] + [f"Def{d_letter}: {d_text}" for d_letter, d_text in defs_dict.items()]
+                
+                # Determine default selection index if previously answered
+                default_idx = 0
+                saved_def = saved_pairs.get(opt_letter, "")
+                if saved_def:
+                    for idx, (d_letter, d_text) in enumerate(defs_dict.items()):
+                        target_key = f"DEF{d_letter}" if not saved_def.startswith("DEF") else saved_def
+                        if f"DEF{d_letter}" == target_key or d_letter == saved_def:
+                            default_idx = idx + 1
+                            break
+
+                choice = st.selectbox(
+                    f"**{opt_letter}: {opt_text}**",
+                    def_choices,
+                    index=default_idx,
+                    key=f"match_{q_idx}_{opt_letter}"
+                )
+
+                if choice and choice != "-- Select Definition --":
+                    # Extract definition prefix (e.g., "DefA" or "A") and normalize to "DefA" format
+                    prefix = choice.split(":")[0].strip()
+                    if not prefix.upper().startswith("DEF"):
+                        prefix = f"Def{prefix}"
+                    else:
+                        # Normalize case to match sheet style (e.g., "DefA")
+                        prefix = f"Def{prefix[-1].upper()}"
+                    matching_results[opt_letter] = prefix
+
+            # Save formatted string to session state (e.g., "A:DefB, B:DefA")
+            if matching_results:
+                pairs_str = ", ".join([f"{k}:{v}" for k, v in matching_results.items()])
+                st.session_state.answers[q_idx] = pairs_str
+            else:
+                if q_idx in st.session_state.answers:
+                    del st.session_state.answers[q_idx]
+
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
