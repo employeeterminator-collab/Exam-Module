@@ -76,7 +76,7 @@ def get_sheets_connection():
   sheet = client.open("ShisaKanko_Exam_Database")
   return sheet
 
-# 動態載入獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")[cite: 8]
+# 動態載入獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")
 def get_exam_questions():
     try:
         scope = [
@@ -94,33 +94,53 @@ def get_exam_questions():
         if not rows or len(rows) < 2:
             return []
             
+        headers_raw = rows[0]
+        headers_clean = [str(h).strip().lower().replace(" ", "").replace("_", "") for h in headers_raw]
+
+        def find_idx(possible_names, default_idx):
+            for name in possible_names:
+                clean_name = name.lower().replace(" ", "").replace("_", "")
+                if clean_name in headers_clean:
+                    return headers_clean.index(clean_name)
+            return default_idx
+
+        # Dynamic header index matching with safe defaults
+        q_text_idx = find_idx(["questiontext", "question", "text", "qtext"], 0)
+        q_type_idx = find_idx(["questiontype", "type", "qtype"], 1)
+        correct_idx = find_idx(["correctanswer", "correct_answer", "answer"], 10)
+        media_idx = find_idx(["mediaurl", "media", "imageurl"], 11)
+
         normalized_records = []
         for row in rows[1:]:
-            if not row or not row[0].strip():
+            if not row or not any(str(c).strip() for c in row):
                 continue
             
-            record = {
-                "raw_row": row,  # Exact positional row values
-                "Question": row[0] if len(row) > 0 else "",
-                "QuestionType": row[1] if len(row) > 1 else "MC",
-                "CorrectAnswer": row[10] if len(row) > 10 else "",
-                "MediaURL": row[11] if len(row) > 11 else "",
-            }
-            
-            # Standard Options A-H (Columns C through J, indices 2 to 9)
-            for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                col_idx = 2 + i
-                record[f"Option{opt_letter}"] = row[col_idx].strip() if len(row) > col_idx else ""
-            
-            # Definitions A-H (Columns M onwards, starting at index 12)
-            for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                col_idx = 12 + i  # Column M = 12, N = 13, O = 14, P = 15, etc.
-                record[f"Def{def_letter}"] = row[col_idx].strip() if len(row) > col_idx else ""
+            # Map every raw header directly to cell values
+            record = {"raw_row": row}
+            for idx, cell_val in enumerate(row):
+                if idx < len(headers_raw):
+                    record[headers_raw[idx].strip()] = cell_val.strip()
+                    record[headers_clean[idx]] = cell_val.strip()
+
+            # Assign normalized fields expected by the UI renderers
+            record["Question"] = row[q_text_idx].strip() if len(row) > q_text_idx else ""
+            record["QuestionType"] = row[q_type_idx].strip() if len(row) > q_type_idx else "MC"
+            record["CorrectAnswer"] = row[correct_idx].strip() if len(row) > correct_idx else ""
+            record["MediaURL"] = row[media_idx].strip() if len(row) > media_idx else ""
+
+            # Options A through H
+            for i, letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
+                opt_idx = find_idx([f"option{letter.lower()}", f"opt{letter.lower()}"], 2 + i)
+                record[f"Option{letter}"] = row[opt_idx].strip() if len(row) > opt_idx else ""
+
+            # Definitions A through H
+            for i, letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
+                def_idx = find_idx([f"def{letter.lower()}", f"definition{letter.lower()}"], 12 + i)
+                record[f"Def{letter}"] = row[def_idx].strip() if len(row) > def_idx else ""
 
             normalized_records.append(record)
             
-        if normalized_records:
-            return normalized_records
+        return normalized_records
             
     except Exception as e:
         st.error(f"Google Sheets Debug Error: {e}")
