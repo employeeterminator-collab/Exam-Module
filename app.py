@@ -103,10 +103,10 @@ def get_exam_questions():
                 "OptionB": r.get("OptionB", ""),
                 "OptionC": r.get("OptionC", ""),
                 "OptionD": r.get("OptionD", ""),
-                "OptionE": r.get("OptionE", ""),  # 💡 新增選項 E
-                "OptionF": r.get("OptionF", ""),  # 💡 新增選項 F
-                "OptionG": r.get("OptionG", ""),  # 💡 新增選項 G
-                "OptionH": r.get("OptionH", ""),  # 💡 新增選項 H
+                "OptionE": r.get("OptionE", ""),
+                "OptionF": r.get("OptionF", ""),
+                "OptionG": r.get("OptionG", ""),
+                "OptionH": r.get("OptionH", ""),
                 "CorrectAnswer": r.get("CorrectAnswer", ""),
                 "MediaURL": r.get("MediaURL", "")
             })
@@ -139,14 +139,12 @@ def log_violation_to_sheet(voucher_code):
         db = get_sheets_connection()
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # 1. 強制寫入一筆獨立紀錄到 ViolationLogs 頁籤
         try:
             logs_sheet = db.worksheet("ViolationLogs")
             logs_sheet.append_row([voucher_code, current_time, "Focus Lost / Tab Switched"])
         except Exception as log_err:
             print(f"Failed to append row to ViolationLogs: {log_err}")
         
-        # 2. 同步累加 Vouchers 表格中的 WarningCount 欄位 (第 11 欄)
         vouchers_sheet = db.worksheet("Vouchers")
         cell = vouchers_sheet.find(voucher_code)
         if cell:
@@ -160,7 +158,7 @@ def log_violation_to_sheet(voucher_code):
     except Exception as e:
         print(f"Failed to log violation globally: {e}")
 
-# 完成考試時更新狀態 (修改後：即使 Timeout 自動交卷，也正常計分並寫入 Pass 或 Fail)
+# 完成考試時更新狀態
 def finalize_exam_submission(voucher_code, warning_count, exam_status, explanation=""):
     try:
         db = get_sheets_connection()
@@ -168,20 +166,14 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
         cell = sheet.find(voucher_code)
         if cell:
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sheet.update_cell(cell.row, 12, completed_time)  # CompletedExam time
-            sheet.update_cell(cell.row, 11, warning_count) # WarningCount
-            sheet.update_cell(cell.row, 13, exam_status)   # ExamStatus / EndTime ("Pass" or "Fail")
-            sheet.update_cell(cell.row, 14, explanation)   # Explanation
+            sheet.update_cell(cell.row, 12, completed_time)
+            sheet.update_cell(cell.row, 11, warning_count)
+            sheet.update_cell(cell.row, 13, exam_status)
+            sheet.update_cell(cell.row, 14, explanation)
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
- 
- 
 
 def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
-    """
-    支援 HTML5 拖曳排序的互動介面（左側為可用選項，右側為答案排列區），並完美同步至 Python 計分與預覽。
-    """
-    # 嚴格過濾掉空白、None 或 nan 的選項，徹底解決多餘空白選項顯示的問題
     valid_options = {}
     for k, v in options_dict.items():
         if v is not None:
@@ -189,7 +181,6 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
             if v_str != "" and v_str.lower() != "nan":
                 valid_options[k] = v_str
     
-    # 1. 確保 session_state 中有初始答案
     if question_key not in st.session_state:
         st.session_state[question_key] = current_answer if current_answer else ""
 
@@ -264,13 +255,11 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
 
     <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px;">請將左側選項拖曳至右側進行排序：</div>
     <div class="drag-container">
-        <!-- 左側：可用選項 -->
         <div class="column" id="source-col" ondragover="allowDrop(event)" ondrop="dropToSource(event)">
             <div class="column-title">Options</div>
             {source_html}
         </div>
         
-        <!-- 右側：排序答案區 -->
         <div class="column" id="target-col" ondragover="allowDrop(event)" ondrop="dropToTarget(event)">
             <div class="column-title">Drag your answer here</div>
             {target_html}
@@ -332,7 +321,6 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
             }});
             
             const resultString = keys.join(',');
-            // 透過 Streamlit 元件通訊將結果送回 Python
             window.parent.postMessage({{type: 'streamlit:setComponentValue', value: resultString}}, '*');
         }}
 
@@ -342,7 +330,6 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
     </html>
     """
 
-    # 渲染拖曳元件並接收前端回傳值
     drag_result = components.html(component_code, height=320)
 
     if drag_result is not None and isinstance(drag_result, str):
@@ -350,16 +337,13 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
 
     current_arrangement = str(st.session_state.get(hidden_input_key, ""))
     
-    # 即時預覽排序結果
     st.markdown(f"**目前拖曳排序結果預覽：** `{current_arrangement if current_arrangement else '尚無（請將選項拖至右側）'}`")
 
-    # 儲存按鈕
     col_btn1, col_btn2 = st.columns([1, 4])
     with col_btn1:
         if st.button("💾 Save Answer", key=f"{question_key}_save_btn"):
             if current_arrangement:
                 st.session_state[question_key] = current_arrangement
-                # 同步寫入 answers 字典確保最終交卷計分能抓取到
                 if "answers" not in st.session_state:
                     st.session_state.answers = {}
                 try:
@@ -371,12 +355,72 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
                 st.rerun()
             else:
                 st.warning("請先將選項拖曳到右側的排序區再儲存。")
-                
+
+
+# ==========================================
+# 0. 登入畫面 (Voucher 驗證) —— 【Restored Here】
+# ==========================================
+if not st.session_state.authenticated:
+    st.markdown("<h2 style='text-align: center;'>🛡️ Shisa Kanko-Shi Examination Portal</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Please enter your Examination Voucher Code to log in.</p>", unsafe_allow_html=True)
+    st.write("---")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        voucher_input = st.text_input("Voucher Code", placeholder="Enter your voucher code here...")
+        if st.button("🔑 Login to Exam", use_container_width=True):
+            if not voucher_input.strip():
+                st.error("Please enter a valid voucher code.")
+            else:
+                with st.spinner("Verifying voucher..."):
+                    try:
+                        db = get_sheets_connection()
+                        vouchers_sheet = db.worksheet("Vouchers")
+                        cell = vouchers_sheet.find(voucher_input.strip())
+                        if cell:
+                            row_values = vouchers_sheet.row_values(cell.row)
+                            records = vouchers_sheet.get_all_records()
+                            matched_record = None
+                            for r in records:
+                                v_val = str(r.get("Voucher", r.get("VoucherCode", r.get("Code", "")))).strip()
+                                if v_val.lower() == voucher_input.strip().lower():
+                                    matched_record = r
+                                    break
+                            
+                            if matched_record:
+                                completed_exam = matched_record.get("CompletedExam", matched_record.get("Completed", ""))
+                                if completed_exam and str(completed_exam).strip() != "":
+                                    st.error("❌ This voucher has already been used to complete an exam.")
+                                else:
+                                    st.session_state.authenticated = True
+                                    st.session_state.voucher_code = voucher_input.strip()
+                                    st.session_state.candidate_email = str(matched_record.get("Email", matched_record.get("CandidateEmail", ""))).strip()
+                                    st.session_state.candidate_first_name = str(matched_record.get("FirstName", matched_record.get("First Name", ""))).strip()
+                                    st.session_state.candidate_last_name = str(matched_record.get("LastName", matched_record.get("Last Name", ""))).strip()
+                                    st.session_state.candidate_japanese_name = str(matched_record.get("JapaneseName", matched_record.get("Japanese Name", ""))).strip()
+                                    st.session_state.candidate_name = f"{st.session_state.candidate_first_name} {st.session_state.candidate_last_name}".strip()
+                                    st.session_state.exam_step = 1
+                                    st.rerun()
+                            else:
+                                st.session_state.authenticated = True
+                                st.session_state.voucher_code = voucher_input.strip()
+                                st.session_state.candidate_email = row_values[1] if len(row_values) > 1 else ""
+                                st.session_state.candidate_last_name = row_values[2] if len(row_values) > 2 else ""
+                                st.session_state.candidate_first_name = row_values[3] if len(row_values) > 3 else ""
+                                st.session_state.candidate_japanese_name = row_values[4] if len(row_values) > 4 else ""
+                                st.session_state.candidate_name = f"{st.session_state.candidate_first_name} {st.session_state.candidate_last_name}".strip()
+                                st.session_state.exam_step = 1
+                                st.rerun()
+                        else:
+                            st.error("❌ Invalid voucher code. Please check and try again.")
+                    except Exception as e:
+                        st.error(f"Database verification error: {e}")
+
 
 # ==========================================
 # Step 1 - 身分核對與考試須知
 # ==========================================
-if st.session_state.authenticated and st.session_state.exam_step == 1:
+elif st.session_state.authenticated and st.session_state.exam_step == 1:
   st.markdown(f"### Welcome, {st.session_state.candidate_first_name} {st.session_state.candidate_last_name}!")
   st.write("---")
 
@@ -564,7 +608,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
 
 
 # ==========================================
-# Step 3 - 核心問答模組 (修正型別錯誤與穩定按鈕版)
+# Step 3 - 核心問答模組
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
@@ -631,8 +675,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
     if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
         pass
 
-  
-    # 2. JavaScript handles auto-hiding the button, global warning banner, visibility/blur/mouseleave detectors
     st.components.v1.html("""
         <script>
             function hideTriggers() {
@@ -675,20 +717,17 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 });
             }
 
-            // 1. 偵測切換分頁或最小化
             parent.document.addEventListener("visibilitychange", function() { 
                 if (parent.document.hidden) triggerGlobalWarning(); 
             });
             
-            // 2. 偵測視窗失去焦點 (點擊其他地方、切換視窗)，並排除點擊 iframe 內部元件（如影片播放按鈕）的情況
             parent.window.addEventListener("blur", function() { 
                 if (parent.document.activeElement && parent.document.activeElement.tagName === 'IFRAME') {
-                    return; // 如果焦點轉移到 iframe 內，直接略過，不計入違規
+                    return;
                 }
                 triggerGlobalWarning(); 
             });
 
-            // 3. 【新加入】偵測滑鼠移出主體網頁邊界 (例如往上移到網址列或分頁)
             parent.document.addEventListener("mouseleave", function(e) {
                 if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
                     triggerGlobalWarning();
@@ -697,8 +736,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         </script>
     """, height=0)
     
-    # 頂端導航與 Review 按鈕區塊
-    top_col1, top_col2, top_col3 = st.columns([1.3, 1.2, 1.3, ])
+    top_col1, top_col2, top_col3 = st.columns([1.3, 1.2, 1.3])
     
     with top_col1:
         st.markdown(f"**👤 {st.session_state.get('candidate_name', 'User')}**")
@@ -744,16 +782,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         """.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
         st.components.v1.html(timer_html, height=55)
 
-        # ✨ 讓 Review 按鈕垂直置中對齊其他兩個方塊
-
-        
         if st.button("📋 Go to Review Page", type="primary", use_container_width=True, key="top_review_btn"):
             st.session_state.exam_step = 4
             st.rerun()
     
-    
     with top_col3:
-        # 修正：改用正確的 st.components.v1.html 渲染視訊框，避免 TypeError
         st.components.v1.html("""
             <div style="border: 2px solid #22c55e; border-radius: 6px; background-color: #f0fdf4; text-align: center; padding: 2px;">
                 <div style="color: #15803d; font-weight: bold; font-size: 9px;">🟢 PROCTOR</div>
@@ -766,7 +799,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             </script>
         """, height=150)
 
-    
     st.divider()
 
     def get_val(data_dict, *possible_keys):
@@ -823,16 +855,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         else:
             st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
 
-     # 統一的媒體渲染區塊 (使用元件確保防下載與播放按鈕皆正常運作)
         if media_url and media_url.lower() != "nan" and media_url != "":
             st.markdown(f"**📎 Question Media:**")
             
             try:
-                # 1. 檢查是否為 YouTube 影片
                 if "youtube.com" in media_url.lower() or "youtu.be" in media_url.lower():
                     st.video(media_url)
-                    
-                # 2. 一般影片格式 (.mp4, .webm, .ogg, .mov) -> 透過 iframe 元件完整防護 + 自訂按鈕
                 elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
                     import streamlit.components.v1 as components
                     
@@ -852,15 +880,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     </head>
                     <body>
                       <div class="video-container">
-                        <!-- 影片本體 -->
                         <video id="securedVideo" autoplay loop playsinline oncontextmenu="return false;">
                           <source src="{media_url}" type="video/mp4">
                           Your browser does not support the video tag.
                         </video>
-                        <!-- 透明防護層 -->
                         <div class="overlay" oncontextmenu="return false;"></div>
                       </div>
-                      <!-- 加入 type="button" 避免觸發預設表單行為或警告 -->
                       <div class="btn-container">
                         <button type="button" onclick="var v=document.getElementById('securedVideo'); if(v.paused){{v.play();}}else{{v.pause();}}">Play / Pause</button>
                       </div>
@@ -868,8 +893,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     </html>
                     '''
                     components.html(video_component_html, height=480)
-                    
-                # 3. 圖片格式 (.png, .jpg, .jpeg) -> 套用防右鍵與防拖曳保護
                 else:
                     img_html = f'''
                         <div style="position: relative; display: inline-block; width: 100%;">
@@ -923,10 +946,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 "H": current_q_data.get("OptionH", "")
             }
             
-            # 取得目前的答案狀態
             existing_ans = st.session_state.get(f"q_{q_idx}", "")
-            
-            # 渲染原生排序互動元件
             render_drag_and_drop_order(f"q_{q_idx}", options_dict, existing_ans)
                     
         st.markdown("---")
@@ -959,8 +979,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     st.session_state.exam_step = 4
                     st.rerun()
         st.markdown("---")
+
+
 # ==========================================
-# Step 4 - 考試總結與詳細清單確認頁面 (Upgraded Review Page)
+# Step 4 - 考試總結與詳細清單確認頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Question Checklist</h2>", unsafe_allow_html=True)
@@ -982,7 +1004,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.markdown("---")
     st.markdown("### Detailed Question Status List")
 
-    # Render an itemized review list with jump buttons for every question
     user_answers = st.session_state.get("answers", {})
     flagged_set = st.session_state.get("flagged_questions", set())
     exam_questions = st.session_state.get("exam_questions", [])
@@ -1033,7 +1054,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                         q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
                         correct_val = str(q_data.get("CorrectAnswer", "")).strip()
                         
-                        # Type 1 & 2: MC / MC_Media (Checks Letter or Option Text match)
                         if q_type in ["MC", "MC_MEDIA"]:
                             correct_letter = correct_val.upper()
                             correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
@@ -1041,12 +1061,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
                                 correct_count += 1
                         
-                        # Type 3: True / False
                         elif q_type == "TF":
                             if str(user_ans).strip().upper() == correct_val.upper():
                                 correct_count += 1
                                 
-                        # Type 4: Ordering (Evaluates sequence like "D,B,C,A")
                         elif q_type == "ORDER":
                             correct_sequence = [l.strip().upper() for l in correct_val.split(",") if l.strip()]
                             user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
@@ -1054,7 +1072,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             if user_sequence == correct_sequence and correct_sequence:
                                 correct_count += 1
                                 
-                        # Type 5: Matching (Evaluates mappings like "A:DefB, B:DefA...")
                         elif q_type == "MATCH":
                             expected_mapping = {}
                             for pair in correct_val.split(","):
@@ -1072,7 +1089,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             if is_match_correct and expected_mapping:
                                 correct_count += 1
 
-                    # 結算分數與狀態
                     passing_score_percentage = 70.0
                     score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
                     final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
@@ -1093,6 +1109,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     st.error(f"Submission error: {e}")
   
     st.divider()
+
+
 # ==========================================
 # Step 5 - 考試結果與結算頁面
 # ==========================================
