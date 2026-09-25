@@ -900,7 +900,8 @@ elif q_type == "ORDER":
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
             
-        st.markdown("---")
+            st.markdown("---")
+        
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
         with col_prev:
