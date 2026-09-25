@@ -976,8 +976,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             # 呼叫剛剛建立的拖曳排序介面
             render_drag_and_drop_order(f"q_{index}", options_dict)
                     
-                st.markdown("---")
-                col_prev, col_flag, col_next = st.columns([1, 1, 1])
+        st.markdown("---")
+        col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
         with col_prev:
             if st.session_state.current_q > 1:
