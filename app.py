@@ -796,204 +796,39 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.session_state.answers[q_idx] = selected
 
         elif q_type == "ORDER":
-            st.markdown("##### 🖱️ Interactive Drag-and-Drop Ranker")
-            st.write("Drag and drop the options into the **Drop Box** in your desired order, then click **💾 Save Order**:")
+            st.markdown("##### 🔢 Order Ranking")
+            st.write("Select the options in your desired ranked order (click them in sequence):")
 
             options_dict = {}
             for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
                 opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
                 if opt_val:
-                    options_dict[opt_letter] = opt_val
+                    options_dict[opt_letter] = f"{opt_letter}: {opt_val}"
 
-            import json
-            items_json = json.dumps([{"id": k, "text": f"{k}: {v}"} for k, v in options_dict.items()])
-            
-            current_val = str(st.session_state.answers.get(q_idx, ""))
-            sync_key = f"order_sync_{q_idx}"
+            option_labels = list(options_dict.values())
 
-            col_input, col_save = st.columns([3, 1])
-            with col_input:
-                user_sequence = st.text_input(
-                    "Current Drop Box Sequence", 
-                    value=current_val, 
-                    key=sync_key,
-                    help="Automatically populated from drag-and-drop."
-                )
-            with col_save:
-                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-                if st.button("💾 Save Order", key=f"save_order_{q_idx}", type="primary", use_container_width=True):
-                    st.session_state.answers[q_idx] = user_sequence.strip().upper()
-                    st.success(f"Saved: {user_sequence.strip().upper()}")
-                    st.rerun()
+            # Retrieve existing saved answer (e.g., "D,B,C,A")
+            current_saved = str(st.session_state.answers.get(q_idx, ""))
+            default_selection = []
+            for letter in [x.strip().upper() for x in current_saved.split(",") if x.strip()]:
+                if letter in options_dict:
+                    default_selection.append(options_dict[letter])
 
-            # Fallback auto-save if already present
-            if user_sequence and q_idx not in st.session_state.answers:
-                st.session_state.answers[q_idx] = user_sequence.strip().upper()
+            # Multiselect naturally preserves your exact selection order
+            selected_items = st.multiselect(
+                "Ranked Order (Click items in your preferred order)",
+                options=option_labels,
+                default=default_selection,
+                key=f"order_rank_{q_idx}"
+            )
 
-            dnd_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <style>
-                body {{
-                    font-family: sans-serif;
-                    background-color: #f8fafc;
-                    color: #1e293b;
-                    margin: 0;
-                    padding: 5px;
-                }}
-                .container {{
-                    display: flex;
-                    gap: 15px;
-                    flex-wrap: wrap;
-                }}
-                .pool, .dropbox {{
-                    flex: 1;
-                    min-width: 220px;
-                    background: #ffffff;
-                    border: 2px dashed #cbd5e1;
-                    border-radius: 8px;
-                    padding: 12px;
-                    min-height: 320px;
-                    max-height: 360px;
-                    overflow-y: auto;
-                    box-sizing: border-box;
-                }}
-                .dropbox {{
-                    border: 2px solid #3b82f6;
-                    background-color: #eff6ff;
-                }}
-                h4 {{
-                    margin-top: 0;
-                    font-size: 13px;
-                    color: #475569;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }}
-                .draggable-item {{
-                    background: #ffffff;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 6px;
-                    padding: 10px 12px;
-                    margin-bottom: 8px;
-                    cursor: grab;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                    font-size: 13px;
-                    user-select: none;
-                }}
-                .draggable-item:active {{
-                    cursor: grabbing;
-                }}
-                .placeholder {{
-                    color: #94a3b8;
-                    font-style: italic;
-                    text-align: center;
-                    margin-top: 100px;
-                    font-size: 13px;
-                }}
-            </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="pool" id="sourcePool" ondragover="allowDrop(event)" ondrop="dropToPool(event)">
-                        <h4>📦 Available Options</h4>
-                        <div id="sourceList"></div>
-                    </div>
-                    <div class="dropbox" id="dropBox" ondragover="allowDrop(event)" ondrop="dropToBox(event)">
-                        <h4>📥 Drop Box (Ranked Order)</h4>
-                        <div id="dropList">
-                            <div class="placeholder" id="placeholder">Drag items here in order</div>
-                        </div>
-                    </div>
-                </div>
-
-                <script>
-                    const allItems = {items_json};
-                    let initialSeq = "{current_val}".split(',').map(s => s.trim()).filter(s => s);
-
-                    const sourceList = document.getElementById('sourceList');
-                    const dropList = document.getElementById('dropList');
-                    const placeholder = document.getElementById('placeholder');
-
-                    let placedIds = new Set(initialSeq);
-                    let poolItems = allItems.filter(item => !placedIds.has(item.id));
-                    let boxItems = initialSeq.map(id => allItems.find(i => i.id === id)).filter(i => i);
-
-                    function render() {{
-                        sourceList.innerHTML = '';
-                        poolItems.forEach(item => {{ sourceList.appendChild(createEl(item)); }});
-
-                        dropList.innerHTML = '';
-                        if (boxItems.length === 0) {{
-                            dropList.appendChild(placeholder);
-                        }} else {{
-                            boxItems.forEach(item => {{ dropList.appendChild(createEl(item)); }});
-                        }}
-                        syncToStreamlit();
-                    }}
-
-                    function createEl(item) {{
-                        const div = document.createElement('div');
-                        div.className = 'draggable-item';
-                        div.draggable = true;
-                        div.innerText = item.text;
-                        div.dataset.id = item.id;
-
-                        div.addEventListener('dragstart', (e) => {{
-                            e.dataTransfer.setData('text/plain', item.id);
-                        }});
-                        return div;
-                    }}
-
-                    function allowDrop(e) {{ e.preventDefault(); }}
-
-                    function dropToBox(e) {{
-                        e.preventDefault();
-                        const id = e.dataTransfer.getData('text/plain');
-                        if (!id) return;
-
-                        poolItems = poolItems.filter(i => i.id !== id);
-                        boxItems = boxItems.filter(i => i.id !== id);
-                        const itemObj = allItems.find(i => i.id === id);
-                        if (itemObj) boxItems.push(itemObj);
-                        render();
-                    }}
-
-                    function dropToPool(e) {{
-                        e.preventDefault();
-                        const id = e.dataTransfer.getData('text/plain');
-                        if (!id) return;
-
-                        boxItems = boxItems.filter(i => i.id !== id);
-                        if (!poolItems.some(i => i.id === id)) {{
-                            const itemObj = allItems.find(i => i.id === id);
-                            if (itemObj) poolItems.push(itemObj);
-                        }}
-                        render();
-                    }}
-
-                    function syncToStreamlit() {{
-                        const seq = boxItems.map(i => i.id).join(',');
-                        try {{
-                            const iframe = window.frameElement;
-                            if (iframe) {{
-                                const container = iframe.closest('[data-testid="stVerticalBlock"]') || iframe.parentElement;
-                                const textInput = container.querySelector('input[type="text"]');
-                                if (textInput && textInput.value !== seq) {{
-                                    textInput.value = seq;
-                                    textInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                    textInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                }}
-                            }}
-                        }} catch (err) {{}}
-                    }}
-
-                    render();
-                </script>
-            </body>
-            </html>
-            """
-            components.html(dnd_html, height=390)
+            # Save immediately to session state as a comma-separated string of letters
+            if selected_items:
+                letters = [item.split(":")[0].strip() for item in selected_items]
+                st.session_state.answers[q_idx] = ",".join(letters)
+            else:
+                if q_idx in st.session_state.answers:
+                    del st.session_state.answers[q_idx]
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
