@@ -902,7 +902,7 @@ elif q_type == "ORDER":
             
             st.markdown("---")
         
-        col_prev, col_flag, col_next = st.columns([1, 1, 1])
+    col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
         with col_prev:
             if st.session_state.current_q > 1:
