@@ -185,17 +185,16 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
     
     # 1. 確保 session_state 中有初始答案
     if question_key not in st.session_state:
-        # 如果已有歷史答案就用歷史的，否則預設全部在左側或按順序
         st.session_state[question_key] = current_answer if current_answer else ""
 
     # 用一個隱藏的文字輸入框或 session_state 來接收前端 JS 傳回的排序字串
-    # 我們這裡用 st.text_input 配合 hidden style 來當作與 JS 溝通的橋樑
     hidden_input_key = f"{question_key}_hidden_bridge"
     if hidden_input_key not in st.session_state:
         st.session_state[hidden_input_key] = st.session_state[question_key]
 
-    # 解析目前的排序名單
-    current_val = st.session_state[hidden_input_key]
+    # 【防呆修正】確保從 session_state 讀出來的一定是字串
+    current_val = str(st.session_state.get(hidden_input_key, ""))
+    
     if current_val:
         target_keys = [x.strip() for x in current_val.split(",") if x.strip() in valid_options]
     else:
@@ -333,12 +332,12 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
     # 渲染拖曳元件並接收前端傳回的最新排序字串
     drag_result = components.html(component_code, height=380)
 
-    # 如果使用者有進行拖曳，就更新暫存橋樑值
-    if drag_result is not None:
+    # 只有當前端確實有回傳字串時才更新 bridge
+    if drag_result is not None and isinstance(drag_result, str):
         st.session_state[hidden_input_key] = drag_result
 
     # 顯示目前抓取到的排列預覽
-    current_arrangement = st.session_state[hidden_input_key]
+    current_arrangement = str(st.session_state.get(hidden_input_key, ""))
     st.markdown(f"**目前拖曳排序結果預覽：** `{current_arrangement if current_arrangement else '尚無（請將選項拖至右側）'}`")
 
     # 增加您要求的「Save Answer」按鈕
