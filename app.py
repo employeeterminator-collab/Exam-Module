@@ -98,13 +98,17 @@ def get_exam_questions():
                 continue
             normalized_records.append({
                 "Question": q_text,
-                "QuestionType": r.get("QuestionType", "MC"),  # 💡 補回題型
+                "QuestionType": r.get("QuestionType", "MC"),
                 "OptionA": r.get("OptionA", ""),
                 "OptionB": r.get("OptionB", ""),
                 "OptionC": r.get("OptionC", ""),
                 "OptionD": r.get("OptionD", ""),
+                "OptionE": r.get("OptionE", ""),  # 💡 新增選項 E
+                "OptionF": r.get("OptionF", ""),  # 💡 新增選項 F
+                "OptionG": r.get("OptionG", ""),  # 💡 新增選項 G
+                "OptionH": r.get("OptionH", ""),  # 💡 新增選項 H
                 "CorrectAnswer": r.get("CorrectAnswer", ""),
-                "MediaURL": r.get("MediaURL", "")             # 💡 補回圖片網址欄位
+                "MediaURL": r.get("MediaURL", "")
             })
             
         if normalized_records:
@@ -170,6 +174,133 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
             sheet.update_cell(cell.row, 14, explanation)   # Explanation
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
+
+ 
+
+def render_drag_and_drop_order(question_key, options_dict):
+    """
+    options_dict: 包含選項代號與內容的字典，例如 {"A": "選項A內容", "B": "選項B內容", ...}
+    """
+    # 過濾掉空白的選項（最多支援到 H）
+    valid_options = {k: v for k, v in options_dict.items() if v and str(v).strip() != ""}
+    
+    # 建立前端 HTML + CSS + JS 介面
+    # 我們將選項隨機打亂或保持預設順序放在左側，右側為放置區
+    options_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {v}</div>' for k, v in valid_options.items()])
+    
+    component_code = f"""
+    <style>
+        .drag-container {{
+            display: flex;
+            gap: 20px;
+            font-family: sans-serif;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }}
+        .column {{
+            flex: 1;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 12px;
+            min-height: 350px;
+            background: #fafafa;
+            box-sizing: border-box;
+        }}
+        .column-title {{
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 15px;
+            color: #333;
+        }}
+        .draggable-item {{
+            background: white;
+            border: 2px solid #222;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            cursor: grab;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            user-select: none;
+        }}
+        .draggable-item:active {{
+            cursor: grabbing;
+        }}
+        .draggable-item.dragging {{
+            opacity: 0.4;
+        }}
+    </style>
+
+    <div style="font-weight: bold; margin-bottom: 5px;">請將左側選項拖曳至右側進行排序：</div>
+    <div class="drag-container">
+        <!-- 左側：可用選項池 -->
+        <div class="column" id="source-col" ondragover="allowDrop(event)" ondrop="dropToSource(event)">
+            <div class="column-title">可用選項</div>
+            {options_html}
+        </div>
+        
+        <!-- 右側：排序答案區 -->
+        <div class="column" id="target-col" ondragover="allowDrop(event)" ondrop="dropToTarget(event)">
+            <div class="column-title">Drag your answer here</div>
+        </div>
+    </div>
+
+    <script>
+        let draggedItem = null;
+
+        const items = document.querySelectorAll('.draggable-item');
+        items.forEach(item => {{
+            item.addEventListener('dragstart', function(e) {{
+                draggedItem = this;
+                setTimeout(() => this.classList.add('dragging'), 0);
+            }});
+            item.addEventListener('dragend', function(e) {{
+                this.classList.remove('dragging');
+                draggedItem = null;
+                updateResult();
+            }});
+        }});
+
+        function allowDrop(e) {{
+            e.preventDefault();
+        }}
+
+        function dropToTarget(e) {{
+            e.preventDefault();
+            const targetCol = document.getElementById('target-col');
+            if (draggedItem) {{
+                targetCol.appendChild(draggedItem);
+            }}
+        }}
+
+        function dropToSource(e) {{
+            e.preventDefault();
+            const sourceCol = document.getElementById('source-col');
+            if (draggedItem) {{
+                sourceCol.appendChild(draggedItem);
+            }}
+        }}
+
+        function updateResult() {{
+            const targetCol = document.getElementById('target-col');
+            const currentItems = targetCol.querySelectorAll('.draggable-item');
+            let keys = [];
+            currentItems.forEach(item => {{
+                keys.push(item.getAttribute('data-key'));
+            }});
+            
+            // 透過 Streamlit 的 window.parent 溝通或隱藏 Input 傳遞數值
+            // 我們可以將結果寫入一個隱藏的 input 並觸發 Streamlit 更新
+            const resultString = keys.join(',');
+            window.parent.postMessage({type: 'streamlit:setComponentValue', value: resultString}, '*');
+        }}
+    </script>
+    """
+    
+    # 利用 streamlit components 呈現
+    # 註：若需雙向綁定回傳值，通常會使用元件庫或將順序存在 session_state 中
+    st.components.v1.html(component_code, height=450)
 
 
 # ==========================================
@@ -830,81 +961,23 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.session_state.answers[q_idx] = selected
 
         elif q_type == "ORDER":
-            st.markdown(f"**{q_text}**")
+            # 組合該題的所有選項字典 (最多支援到 H)
+            options_dict = {
+                "A": q.get("OptionA", ""),
+                "B": q.get("OptionB", ""),
+                "C": q.get("OptionC", ""),
+                "D": q.get("OptionD", ""),
+                "E": q.get("OptionE", ""),
+                "F": q.get("OptionF", ""),
+                "G": q.get("OptionG", ""),
+                "H": q.get("OptionH", "")
+            }
             
-            # 1. 動態抓取所有有內容的選項 (從 A 檢查到 H，支援 8 個步驟或更多)
-            options_dict = {}
-            import string
-            # 這裡檢查 A 到 H (總共 8 個選項)，如果你需要更多可以改成 10 或 12 個
-            for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
-                if opt_val:
-                    options_dict[opt_letter] = opt_val
-            
-            st.info(f"💡 這是一題排序題，共有 {len(options_dict)} 個項目需要排序。已選過的項目會自動隱藏：")
-            
-            # 2. 讀取先前儲存的答案
-            saved_ans = user_answers.get(q_idx, "")
-            saved_order = [x.strip() for x in saved_ans.split(",")] if isinstance(saved_ans, str) and saved_ans else []
-
-            num_options = len(options_dict)
-            selected_letters = [""] * num_options
-            
-            # 3. 針對每一個名次建立下拉選單，自動聯動過濾
-            for i in range(num_options):
-                rank_num = i + 1
-                widget_key = f"order_q_{q_idx}_pos_{rank_num}"
-                
-                # 檢查其他行已經選了什麼字母，將其過濾
-                other_selected = set()
-                for other_i in range(num_options):
-                    if other_i != i:
-                        other_key = f"order_q_{q_idx}_pos_{other_i + 1}"
-                        val = st.session_state.get(other_key, "-- 請選擇 --")
-                        if val and val != "-- 請選擇 --":
-                            letter = val.split(":")[0].strip()
-                            other_selected.add(letter)
-                
-                # 組裝當前選單可用的選項
-                available_options = ["-- 請選擇 --"]
-                for l, text in options_dict.items():
-                    if l not in other_selected:
-                        available_options.append(f"{l}: {text}")
-                
-                # 計算預設 index 保持穩定
-                default_idx = 0
-                current_val = st.session_state.get(widget_key, None)
-                
-                if current_val is None and i < len(saved_order):
-                    target_letter = saved_order[i]
-                    for idx, opt_str in enumerate(available_options):
-                        if opt_str.startswith(f"{target_letter}:"):
-                            default_idx = idx
-                            break
-                elif current_val:
-                    for idx, opt_str in enumerate(available_options):
-                        if opt_str == current_val:
-                            default_idx = idx
-                            break
-                
-                # 渲染動態數量的下拉選單
-                choice = st.selectbox(f"第 {rank_num} 順位 (Rank {rank_num})", available_options, index=default_idx, key=widget_key)
-                
-                if choice and choice != "-- 請選擇 --":
-                    chosen_letter = choice.split(":")[0].strip()
-                    selected_letters[i] = chosen_letter
-                else:
-                    selected_letters[i] = ""
-            
-            # 4. 當所有名次都選好後儲存
-            if all(selected_letters):
-                st.session_state.answers[q_idx] = ",".join(selected_letters)
-            else:
-                if q_idx in st.session_state.answers:
-                    del st.session_state.answers[q_idx]
-            
-        st.markdown("---")
-        col_prev, col_flag, col_next = st.columns([1, 1, 1])
+            # 呼叫剛剛建立的拖曳排序介面
+            render_drag_and_drop_order(f"q_{index}", options_dict)
+                    
+                st.markdown("---")
+                col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
         with col_prev:
             if st.session_state.current_q > 1:
