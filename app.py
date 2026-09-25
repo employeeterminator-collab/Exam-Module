@@ -358,61 +358,53 @@ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
 
 
 # ==========================================
-# 0. 登入畫面 (Voucher 驗證) —— 【Restored Here】
+# 0. 登入畫面 (Voucher + Email 雙重驗證)
 # ==========================================
 if not st.session_state.authenticated:
     st.markdown("<h2 style='text-align: center;'>🛡️ Shisa Kanko-Shi Examination Portal</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Please enter your Examination Voucher Code to log in.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Please enter your Examination Voucher Code and Registered Email to log in.</p>", unsafe_allow_html=True)
     st.write("---")
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         voucher_input = st.text_input("Voucher Code", placeholder="Enter your voucher code here...")
+        email_input = st.text_input("Registered Email Address", placeholder="Enter your registered email here...")
+        
         if st.button("🔑 Login to Exam", use_container_width=True):
-            if not voucher_input.strip():
-                st.error("Please enter a valid voucher code.")
+            if not voucher_input.strip() or not email_input.strip():
+                st.error("Please enter both your Voucher Code and Registered Email Address.")
             else:
-                with st.spinner("Verifying voucher..."):
+                with st.spinner("Verifying credentials..."):
                     try:
                         db = get_sheets_connection()
                         vouchers_sheet = db.worksheet("Vouchers")
-                        cell = vouchers_sheet.find(voucher_input.strip())
-                        if cell:
-                            row_values = vouchers_sheet.row_values(cell.row)
-                            records = vouchers_sheet.get_all_records()
-                            matched_record = None
-                            for r in records:
-                                v_val = str(r.get("Voucher", r.get("VoucherCode", r.get("Code", "")))).strip()
-                                if v_val.lower() == voucher_input.strip().lower():
-                                    matched_record = r
-                                    break
+                        records = vouchers_sheet.get_all_records()
+                        
+                        matched_record = None
+                        for r in records:
+                            v_val = str(r.get("Voucher", r.get("VoucherCode", r.get("Code", "")))).strip()
+                            e_val = str(r.get("Email", r.get("CandidateEmail", ""))).strip()
                             
-                            if matched_record:
-                                completed_exam = matched_record.get("CompletedExam", matched_record.get("Completed", ""))
-                                if completed_exam and str(completed_exam).strip() != "":
-                                    st.error("❌ This voucher has already been used to complete an exam.")
-                                else:
-                                    st.session_state.authenticated = True
-                                    st.session_state.voucher_code = voucher_input.strip()
-                                    st.session_state.candidate_email = str(matched_record.get("Email", matched_record.get("CandidateEmail", ""))).strip()
-                                    st.session_state.candidate_first_name = str(matched_record.get("FirstName", matched_record.get("First Name", ""))).strip()
-                                    st.session_state.candidate_last_name = str(matched_record.get("LastName", matched_record.get("Last Name", ""))).strip()
-                                    st.session_state.candidate_japanese_name = str(matched_record.get("JapaneseName", matched_record.get("Japanese Name", ""))).strip()
-                                    st.session_state.candidate_name = f"{st.session_state.candidate_first_name} {st.session_state.candidate_last_name}".strip()
-                                    st.session_state.exam_step = 1
-                                    st.rerun()
+                            if v_val.lower() == voucher_input.strip().lower() and e_val.lower() == email_input.strip().lower():
+                                matched_record = r
+                                break
+                        
+                        if matched_record:
+                            completed_exam = matched_record.get("CompletedExam", matched_record.get("Completed", ""))
+                            if completed_exam and str(completed_exam).strip() != "":
+                                st.error("❌ This voucher and email combination has already been used to complete an exam.")
                             else:
                                 st.session_state.authenticated = True
                                 st.session_state.voucher_code = voucher_input.strip()
-                                st.session_state.candidate_email = row_values[1] if len(row_values) > 1 else ""
-                                st.session_state.candidate_last_name = row_values[2] if len(row_values) > 2 else ""
-                                st.session_state.candidate_first_name = row_values[3] if len(row_values) > 3 else ""
-                                st.session_state.candidate_japanese_name = row_values[4] if len(row_values) > 4 else ""
+                                st.session_state.candidate_email = email_input.strip()
+                                st.session_state.candidate_first_name = str(matched_record.get("FirstName", matched_record.get("First Name", ""))).strip()
+                                st.session_state.candidate_last_name = str(matched_record.get("LastName", matched_record.get("Last Name", ""))).strip()
+                                st.session_state.candidate_japanese_name = str(matched_record.get("JapaneseName", matched_record.get("Japanese Name", ""))).strip()
                                 st.session_state.candidate_name = f"{st.session_state.candidate_first_name} {st.session_state.candidate_last_name}".strip()
                                 st.session_state.exam_step = 1
                                 st.rerun()
                         else:
-                            st.error("❌ Invalid voucher code. Please check and try again.")
+                            st.error("❌ Invalid Voucher Code or Email Address combination. Please check your credentials and try again.")
                     except Exception as e:
                         st.error(f"Database verification error: {e}")
 
