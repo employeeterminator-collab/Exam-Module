@@ -963,14 +963,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         elif q_type == "ORDER":
             # 組合該題的所有選項字典 (最多支援到 H)
             options_dict = {
-                "A": q.get("OptionA", ""),
-                "B": q.get("OptionB", ""),
-                "C": q.get("OptionC", ""),
-                "D": q.get("OptionD", ""),
-                "E": q.get("OptionE", ""),
-                "F": q.get("OptionF", ""),
-                "G": q.get("OptionG", ""),
-                "H": q.get("OptionH", "")
+                "A": r.get("OptionA", ""),
+                "B": r.get("OptionB", ""),
+                "C": r.get("OptionC", ""),
+                "D": r.get("OptionD", ""),
+                "E": r.get("OptionE", ""),
+                "F": r.get("OptionF", ""),
+                "G": r.get("OptionG", ""),
+                "H": r.get("OptionH", "")
             }
             
             # 呼叫剛剛建立的拖曳排序介面
