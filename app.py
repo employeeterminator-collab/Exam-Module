@@ -797,7 +797,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
         elif q_type == "ORDER":
             st.markdown("##### 🖱️ Interactive Drag-and-Drop Ranker")
-            st.write("Drag and drop the options into the **Drop Box** in your desired order:")
+            st.write("Drag and drop the options into the **Drop Box** in your desired order, then click **💾 Save Order**:")
 
             options_dict = {}
             for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
@@ -808,21 +808,27 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             import json
             items_json = json.dumps([{"id": k, "text": f"{k}: {v}"} for k, v in options_dict.items()])
             
-            # Retrieve existing saved answer from session state
             current_val = str(st.session_state.answers.get(q_idx, ""))
-
             sync_key = f"order_sync_{q_idx}"
-            
-            # Persistent Streamlit text input acting as the backend storage
-            user_sequence = st.text_input(
-                "Current Drop Box Sequence (Synced)", 
-                value=current_val, 
-                key=sync_key,
-                help="Automatically updated from the drag-and-drop box above."
-            )
-            
-            # Save immediately to answers dict
-            st.session_state.answers[q_idx] = user_sequence
+
+            col_input, col_save = st.columns([3, 1])
+            with col_input:
+                user_sequence = st.text_input(
+                    "Current Drop Box Sequence", 
+                    value=current_val, 
+                    key=sync_key,
+                    help="Automatically populated from drag-and-drop."
+                )
+            with col_save:
+                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("💾 Save Order", key=f"save_order_{q_idx}", type="primary", use_container_width=True):
+                    st.session_state.answers[q_idx] = user_sequence.strip().upper()
+                    st.success(f"Saved: {user_sequence.strip().upper()}")
+                    st.rerun()
+
+            # Fallback auto-save if already present
+            if user_sequence and q_idx not in st.session_state.answers:
+                st.session_state.answers[q_idx] = user_sequence.strip().upper()
 
             dnd_html = f"""
             <!DOCTYPE html>
@@ -843,12 +849,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 }}
                 .pool, .dropbox {{
                     flex: 1;
-                    min-width: 200px;
+                    min-width: 220px;
                     background: #ffffff;
                     border: 2px dashed #cbd5e1;
                     border-radius: 8px;
                     padding: 12px;
-                    min-height: 180px;
+                    min-height: 320px;
+                    max-height: 360px;
+                    overflow-y: auto;
                     box-sizing: border-box;
                 }}
                 .dropbox {{
@@ -880,7 +888,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     color: #94a3b8;
                     font-style: italic;
                     text-align: center;
-                    margin-top: 40px;
+                    margin-top: 100px;
                     font-size: 13px;
                 }}
             </style>
@@ -977,9 +985,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                                     textInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
                                 }}
                             }}
-                        }} catch (err) {{
-                            console.error("Sync error:", err);
-                        }}
+                        }} catch (err) {{}}
                     }}
 
                     render();
@@ -987,7 +993,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             </body>
             </html>
             """
-            components.html(dnd_html, height=270)
+            components.html(dnd_html, height=390)
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
