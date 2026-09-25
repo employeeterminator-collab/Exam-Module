@@ -830,55 +830,73 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
 
-        elif q_type == "MATCH":
+       elif q_type == "MATCH":
             st.markdown("##### 🔗 Matching Exercise")
             st.write("Match each item with its correct definition:")
 
-            # Dynamic column getter that handles Pandas Series / Dicts and case/whitespace issues safely
-            def get_col_val(data, possible_keys):
-                if hasattr(data, "index"):
-                    # Search pandas index case-insensitively
-                    for col in data.index:
-                        col_str = str(col).strip()
-                        for pk in possible_keys:
-                            if col_str.lower() == pk.lower():
-                                val = data[col]
-                                if val is not None and str(val).strip() and str(val).strip().lower() != "nan":
-                                    return str(val).strip()
-                # Fallback for standard dicts
-                for pk in possible_keys:
-                    try:
-                        val = data.get(pk)
-                        if val is not None and str(val).strip() and str(val).strip().lower() != "nan":
-                            return str(val).strip()
-                    except Exception:
-                        continue
-                return ""
-
-            # Gather options A to H dynamically
+            # Gather options A to H with positional & name fallbacks
             options_dict = {}
-            for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                val = get_col_val(current_q_data, [f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter])
+            for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
+                val = ""
+                for col_candidate in [f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter]:
+                    try:
+                        if hasattr(current_q_data, "get") and current_q_data.get(col_candidate) is not None:
+                            v = str(current_q_data.get(col_candidate)).strip()
+                            if v and v.lower() != "nan":
+                                val = v
+                                break
+                    except Exception:
+                        pass
+                if not val:
+                    try:
+                        pos = 2 + i  # OptionA typically starts at Column C (index 2)
+                        if hasattr(current_q_data, "iloc") and len(current_q_data) > pos:
+                            v = str(current_q_data.iloc[pos]).strip()
+                            if v and v.lower() != "nan":
+                                val = v
+                    except Exception:
+                        pass
                 if val:
                     options_dict[opt_letter] = val
 
-            # Gather definitions explicitly AND scan columns dynamically for any 'def' prefix
+            # Gather definitions reading explicitly up to Column P and beyond 
+            # Column M = index 12 (DefA), N = 13 (DefB), O = 14 (DefC), P = 15 (DefD), etc.
             defs_dict = {}
-            for def_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                val = get_col_val(current_q_data, [f"Def{def_letter}", f"Definition{def_letter}", f"def{def_letter}"])
+            def_mapping = {
+                "A": 12,  # Column M
+                "B": 13,  # Column N
+                "C": 14,  # Column O
+                "D": 15,  # Column P
+                "E": 16,  # Column Q
+                "F": 17,  # Column R
+                "G": 18,  # Column S
+                "H": 19   # Column T
+            }
+
+            for def_letter, idx in def_mapping.items():
+                val = ""
+                # 1. Try named lookup first
+                for col_candidate in [f"Def{def_letter}", f"Definition{def_letter}", f"def{def_letter}"]:
+                    try:
+                        if hasattr(current_q_data, "get") and current_q_data.get(col_candidate) is not None:
+                            v = str(current_q_data.get(col_candidate)).strip()
+                            if v and v.lower() != "nan":
+                                val = v
+                                break
+                    except Exception:
+                        pass
+                # 2. Fallback to positional columns M through P+
+                if not val:
+                    try:
+                        if hasattr(current_q_data, "iloc") and len(current_q_data) > idx:
+                            v = str(current_q_data.iloc[idx]).strip()
+                            if v and v.lower() != "nan":
+                                val = v
+                    except Exception:
+                        pass
+                
                 if val:
                     defs_dict[def_letter] = val
-
-            # If still empty, scan all columns in the row for any matching definition header
-            if not defs_dict and hasattr(current_q_data, "index"):
-                for col in current_q_data.index:
-                    col_str = str(col).strip()
-                    if col_str.lower().startswith("def") or "definition" in col_str.lower():
-                        val = current_q_data[col]
-                        if val is not None and str(val).strip() and str(val).strip().lower() != "nan":
-                            letter = col_str[-1].upper()
-                            if letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                                defs_dict[letter] = str(val).strip()
 
             # Parse existing saved answers (e.g., "A:DefB,B:DefA")
             current_saved = str(st.session_state.answers.get(q_idx, ""))
@@ -893,7 +911,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if not options_dict:
                 st.warning("⚠️ No options found for this question.")
             if not defs_dict:
-                st.warning("⚠️ No definitions found. Please check that your Google Sheet has columns named DefA, DefB, DefC, etc.")
+                st.warning("⚠️ No definitions found. Please verify columns M through P in your Google Sheet.")
 
             # Render a clear selectbox for each option item
             for opt_letter, opt_text in options_dict.items():
@@ -902,9 +920,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 default_idx = 0
                 saved_def = saved_pairs.get(opt_letter, "")
                 if saved_def:
-                    for idx, (d_letter, d_text) in enumerate(defs_dict.items()):
+                    for idx_pos, (d_letter, d_text) in enumerate(defs_dict.items()):
                         if saved_def.upper() in [f"DEF{d_letter}", d_letter.upper()]:
-                            default_idx = idx + 1
+                            default_idx = idx_pos + 1
                             break
 
                 choice = st.selectbox(
@@ -930,7 +948,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
-
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
