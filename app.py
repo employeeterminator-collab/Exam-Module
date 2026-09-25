@@ -915,7 +915,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if val:
                     options_dict[opt_letter] = val
 
-            # 2. Gather definitions DefA to DefH
+            # 2. Gather definitions A to H
             defs_dict = {}
             for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 val = get_val(current_q_data, f"Def{def_letter}", f"Definition{def_letter}")
@@ -931,21 +931,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if not defs_dict:
                 st.warning("⚠️ No definitions found. Please check columns M through P.")
 
-            # Parse saved answer string (e.g., "A:DefB,B:DefA")
+            # Parse saved answer string (handles both "A:B,B:A" and old "A:DefB,B:DefA")
             current_saved = str(st.session_state.answers.get(q_idx, ""))
             saved_pairs = {}
             for pair in current_saved.split(","):
                 if ":" in pair:
                     parts = pair.split(":")
-                    saved_pairs[parts[0].strip().upper()] = parts[1].strip().upper()
+                    saved_pairs[parts[0].strip().upper()] = parts[1].strip().replace("DEF", "").upper()
 
             matching_results = {}
-            def_choices = ["-- Select Definition --"] + [f"Def{d_letter}" for d_letter in defs_dict.keys()]
+            # Clean drop-down choices using just letters (e.g., ["-- Select Definition --", "A", "B", "C", "D"])
+            def_choices = ["-- Select Definition --"] + list(defs_dict.keys())
 
             # 3. Create Side-by-Side Split Panel Layout
             col_left, col_right = st.columns([1, 1], gap="medium")
 
-            # Left Column: Questions & Short Dropdowns
+            # Left Column: Items & Clean Single-Letter Dropdowns
             with col_left:
                 st.markdown("#### ✏️ Items")
                 for opt_letter, opt_text in options_dict.items():
@@ -953,7 +954,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     saved_def = saved_pairs.get(opt_letter, "")
                     if saved_def:
                         for idx_pos, d_letter in enumerate(defs_dict.keys()):
-                            if saved_def.upper() in [f"DEF{d_letter.upper()}", d_letter.upper()]:
+                            if saved_def.upper() == d_letter.upper():
                                 default_idx = idx_pos + 1
                                 break
 
@@ -967,13 +968,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     if choice and choice != "-- Select Definition --":
                         matching_results[opt_letter] = choice.strip()
 
-            # Right Column: Full Definitions Reference Pool
+            # Right Column: Clean Definitions Pool (without "Def" prefix)
             with col_right:
                 st.markdown("#### 📖 Definitions Pool")
                 for d_letter, d_text in defs_dict.items():
-                    st.info(f"**Def{d_letter}:** {d_text}")
+                    st.info(f"**{d_letter}:** {d_text}")
 
-            # 4. Save clean formatted result string (e.g. "A:DefB,B:DefA")
+            # 4. Save clean formatted result string (e.g., "A:B,B:A")
             if matching_results:
                 sorted_keys = sorted(matching_results.keys())
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
