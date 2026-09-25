@@ -175,52 +175,90 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
  
+ 
 
+def render_drag_and_drop_order(question_key, options_dict, existing_ans=""):
+    """
+    Renders the complete ORDER question interface with drag-and-drop,
+    live preview, and a dedicated save button.
+    """
+    # Initialize session state value if not already present
+    if question_key not in st.session_state:
+        st.session_state[question_key] = existing_ans
 
-def render_drag_and_drop_order(question_key, options_dict):
-    """
-    Renders a drag-and-drop ordering component where dragging items 
-    instantly updates the preview and saving commits the order.
-    """
-    # Convert options dict/list into HTML/JS draggable interface
-    # Using a hidden input or component value bridge to sync state back to Python
-    
-    # Example structure for the custom HTML/JS component bridge:
+    # Format options for the HTML component
+    # options_dict can be a dictionary or list of options (e.g., {"A": "Japan", "B": "Canada", ...})
+    if isinstance(options_dict, dict):
+        items_html = "".join([
+            f'<div class="draggable-item" draggable="true" data-value="{k}" ondragstart="drag(event)" '
+            f'style="background: white; border: 1px solid #ccc; padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; cursor: grab; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">'
+            f'<b>{k}.</b> {v}</div>' 
+            for k, v in options_dict.items()
+        ])
+    else:
+        # Fallback if it's a list
+        items_html = "".join([
+            f'<div class="draggable-item" draggable="true" data-value="{item}" ondragstart="drag(event)" '
+            f'style="background: white; border: 1px solid #ccc; padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; cursor: grab;">'
+            f'{item}</div>' 
+            for item in options_dict
+        ])
+
+    # HTML/JS Drag-and-Drop Component
     component_code = f"""
-    <div id="drag-drop-container" style="display: flex; gap: 20px; font-family: sans-serif;">
-        <!-- Left Box: Options -->
-        <div id="source-box" style="border: 2px dashed #ccc; padding: 10px; width: 45%; min-height: 150px; border-radius: 8px;">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #555; text-align: center;">Options</div>
-            <!-- Items rendered here -->
+    <div style="font-family: sans-serif; display: flex; gap: 20px;">
+        <div id="source-box" ondrop="drop(event)" ondragover="allowDrop(event)" 
+             style="border: 2px dashed #b0b0b0; padding: 12px; width: 45%; min-height: 160px; border-radius: 8px; background: #fafafa;">
+            <div style="font-weight: bold; margin-bottom: 8px; color: #555; text-align: center; font-size: 14px;">Options</div>
+            {items_html}
         </div>
         
-        <!-- Right Box: Target / Order -->
-        <div id="target-box" style="border: 2px dashed #ccc; padding: 10px; width: 45%; min-height: 150px; border-radius: 8px;" ondragover="allowDrop(event)" ondrop="drop(event)">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #555; text-align: center;">Drag your answer here</div>
+        <div id="target-box" ondrop="drop(event)" ondragover="allowDrop(event)" 
+             style="border: 2px dashed #b0b0b0; padding: 12px; width: 45%; min-height: 160px; border-radius: 8px; background: #fafafa;">
+            <div style="font-weight: bold; margin-bottom: 8px; color: #555; text-align: center; font-size: 14px;">Drag your answer here</div>
         </div>
     </div>
     
     <input type="hidden" id="{question_key}_bridge" value="" />
 
     <script>
-        // JavaScript logic to handle drag and drop and update the hidden bridge value
+        function allowDrop(ev) {{
+            ev.preventDefault();
+        }}
+        function drag(ev) {{
+            ev.dataTransfer.setData("text", ev.target.outerHTML);
+            ev.dataTransfer.setData("id", ev.target.id || Math.random());
+            window.draggedEl = ev.target;
+        }}
+        function drop(ev) {{
+            ev.preventDefault();
+            let dropTarget = ev.target.closest('#target-box') || ev.target.closest('#source-box') || ev.target;
+            if (window.draggedEl && dropTarget) {{
+                dropTarget.appendChild(window.draggedEl);
+                updateBridge();
+            }}
+        }}
         function updateBridge() {{
             const targetBox = document.getElementById('target-box');
             const items = targetBox.querySelectorAll('.draggable-item');
             const values = Array.from(items).map(item => item.getAttribute('data-value'));
             const bridge = document.getElementById('{question_key}_bridge');
             bridge.value = values.join(',');
-            // Trigger change event so Streamlit / component catches it
             bridge.dispatchEvent(new Event('input'));
         }}
     </script>
     """
-    
-    # Render component and retrieve current arrangement from session state or bridge
-    current_arrangement = st.session_state.get(question_key, "")
+
+    # Render the interactive component
+    # (Note: component value can be captured or you can rely on the session state saving below)
+    components.html(component_code, height=220)
+
+    # Get current arrangement from session state for preview
+    current_arrangement = st.session_state.get(question_key, existing_ans)
 
     # Live Preview Display
-    st.markdown(f"**目前拖曳排序結果預覽：** `{current_arrangement if current_arrangement else '尚無 (請將選項拖至右側)'}`")
+    display_text = current_arrangement if current_arrangement else "尚無 (請將選項拖至右側)"
+    st.markdown(f"**目前拖曳排序結果預覽：** `{display_text}`")
 
     # Save Answer Button
     col1, col2 = st.columns([1, 4])
@@ -232,126 +270,6 @@ def render_drag_and_drop_order(question_key, options_dict):
                 st.rerun()
             else:
                 st.warning("請先將選項拖曳到右側的排序區再儲存。")
-
-
-
-# ==========================================
-# Step 0 - 考生身分驗證與精準 Col 13 / Col 10 邏輯檢查
-# ==========================================
-if not st.session_state.authenticated:
-  st.markdown(
-      "<h1 style='text-align: center;'>Shisa Kanko-Shi Examination Portal</h1>",
-      unsafe_allow_html=True,
-  )
-  st.markdown(
-      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling Specialist)</h3>",
-      unsafe_allow_html=True,
-  )
-  st.write("---")
-
-  st.markdown("### Candidate Authentication")
-  st.write("Please enter your registered Email and Voucher Code to enter the examination room.")
-
-  with st.form("auth_form"):
-    email_input = st.text_input("Registered Email Address", placeholder="e.g., candidate@example.com")
-    voucher_input = st.text_input("Voucher Code", type="password", placeholder="Enter your voucher code")
-
-    submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
-
-    if submitted:
-      if not email_input or not voucher_input or not email_input.strip() or not voucher_input.strip():
-        st.error("Please enter both your Email and Voucher Code.")
-      else:
-        try:
-          db = get_sheets_connection()
-          vouchers_sheet = db.worksheet("Vouchers")
-          records = vouchers_sheet.get_all_records()
-
-          matched_record = None
-          row_index = None
-
-          for idx, record in enumerate(records, start=2):
-            r_voucher = str(record.get("VoucherCode", "")).strip()
-            r_email = str(record.get("AssignedEmail", "")).strip()
-            r_status = str(record.get("Status", "")).strip()
-
-            if (
-                r_voucher == voucher_input.strip()
-                and r_email != ""
-                and r_email.lower() == email_input.strip().lower()
-                and r_status.lower() == "used"
-            ):
-              matched_record = record
-              row_index = idx
-              break
-
-          if matched_record:
-            exam_status_val = str(matched_record.get("ExamEndTime", "")).strip() # Column 13 (ExamStatus / EndTime)
-            committed_time = str(matched_record.get("Committed", "")).strip()     # Column 10 (Committed)
-
-            # 1. 優先檢查 Column 13 是否已有值 (Pass, Fail, DNF 等)
-            if exam_status_val != "":
-              st.error(f"❌ **Access Denied:** This voucher has already been finalized with status: **{exam_status_val}**. Re-entry is strictly prohibited.")
-            
-            # 2. 如果 Column 13 係空，檢查 Column 10 (Committed) 是否有開始過時間
-            elif committed_time != "":
-              try:
-                committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
-                elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
-                EXAM_TIME_LIMIT = 5400  # 90 minutes
-
-                # 如果超過 90 分鐘，填入 DNF 到 Column 13 並拒絕登入
-                if elapsed_seconds > EXAM_TIME_LIMIT:
-                    vouchers_sheet.update_cell(row_index, 13, "DNF")
-                    st.error("❌ **Access Denied:** Exam session expired. Status updated to Did Not Finish (DNF).")
-                else:
-                    # 未超時，允許返回考試繼續作答
-                    f_name = str(matched_record.get("EnglishFirstName", "")).strip()
-                    l_name = str(matched_record.get("EnglishLastName", "")).strip()
-                    j_name = str(matched_record.get("JapaneseName", "")).strip()
-
-                    # ✨ 新增：計算從開始到現在已經過左幾多秒，得出剩餘秒數
-                    elapsed_seconds_since_commit = int(elapsed_seconds)
-                    remaining_allowed_seconds = max(0, EXAM_TIME_LIMIT - elapsed_seconds_since_commit)
-
-                    st.session_state.authenticated = True
-                    st.session_state.candidate_email = email_input.strip()
-                    st.session_state.voucher_code = voucher_input.strip()
-                    st.session_state.candidate_first_name = f_name
-                    st.session_state.candidate_last_name = l_name
-                    st.session_state.candidate_japanese_name = j_name
-                    st.session_state.candidate_name = f"{f_name} {l_name}".strip()
-
-                    # ✨ 新增：把準確嘅剩餘時間同計時基準注入 session_state
-                    st.session_state.exam_remaining_seconds = remaining_allowed_seconds
-                    st.session_state.exam_timer_start_local = time.time()
-
-                    st.session_state.exam_step = 3
-                    st.success("🔄 Resuming your active examination session...")
-                    time.sleep(1)
-                    st.rerun()
-              except Exception as e:
-                st.error(f"Time calculation error: {e}")
-            else:
-              # Column 13 同 Column 10 都係空，代表全新未開始的考試
-              f_name = str(matched_record.get("EnglishFirstName", "")).strip()
-              l_name = str(matched_record.get("EnglishLastName", "")).strip()
-              j_name = str(matched_record.get("JapaneseName", "")).strip()
-
-              st.session_state.authenticated = True
-              st.session_state.candidate_email = email_input.strip()
-              st.session_state.voucher_code = voucher_input.strip()
-              st.session_state.candidate_first_name = f_name
-              st.session_state.candidate_last_name = l_name
-              st.session_state.candidate_japanese_name = j_name
-              st.session_state.candidate_name = f"{f_name} {l_name}".strip()
-
-              st.session_state.exam_step = 1
-              st.rerun()
-          else:
-            st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
-        except Exception as e:
-          st.error(f"Connection error: {e}")
                 
 
 # ==========================================
