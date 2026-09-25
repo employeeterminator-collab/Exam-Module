@@ -261,10 +261,16 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
 
         # Email Setup
         smtp_config = st.secrets["smtp"]
+        server_host = str(smtp_config["server"]).strip()
+        port = int(smtp_config["port"])
+        login_user = str(smtp_config.get("login", smtp_config["sender_email"])).strip()
+        sender_password = str(smtp_config["sender_password"]).strip()
+        sender_email = str(smtp_config["sender_email"]).strip()
+
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"[{status_text}] Your Exam Results - {exam_title}"
-        msg["From"] = smtp_config["sender_email"]
-        msg["To"] = user_email
+        msg["From"] = sender_email
+        msg["To"] = str(user_email).strip()
 
         # HTML Body
         html_content = f"""
@@ -298,15 +304,24 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
 
         msg.attach(MIMEText(html_content, "html"))
 
-        # Send via SMTP
-        with smtplib.SMTP(smtp_config["server"], smtp_config["port"]) as server:
-            server.starttls()
-            server.login(smtp_config["sender_email"], smtp_config["sender_password"])
-            server.send_message(msg)
+        # Port 587 (STARTTLS) execution for Brevo
+        if port == 465:
+            with smtplib.SMTP_SSL(server_host, port, timeout=10) as server:
+                server.login(login_user, sender_password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(server_host, port, timeout=10) as server:
+                server.starttls()
+                server.login(login_user, sender_password)
+                server.send_message(msg)
 
+        st.session_state.email_sent_success = True
         return True
+
     except Exception as e:
-        st.error(f"Failed to send email notification: {e}")
+        error_msg = f"Email delivery failed: {e}"
+        print(f"SMTP Error: {error_msg}")
+        st.session_state.email_error = str(e)
         return False
 
 # ==========================================
