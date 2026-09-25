@@ -175,7 +175,67 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
- 
+ def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
+    """
+    100% 穩定的排序互動介面：左側對照選項，右側透過上下按鈕調整順序，完美支援儲存與計分。
+    """
+    valid_options = {k: v for k, v in options_dict.items() if v and str(v).strip() != ""}
+    
+    # 1. 確保 session_state 中有初始答案
+    if question_key not in st.session_state:
+        st.session_state[question_key] = current_answer if current_answer else ""
+
+    # 2. 建立暫存狀態來在畫面上即時調整順序
+    temp_state_key = f"{question_key}_temp_order"
+    if temp_state_key not in st.session_state:
+        if st.session_state[question_key]:
+            st.session_state[temp_state_key] = [x.strip() for x in st.session_state[question_key].split(",") if x.strip() in valid_options]
+        else:
+            st.session_state[temp_state_key] = list(valid_options.keys())
+
+    current_order = st.session_state[temp_state_key]
+
+    st.markdown("<b>請在右側調整選項的正確順序：</b>", unsafe_allow_html=True)
+    
+    col_left, col_right = st.columns([1, 1])
+    
+    with col_left:
+        st.markdown("##### 🔍 原始選項參考 (Options)")
+        for k, v in valid_options.items():
+            st.markdown(f"- **{k}.** {v}")
+            
+    with col_right:
+        st.markdown("##### 📝 排序答案區")
+        
+        for idx, key in enumerate(current_order):
+            c1, c2, c3 = st.columns([3, 1, 1])
+            with c1:
+                st.markdown(f"**{idx+1}. [{key}]** {valid_options.get(key, '')}")
+            with c2:
+                if idx > 0:
+                    if st.button("⬆️", key=f"{question_key}_up_{key}_{idx}"):
+                        current_order[idx], current_order[idx-1] = current_order[idx-1], current_order[idx]
+                        st.rerun()
+                else:
+                    st.markdown("")
+            with c3:
+                if idx < len(current_order) - 1:
+                    if st.button("⬇️", key=f"{question_key}_down_{key}_{idx}"):
+                        current_order[idx], current_order[idx+1] = current_order[idx+1], current_order[idx]
+                        st.rerun()
+                else:
+                    st.markdown("")
+        
+        result_string = ",".join(current_order)
+        st.markdown(f"**目前排序結果預覽：** `{result_string}`")
+        
+        if st.button("💾 Save Answer", key=f"{question_key}_save_btn"):
+            if result_string:
+                st.session_state[question_key] = result_string
+                st.success("答案已成功儲存並計入成績！")
+                st.rerun()
+            else:
+                st.warning("請先排列選項再儲存。")
 
 
 
