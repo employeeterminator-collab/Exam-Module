@@ -177,59 +177,165 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
 
  
 
-def render_order_question(question_key, options_dict, current_answer=None):
+def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
     """
-    使用原生 Streamlit 介面處理 [ORDER] 排序題，確保能即時寫入 session_state 並正確計分。
-    options_dict: {"A": "內容A", "B": "內容B", ...}
+    保留原本美觀的拖曳方塊介面，並透過隱藏欄位與 Streamlit session_state 雙向同步。
     """
     valid_options = {k: v for k, v in options_dict.items() if v and str(v).strip() != ""}
-    n_items = len(valid_options)
     
-    st.markdown("<b>請為以下選項指定正確的先後順序：</b>", unsafe_allow_html=True)
-    
-    # 預設或現有的答案解析 (假設 current_answer 可能是逗號分隔的字串如 "B,A,C,D" 或 list)
+    # 1. 處理目前的答案順序（如果是已儲存的，依照儲存的順序排列，否則按預設）
     if isinstance(current_answer, str) and current_answer:
-        current_list = [x.strip() for x in current_answer.split(",")]
-    elif isinstance(current_answer, list):
-        current_list = current_answer
+        current_keys = [x.strip() for x in current_answer.split(",") if x.strip() in valid_options]
+        # 補上可能漏掉的新選項
+        for k in valid_options.keys():
+            if k not in current_keys:
+                current_keys.append(k)
     else:
-        # 預設按字母順序
-        current_list = list(valid_options.keys())
+        current_keys = list(valid_options.keys())
 
-    # 建立一個容器讓使用者調整順序或選擇名次
-    # 這裡我們提供直覺的 Selectbox 讓每個選項選擇名次 (1 到 n_items)
-    user_ranking = {}
+    # 2. 建立 Streamlit 隱藏狀態欄位（或文字框），用來接收前端 JS 傳回的排序結果
+    # 我們用 session_state 來儲存這個值
+    if question_key not in st.session_state:
+        st.session_state[question_key] = ",".join(current_keys)
+
+    # 3. 產生左右欄的 HTML 內容
+    # 根據目前的排序狀態，決定哪些在目標區（右側），哪些在可用區（左側）
+    target_keys = current_keys
+    source_keys = [k for k in valid_options.keys() if k not in target_keys] # 正常來說剛開始全在右邊或左邊
     
-    cols = st.columns(2)
-    with cols[0]:
-        st.markdown("**選項內容說明**")
-        for k, v in valid_options.items():
-            st.markdown(f"- **{k}.** {v}")
+    # 為了讓畫面符合您的截圖，我們把所有項目初始放在右側（或依使用者習慣）
+    # 這裡我們用前端 JS 來維持拖曳，並將結果即時回傳給 Streamlit
+    target_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in target_keys])
+    source_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {valid_options[k]}</div>' for k in source_keys])
+
+    component_code = f"""
+    <style>
+        .drag-container {{
+            display: flex;
+            gap: 20px;
+            font-family: sans-serif;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }}
+        .column {{
+            flex: 1;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 12px;
+            min-height: 250px;
+            background: #fafafa;
+            box-sizing: border-box;
+        }}
+        .column-title {{
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 15px;
+            color: #333;
+        }}
+        .draggable-item {{
+            background: white;
+            border: 2px solid #222;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            cursor: grab;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            user-select: none;
+        }}
+        .draggable-item:active {{
+            cursor: grabbing;
+        }}
+        .draggable-item.dragging {{
+            opacity: 0.4;
+        }}
+    </style>
+
+    <div style="font-weight: bold; margin-bottom: 5px;">請將選項拖曳排列至右側正確順序：</div>
+    <div class="drag-container">
+        <!-- 左側：備用區 -->
+        <div class="column" id="source-col" ondragover="allowDrop(event)" ondrop="dropToSource(event)">
+            <div class="column-title">可用選項池</div>
+            {source_html}
+        </div>
+        
+        <!-- 右側：排序答案區 -->
+        <div class="column" id="target-col" ondragover="allowDrop(event)" ondrop="dropToTarget(event)">
+            <div class="column-title">Drag your answer here</div>
+            {target_html}
+        </div>
+    </div>
+
+    <script>
+        let draggedItem = null;
+
+        function attachEvents() {{
+            const items = document.querySelectorAll('.draggable-item');
+            items.forEach(item => {{
+                item.removeEventListener('dragstart', handleDragStart);
+                item.removeEventListener('dragend', handleDragEnd);
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragend', handleDragEnd);
+            }});
+        }}
+
+        function handleDragStart(e) {{
+            draggedItem = this;
+            setTimeout(() => this.classList.add('dragging'), 0);
+        }}
+
+        function handleDragEnd(e) {{
+            this.classList.remove('dragging');
+            draggedItem = null;
+            updateResult();
+        }}
+
+        function allowDrop(e) {{
+            e.preventDefault();
+        }}
+
+        function dropToTarget(e) {{
+            e.preventDefault();
+            const targetCol = document.getElementById('target-col');
+            if (draggedItem) {{
+                targetCol.appendChild(draggedItem);
+                updateResult();
+            }}
+        }}
+
+        function dropToSource(e) {{
+            e.preventDefault();
+            const sourceCol = document.getElementById('source-col');
+            if (draggedItem) {{
+                sourceCol.appendChild(draggedItem);
+                updateResult();
+            }}
+        }}
+
+        function updateResult() {{
+            const targetCol = document.getElementById('target-col');
+            const currentItems = targetCol.querySelectorAll('.draggable-item');
+            let keys = [];
+            currentItems.forEach(item => {{
+                keys.push(item.getAttribute('data-key'));
+            }});
             
-    with cols[1]:
-        st.markdown("**設定您的排序名次**")
-        # 讓使用者為每一個選項分配名次 (1, 2, 3...)
-        temp_ranks = {}
-        for i, k in enumerate(valid_options.keys()):
-            # 預設位置
-            default_idx = current_list.index(k) if k in current_list else i
-            rank = st.selectbox(
-                f"選擇「{k}」的順位", 
-                options=list(range(1, n_items + 1)),
-                index=default_idx,
-                key=f"{question_key}_pos_{k}"
-            )
-            temp_ranks[k] = rank
+            const resultString = keys.join(',');
+            // 透過 Streamlit 的 setComponentValue 回傳數值給 Python
+            window.parent.postMessage({{type: 'streamlit:setComponentValue', value: resultString}}, '*');
+        }}
 
-    # 根據使用者選擇的名次進行排序組合
-    sorted_keys = sorted(temp_ranks.keys(), key=lambda x: temp_ranks[x])
-    result_string = ",".join(sorted_keys)
+        attachEvents();
+    </script>
+    """
     
-    # 即時寫入 session_state 確保計入已作答與評分
-    st.session_state[question_key] = result_string
+    # 4. 使用 streamlit.components.v1.html 接收回傳值
+    # 只要使用者拖曳，component 就會回傳新的字串並更新 session_state
+    component_value = components.html(component_code, height=380, default=st.session_state[question_key])
     
-    # 顯示目前排好的結果預覽
-    st.info(f"目前排序結果: **{result_string}**")
+    if component_value is not None:
+        st.session_state[question_key] = component_value
 
 
 # ==========================================
@@ -905,7 +1011,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             existing_ans = st.session_state.get(f"q_{q_idx}", "")
             
             # 渲染原生排序互動元件
-            render_order_question(f"q_{q_idx}", options_dict, existing_ans)
+            render_drag_and_drop_order(f"q_{q_idx}", options_dict, existing_ans)
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
