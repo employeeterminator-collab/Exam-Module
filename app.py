@@ -94,49 +94,28 @@ def get_exam_questions():
         if not rows or len(rows) < 2:
             return []
             
-        header = [h.strip().lower() for h in rows[0]]
-        
-        def find_col(*possible_names):
-            for name in possible_names:
-                if name.lower() in header:
-                    return header.index(name.lower())
-            return None
-
-        # Standard column mappings with safe defaults
-        q_text_idx = find_col("questiontext", "question", "text", "qtext") or 0
-        q_type_idx = find_col("questiontype", "type", "qtype") or 1
-        correct_idx = find_col("correctanswer", "correct_answer", "answer") or 10
-        media_idx = find_col("mediaurl", "media", "imageurl") or 11
-
         normalized_records = []
         for row in rows[1:]:
-            if not row or not row[q_text_idx].strip():
+            if not row or not row[0].strip():
                 continue
             
             record = {
-                "raw_row": row,  # Preserve exact row data for fallbacks
-                "Question": row[q_text_idx] if len(row) > q_text_idx else "",
-                "QuestionType": row[q_type_idx] if len(row) > q_type_idx else "MC",
-                "CorrectAnswer": row[correct_idx] if len(row) > correct_idx else "",
-                "MediaURL": row[media_idx] if len(row) > media_idx else "",
+                "raw_row": row,  # Exact positional row values
+                "Question": row[0] if len(row) > 0 else "",
+                "QuestionType": row[1] if len(row) > 1 else "MC",
+                "CorrectAnswer": row[10] if len(row) > 10 else "",
+                "MediaURL": row[11] if len(row) > 11 else "",
             }
             
-            # Dynamic + positional fallback for Options A through H
+            # Standard Options A-H (Columns C through J, indices 2 to 9)
             for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                # Try finding header names like "optiona", "opt_a", "choice_a", or fallback to index (2 + i)
-                col_idx = find_col(f"option{opt_letter.lower()}", f"opt_{opt_letter.lower()}", f"choice{opt_letter.lower()}", f"option {opt_letter.lower()}")
-                if col_idx is None:
-                    col_idx = 2 + i  # Standard fallback index
-                
-                record[f"Option{opt_letter}"] = row[col_idx] if len(row) > col_idx else ""
+                col_idx = 2 + i
+                record[f"Option{opt_letter}"] = row[col_idx].strip() if len(row) > col_idx else ""
             
-            # Dynamic + positional fallback for Definitions A through H (Columns M onwards / index 12+)
+            # Definitions A-H (Columns M onwards, starting at index 12)
             for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                col_idx = find_col(f"def{def_letter.lower()}", f"definition{def_letter.lower()}", f"def_{def_letter.lower()}")
-                if col_idx is None:
-                    col_idx = 12 + i  # Column M = 12, N = 13, O = 14, P = 15, etc.
-                
-                record[f"Def{def_letter}"] = row[col_idx] if len(row) > col_idx else ""
+                col_idx = 12 + i  # Column M = 12, N = 13, O = 14, P = 15, etc.
+                record[f"Def{def_letter}"] = row[col_idx].strip() if len(row) > col_idx else ""
 
             normalized_records.append(record)
             
