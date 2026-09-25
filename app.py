@@ -89,27 +89,48 @@ def get_exam_questions():
         
         spreadsheet = client.open("Questions")
         sheet = spreadsheet.worksheet("A")
-        records = sheet.get_all_records()
+        rows = sheet.get_all_values()
         
+        if not rows or len(rows) < 2:
+            return []
+            
+        header = [h.strip().lower() for h in rows[0]]
+        
+        def find_col(*possible_names):
+            for name in possible_names:
+                if name.lower() in header:
+                    return header.index(name.lower())
+            return None
+
+        q_text_idx = find_col("questiontext", "question", "text", "qtext") or 0
+        q_type_idx = find_col("questiontype", "type", "qtype") or 1
+        correct_idx = find_col("correctanswer", "correct_answer", "answer") or 10
+        media_idx = find_col("mediaurl", "media", "imageurl") or 11
+
         normalized_records = []
-        for r in records:
-            q_text = r.get("QuestionText", r.get("Question", ""))
-            if not str(q_text).strip():
+        for row in rows[1:]:
+            if not row or not row[q_text_idx].strip():
                 continue
-            normalized_records.append({
-                "Question": q_text,
-                "QuestionType": r.get("QuestionType", "MC"),
-                "OptionA": r.get("OptionA", ""),
-                "OptionB": r.get("OptionB", ""),
-                "OptionC": r.get("OptionC", ""),
-                "OptionD": r.get("OptionD", ""),
-                "OptionE": r.get("OptionE", ""),
-                "OptionF": r.get("OptionF", ""),
-                "OptionG": r.get("OptionG", ""),
-                "OptionH": r.get("OptionH", ""),
-                "CorrectAnswer": r.get("CorrectAnswer", ""),
-                "MediaURL": r.get("MediaURL", "")
-            })
+            
+            record = {
+                "raw_row": row,  # Exact positional row values from Google Sheets
+                "Question": row[q_text_idx] if len(row) > q_text_idx else "",
+                "QuestionType": row[q_type_idx] if len(row) > q_type_idx else "MC",
+                "CorrectAnswer": row[correct_idx] if len(row) > correct_idx else "",
+                "MediaURL": row[media_idx] if len(row) > media_idx else "",
+            }
+            
+            # Options A-H (Columns C through J, indices 2 to 9)
+            for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
+                col_idx = 2 + i
+                record[f"Option{opt_letter}"] = row[col_idx] if len(row) > col_idx else ""
+            
+            # Definitions A-H (Columns M through T, indices 12 to 19)
+            for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
+                col_idx = 12 + i  # Column M = 12, N = 13, O = 14, P = 15, etc.
+                record[f"Def{def_letter}"] = row[col_idx] if len(row) > col_idx else ""
+
+            normalized_records.append(record)
             
         if normalized_records:
             return normalized_records
@@ -118,6 +139,7 @@ def get_exam_questions():
         st.error(f"Google Sheets Debug Error: {e}")
         
     return []
+
 
 # 記錄第一次開始考試的時間 (Committed)[cite: 8]
 def update_voucher_committed(voucher_code):
@@ -834,66 +856,37 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.markdown("##### 🔗 Matching Exercise")
             st.write("Match each item with its correct definition:")
 
+            raw_row = current_q_data.get("raw_row", [])
+
             # Gather options A to H with positional & name fallbacks
             options_dict = {}
             for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 val = ""
-                for col_candidate in [f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter]:
-                    try:
-                        if hasattr(current_q_data, "get") and current_q_data.get(col_candidate) is not None:
-                            v = str(current_q_data.get(col_candidate)).strip()
-                            if v and v.lower() != "nan":
-                                val = v
-                                break
-                    except Exception:
-                        pass
-                if not val:
-                    try:
-                        pos = 2 + i  # OptionA typically starts at Column C (index 2)
-                        if hasattr(current_q_data, "iloc") and len(current_q_data) > pos:
-                            v = str(current_q_data.iloc[pos]).strip()
-                            if v and v.lower() != "nan":
-                                val = v
-                    except Exception:
-                        pass
+                v = current_q_data.get(f"Option{opt_letter}", "")
+                if v and str(v).lower() != "nan":
+                    val = str(v).strip()
+                elif raw_row and len(raw_row) > (2 + i):
+                    v = raw_row[2 + i]
+                    if v and str(v).lower() != "nan":
+                        val = str(v).strip()
                 if val:
                     options_dict[opt_letter] = val
 
-            # Gather definitions reading explicitly up to Column P and beyond 
-            # Column M = index 12 (DefA), N = 13 (DefB), O = 14 (DefC), P = 15 (DefD), etc.
+            # Gather definitions reading explicitly up to Column P and beyond (Column M = index 12)
             defs_dict = {}
-            def_mapping = {
-                "A": 12,  # Column M
-                "B": 13,  # Column N
-                "C": 14,  # Column O
-                "D": 15,  # Column P
-                "E": 16,  # Column Q
-                "F": 17,  # Column R
-                "G": 18,  # Column S
-                "H": 19   # Column T
-            }
-
-            for def_letter, idx in def_mapping.items():
+            for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 val = ""
+                idx = 12 + i  # Column M = 12 (DefA), N = 13 (DefB), O = 14 (DefC), P = 15 (DefD)
+                
                 # 1. Try named lookup first
-                for col_candidate in [f"Def{def_letter}", f"Definition{def_letter}", f"def{def_letter}"]:
-                    try:
-                        if hasattr(current_q_data, "get") and current_q_data.get(col_candidate) is not None:
-                            v = str(current_q_data.get(col_candidate)).strip()
-                            if v and v.lower() != "nan":
-                                val = v
-                                break
-                    except Exception:
-                        pass
+                v = current_q_data.get(f"Def{def_letter}", "")
+                if v and str(v).lower() != "nan":
+                    val = str(v).strip()
                 # 2. Fallback to positional columns M through P+
-                if not val:
-                    try:
-                        if hasattr(current_q_data, "iloc") and len(current_q_data) > idx:
-                            v = str(current_q_data.iloc[idx]).strip()
-                            if v and v.lower() != "nan":
-                                val = v
-                    except Exception:
-                        pass
+                elif raw_row and len(raw_row) > idx:
+                    v = raw_row[idx]
+                    if v and str(v).lower() != "nan":
+                        val = str(v).strip()
                 
                 if val:
                     defs_dict[def_letter] = val
@@ -948,6 +941,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
+       
+        
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
