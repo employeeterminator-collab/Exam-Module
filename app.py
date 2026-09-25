@@ -177,128 +177,59 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
 
  
 
-def render_drag_and_drop_order(question_key, options_dict):
+def render_order_question(question_key, options_dict, current_answer=None):
     """
-    options_dict: 包含選項代號與內容的字典，例如 {"A": "選項A內容", "B": "選項B內容", ...}
+    使用原生 Streamlit 介面處理 [ORDER] 排序題，確保能即時寫入 session_state 並正確計分。
+    options_dict: {"A": "內容A", "B": "內容B", ...}
     """
-    # 過濾掉空白的選項（最多支援到 H）
     valid_options = {k: v for k, v in options_dict.items() if v and str(v).strip() != ""}
+    n_items = len(valid_options)
     
-    # 建立前端 HTML + CSS + JS 介面
-    # 我們將選項隨機打亂或保持預設順序放在左側，右側為放置區
-    options_html = "".join([f'<div class="draggable-item" draggable="true" data-key="{k}"><b>{k}.</b> {v}</div>' for k, v in valid_options.items()])
+    st.markdown("<b>請為以下選項指定正確的先後順序：</b>", unsafe_allow_html=True)
     
-    component_code = f"""
-    <style>
-        .drag-container {{
-            display: flex;
-            gap: 20px;
-            font-family: sans-serif;
-            margin-top: 10px;
-            margin-bottom: 10px;
-        }}
-        .column {{
-            flex: 1;
-            border: 2px solid #333;
-            border-radius: 8px;
-            padding: 12px;
-            min-height: 350px;
-            background: #fafafa;
-            box-sizing: border-box;
-        }}
-        .column-title {{
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 15px;
-            color: #333;
-        }}
-        .draggable-item {{
-            background: white;
-            border: 2px solid #222;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-            border-radius: 6px;
-            cursor: grab;
-            font-weight: 500;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            user-select: none;
-        }}
-        .draggable-item:active {{
-            cursor: grabbing;
-        }}
-        .draggable-item.dragging {{
-            opacity: 0.4;
-        }}
-    </style>
+    # 預設或現有的答案解析 (假設 current_answer 可能是逗號分隔的字串如 "B,A,C,D" 或 list)
+    if isinstance(current_answer, str) and current_answer:
+        current_list = [x.strip() for x in current_answer.split(",")]
+    elif isinstance(current_answer, list):
+        current_list = current_answer
+    else:
+        # 預設按字母順序
+        current_list = list(valid_options.keys())
 
-    <div style="font-weight: bold; margin-bottom: 5px;">Please drag the options on the left to the right for correct order.：</div>
-    <div class="drag-container">
-        <!-- 左側：可用選項池 -->
-        <div class="column" id="source-col" ondragover="allowDrop(event)" ondrop="dropToSource(event)">
-            <div class="column-title">Options</div>
-            {options_html}
-        </div>
-        
-        <!-- 右側：排序答案區 -->
-        <div class="column" id="target-col" ondragover="allowDrop(event)" ondrop="dropToTarget(event)">
-            <div class="column-title">Drag your answer here</div>
-        </div>
-    </div>
-
-    <script>
-        let draggedItem = null;
-
-        const items = document.querySelectorAll('.draggable-item');
-        items.forEach(item => {{
-            item.addEventListener('dragstart', function(e) {{
-                draggedItem = this;
-                setTimeout(() => this.classList.add('dragging'), 0);
-            }});
-            item.addEventListener('dragend', function(e) {{
-                this.classList.remove('dragging');
-                draggedItem = null;
-                updateResult();
-            }});
-        }});
-
-        function allowDrop(e) {{
-            e.preventDefault();
-        }}
-
-        function dropToTarget(e) {{
-            e.preventDefault();
-            const targetCol = document.getElementById('target-col');
-            if (draggedItem) {{
-                targetCol.appendChild(draggedItem);
-            }}
-        }}
-
-        function dropToSource(e) {{
-            e.preventDefault();
-            const sourceCol = document.getElementById('source-col');
-            if (draggedItem) {{
-                sourceCol.appendChild(draggedItem);
-            }}
-        }}
-
-        function updateResult() {{
-            const targetCol = document.getElementById('target-col');
-            const currentItems = targetCol.querySelectorAll('.draggable-item');
-            let keys = [];
-            currentItems.forEach(item => {{
-                keys.push(item.getAttribute('data-key'));
-            }});
+    # 建立一個容器讓使用者調整順序或選擇名次
+    # 這裡我們提供直覺的 Selectbox 讓每個選項選擇名次 (1 到 n_items)
+    user_ranking = {}
+    
+    cols = st.columns(2)
+    with cols[0]:
+        st.markdown("**選項內容說明**")
+        for k, v in valid_options.items():
+            st.markdown(f"- **{k}.** {v}")
             
-            const resultString = keys.join(',');
-            // 修正處：將原本單層大括號改為雙層大括號 {{ }} 避免 f-string 衝突
-            window.parent.postMessage({{type: 'streamlit:setComponentValue', value: resultString}}, '*');
-        }}
-    </script>
-    """
+    with cols[1]:
+        st.markdown("**設定您的排序名次**")
+        # 讓使用者為每一個選項分配名次 (1, 2, 3...)
+        temp_ranks = {}
+        for i, k in enumerate(valid_options.keys()):
+            # 預設位置
+            default_idx = current_list.index(k) if k in current_list else i
+            rank = st.selectbox(
+                f"選擇「{k}」的順位", 
+                options=list(range(1, n_items + 1)),
+                index=default_idx,
+                key=f"{question_key}_pos_{k}"
+            )
+            temp_ranks[k] = rank
+
+    # 根據使用者選擇的名次進行排序組合
+    sorted_keys = sorted(temp_ranks.keys(), key=lambda x: temp_ranks[x])
+    result_string = ",".join(sorted_keys)
     
-    # 利用 streamlit components 呈現
-    st.components.v1.html(component_code, height=450)
+    # 即時寫入 session_state 確保計入已作答與評分
+    st.session_state[question_key] = result_string
+    
+    # 顯示目前排好的結果預覽
+    st.info(f"目前排序結果: **{result_string}**")
 
 
 # ==========================================
@@ -959,7 +890,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 st.session_state.answers[q_idx] = selected
 
         elif q_type == "ORDER":
-            # 組合該題的所有選項字典 (最多支援到 H)
             options_dict = {
                 "A": current_q_data.get("OptionA", ""),
                 "B": current_q_data.get("OptionB", ""),
@@ -971,8 +901,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 "H": current_q_data.get("OptionH", "")
             }
             
-            # 呼叫剛剛建立的拖曳排序介面
-            render_drag_and_drop_order(f"q_{q_idx}", options_dict)
+            # 取得目前的答案狀態
+            existing_ans = st.session_state.get(f"q_{q_idx}", "")
+            
+            # 渲染原生排序互動元件
+            render_order_question(f"q_{q_idx}", options_dict, existing_ans)
                     
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
