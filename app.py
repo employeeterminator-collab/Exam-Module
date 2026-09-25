@@ -12,6 +12,13 @@ from email.mime.multipart import MIMEMultipart
 
 st.markdown("""
     <style>
+    /* Cleanly hide backend mechanism buttons visually */
+    div[data-testid="stButton"]:has(button[aria-label="TriggerViolationBackend"]),
+    div[data-testid="stButton"]:has(button[aria-label="AutoSubmitBackend"]),
+    button[aria-label="TriggerViolationBackend"],
+    button[aria-label="AutoSubmitBackend"] {
+        display: none !important;
+    }
     /* Expand the popover container width */
     div[data-baseweb="popover"] {
         width: max-content !important;
@@ -650,7 +657,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         score_percentage = (correct_count / TOTAL_QUESTIONS) * 100 if TOTAL_QUESTIONS > 0 else 0
         final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
         
-        # 1. Record submission in Sheets
+        # 1. Record submission in Google Sheets
         finalize_exam_submission(
             st.session_state.voucher_code,
             focus_losses,
@@ -658,7 +665,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             explanation=f"Auto-submitted on timeout. Correct {correct_count}/{TOTAL_QUESTIONS}"
         )
         
-        # 2. Send Pass / Fail Email Notification
+        # 2. Send Email Notification
         user_email = st.session_state.get("candidate_email", "")
         user_name = st.session_state.get("candidate_name", "Candidate")
 
@@ -672,20 +679,15 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 exam_title="Shisa Kanko-Shi Examination"
             )
         
-        # 3. Update session state & navigate to Step 5
+        # 3. Navigate to Results Step
         st.session_state.exam_final_status = final_status
         st.session_state.exam_correct_count = correct_count
         st.session_state.exam_step = 5
         st.rerun()
 
-    # CSS-enforced hidden container to ensure backend buttons never display visually
-    st.markdown('<div style="display: none !important; visibility: hidden !important; height: 0px; width: 0px; overflow: hidden;">', unsafe_allow_html=True)
+    # Backend triggers (hidden completely via the CSS rule above)
     if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
         pass
-    if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
-        pass
-    st.markdown('</div>', unsafe_allow_html=True)
-  
 
     if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger", on_click=handle_auto_submit):
         pass
