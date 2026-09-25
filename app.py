@@ -175,7 +175,7 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
     except Exception as e:
         print(f"Failed to finalize exam submission: {e}")
 
- def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
+def render_drag_and_drop_order(question_key, options_dict, current_answer=None):
     """
     100% 穩定的排序互動介面：左側對照選項，右側透過上下按鈕調整順序，完美支援儲存與計分。
     """
