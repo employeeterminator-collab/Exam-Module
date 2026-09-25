@@ -275,7 +275,7 @@ def render_drag_and_drop_order(question_key, options_dict, existing_ans=""):
 # ==========================================
 # Step 1 - 身分核對與考試須知
 # ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 1:
+if st.session_state.authenticated and st.session_state.exam_step == 1:
   st.markdown(f"### Welcome, {st.session_state.candidate_first_name} {st.session_state.candidate_last_name}!")
   st.write("---")
 
