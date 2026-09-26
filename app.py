@@ -1,14 +1,24 @@
 import base64
 import datetime
+import re
+import smtplib
 import time
-import gspread
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from google.oauth2.service_account import Credentials
+import gspread
 import streamlit as st
 import streamlit.components.v1 as components
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
+# ==========================================
+# 1. 頁面基本設定 (MUST be the absolute first Streamlit command)
+# ==========================================
+st.set_page_config(
+    page_title="Shisa Kanko-Shi Examination Portal",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
 
 st.markdown("""
     <style>
@@ -40,19 +50,17 @@ st.markdown("""
         min-height: fit-content !important;
         line-height: 1.4 !important;
     }
+
+    /* Print styles optimization */
+    @media print {
+        header, footer, [data-testid="stSidebar"], .stButton {
+            display: none !important;
+        }
+    }
     </style>
 """, unsafe_allow_html=True)
 
-
-# 1. 頁面基本設定[cite: 8]
-st.set_page_config(
-    page_title="Shisa Kanko-Shi Examination Portal",
-    page_icon="🛡️",
-    layout="centered",
-    initial_sidebar_state="collapsed",
-)
-
-# 隱藏 Streamlit 預設選單、頁尾與標題的錨點連結符號[cite: 8]
+# 隱藏 Streamlit 預設選單、頁尾與標題的錨點連結符號
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -72,27 +80,29 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# 2. 初始化 Session State[cite: 8]
+# ==========================================
+# 2. 初始化 Session State
+# ==========================================
 if "authenticated" not in st.session_state:
-  st.session_state.authenticated = False
+    st.session_state.authenticated = False
 if "candidate_email" not in st.session_state:
-  st.session_state.candidate_email = ""
+    st.session_state.candidate_email = ""
 if "voucher_code" not in st.session_state:
-  st.session_state.voucher_code = ""
+    st.session_state.voucher_code = ""
 if "candidate_first_name" not in st.session_state:
-  st.session_state.candidate_first_name = ""
+    st.session_state.candidate_first_name = ""
 if "candidate_last_name" not in st.session_state:
-  st.session_state.candidate_last_name = ""
+    st.session_state.candidate_last_name = ""
 if "candidate_japanese_name" not in st.session_state:
-  st.session_state.candidate_japanese_name = ""
+    st.session_state.candidate_japanese_name = ""
 if "candidate_name" not in st.session_state:
-  st.session_state.candidate_name = ""
+    st.session_state.candidate_name = ""
 if "exam_step" not in st.session_state:
-  st.session_state.exam_step = 0
+    st.session_state.exam_step = 0
 if "on_break" not in st.session_state:
-  st.session_state.on_break = False
+    st.session_state.on_break = False
 if "break_start_time" not in st.session_state:
-  st.session_state.break_start_time = None
+    st.session_state.break_start_time = None
 if "flagged_questions" not in st.session_state:
     st.session_state.flagged_questions = set()
 if "focus_loss_count" not in st.session_state:
@@ -101,18 +111,18 @@ if "exam_questions" not in st.session_state:
     st.session_state.exam_questions = []
 
 # ==========================================
-# 3. Google Sheets 連線與資料庫輔助函式[cite: 8]
+# 3. Google Sheets 連線與資料庫輔助函式
 # ==========================================
 def get_sheets_connection():
-  scope = [
-      "https://spreadsheets.google.com/feeds",
-      "https://www.googleapis.com/auth/drive",
-  ]
-  creds_dict = dict(st.secrets["gcp_service_account"])
-  creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-  client = gspread.authorize(creds)
-  sheet = client.open("ShisaKanko_Exam_Database")
-  return sheet
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("ShisaKanko_Exam_Database")
+    return sheet
 
 # 動態載入獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")
 def get_exam_questions():
@@ -142,7 +152,6 @@ def get_exam_questions():
                     return headers_clean.index(clean_name)
             return default_idx
 
-        # Dynamic header index matching with safe defaults
         q_text_idx = find_idx(["questiontext", "question", "text", "qtext"], 0)
         q_type_idx = find_idx(["questiontype", "type", "qtype"], 1)
         correct_idx = find_idx(["correctanswer", "correct_answer", "answer"], 10)
@@ -153,25 +162,21 @@ def get_exam_questions():
             if not row or not any(str(c).strip() for c in row):
                 continue
             
-            # Map every raw header directly to cell values
             record = {"raw_row": row}
             for idx, cell_val in enumerate(row):
                 if idx < len(headers_raw):
                     record[headers_raw[idx].strip()] = cell_val.strip()
                     record[headers_clean[idx]] = cell_val.strip()
 
-            # Assign normalized fields expected by the UI renderers
             record["Question"] = row[q_text_idx].strip() if len(row) > q_text_idx else ""
             record["QuestionType"] = row[q_type_idx].strip() if len(row) > q_type_idx else "MC"
             record["CorrectAnswer"] = row[correct_idx].strip() if len(row) > correct_idx else ""
             record["MediaURL"] = row[media_idx].strip() if len(row) > media_idx else ""
 
-            # Options A through H
             for i, letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 opt_idx = find_idx([f"option{letter.lower()}", f"opt{letter.lower()}"], 2 + i)
                 record[f"Option{letter}"] = row[opt_idx].strip() if len(row) > opt_idx else ""
 
-            # Definitions A through H
             for i, letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 def_idx = find_idx([f"def{letter.lower()}", f"definition{letter.lower()}"], 12 + i)
                 record[f"Def{letter}"] = row[def_idx].strip() if len(row) > def_idx else ""
@@ -185,20 +190,32 @@ def get_exam_questions():
         
     return []
 
-def clean_match_key(val):
-    if not val or "--" in val:
-        return ""
-    # Extract the label before the colon (e.g. "DefB: A piece..." -> "B")
-    prefix = val.split(":")[0].strip()
-    return prefix.replace("Def", "").strip().upper()
+# 統一算分邏輯 (支援 MC, TF, ORDER, MATCH)
+def calculate_exam_score(questions, user_answers):
+    correct_count = 0
+    total_q = len(questions)
+    
+    for idx, q_data in enumerate(questions, start=1):
+        user_ans = user_answers.get(idx)
+        if not user_ans:
+            continue
+            
+        correct_val = str(q_data.get("CorrectAnswer", "")).strip().upper()
+        u_ans_str = str(user_ans).strip().upper()
+        
+        # 1. 直接字串比對
+        if u_ans_str == correct_val:
+            correct_count += 1
+        else:
+            # 2. 針對 ORDER 或 MATCH 做去空格比對
+            clean_u = re.sub(r'\s+', '', u_ans_str)
+            clean_c = re.sub(r'\s+', '', correct_val)
+            if clean_u and clean_u == clean_c:
+                correct_count += 1
 
-def parse_correct_answers(correct_str):
-    import re
-    # Extract letters like A, B, C, D from "B, A, D, C" or "DefB, DefA"
-    return [x.replace("DEF", "").strip().upper() for x in re.findall(r'(?:DEF)?[A-H]', str(correct_str).upper())]
+    return correct_count, total_q
 
-
-# 記錄第一次開始考試的時間 (Committed)[cite: 8]
+# 記錄第一次開始考試的時間 (Committed)
 def update_voucher_committed(voucher_code):
     try:
         db = get_sheets_connection()
@@ -212,8 +229,10 @@ def update_voucher_committed(voucher_code):
     except Exception as e:
         print(f"Failed to update Committed time: {e}")
 
-# 記錄違規事件到 ViolationLogs Tab 同時即時更新 Vouchers 上的警告次數[cite: 8]
+# 記錄違規事件到 ViolationLogs Tab 同時即時更新 Vouchers 上的警告次數
 def log_violation_to_sheet(voucher_code):
+    # 本地狀態優先遞增，確保網絡連線有誤時計數不丟失
+    st.session_state.focus_loss_count = st.session_state.get("focus_loss_count", 0) + 1
     try:
         db = get_sheets_connection()
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -227,17 +246,11 @@ def log_violation_to_sheet(voucher_code):
         vouchers_sheet = db.worksheet("Vouchers")
         cell = vouchers_sheet.find(voucher_code)
         if cell:
-            current_warnings = vouchers_sheet.cell(cell.row, 11).value
-            try:
-                new_count = int(current_warnings) + 1 if current_warnings and str(current_warnings).isdigit() else 1
-            except:
-                new_count = 1
-            vouchers_sheet.update_cell(cell.row, 11, new_count)
-            st.session_state.focus_loss_count = new_count
+            vouchers_sheet.update_cell(cell.row, 11, st.session_state.focus_loss_count)
     except Exception as e:
         print(f"Failed to log violation globally: {e}")
 
-# 完成考試時更新狀態[cite: 8]
+# 完成考試時更新狀態
 def finalize_exam_submission(voucher_code, warning_count, exam_status, explanation=""):
     try:
         db = get_sheets_connection()
@@ -259,7 +272,6 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
         status_text = "PASSED" if is_passed else "FAILED"
         status_color = "#2e7d32" if is_passed else "#c62828"
 
-        # Email Setup
         smtp_config = st.secrets["smtp"]
         server_host = str(smtp_config["server"]).strip()
         port = int(smtp_config["port"])
@@ -272,7 +284,6 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
         msg["From"] = sender_email
         msg["To"] = str(user_email).strip()
 
-        # HTML Body
         html_content = f"""
         <html>
           <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
@@ -304,7 +315,6 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
 
         msg.attach(MIMEText(html_content, "html"))
 
-        # Port 587 (STARTTLS) execution for Brevo
         if port == 465:
             with smtplib.SMTP_SSL(server_host, port, timeout=10) as server:
                 server.login(login_user, sender_password)
@@ -325,137 +335,137 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
         return False
 
 # ==========================================
-# Step 0 - 考生身分驗證[cite: 8]
+# Step 0 - 考生身分驗證
 # ==========================================
 if not st.session_state.authenticated:
-  st.markdown(
-      "<h1 style='text-align: center;'>Shisa Kanko-Shi Examination Portal</h1>",
-      unsafe_allow_html=True,
-  )
-  st.markdown(
-      "<h3 style='text-align: center;'>(Certified Pointing-and-Calling Specialist)</h3>",
-      unsafe_allow_html=True,
-  )
-  st.write("---")
+    st.markdown(
+        "<h1 style='text-align: center;'>Shisa Kanko-Shi Examination Portal</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<h3 style='text-align: center;'>(Certified Pointing-and-Calling Specialist)</h3>",
+        unsafe_allow_html=True,
+    )
+    st.write("---")
 
-  st.markdown("### Candidate Authentication")
-  st.write("Please enter your registered Email and Voucher Code to enter the examination room.")
+    st.markdown("### Candidate Authentication")
+    st.write("Please enter your registered Email and Voucher Code to enter the examination room.")
 
-  with st.form("auth_form"):
-    email_input = st.text_input("Registered Email Address", placeholder="e.g., candidate@example.com")
-    voucher_input = st.text_input("Voucher Code", type="password", placeholder="Enter your voucher code")
+    with st.form("auth_form"):
+        email_input = st.text_input("Registered Email Address", placeholder="e.g., candidate@example.com")
+        voucher_input = st.text_input("Voucher Code", type="password", placeholder="Enter your voucher code")
 
-    submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
+        submitted = st.form_submit_button("🔓 Verify and Enter Exam Room")
 
-    if submitted:
-      if not email_input or not voucher_input or not email_input.strip() or not voucher_input.strip():
-        st.error("Please enter both your Email and Voucher Code.")
-      else:
-        try:
-          db = get_sheets_connection()
-          vouchers_sheet = db.worksheet("Vouchers")
-          records = vouchers_sheet.get_all_records()
-
-          matched_record = None
-          row_index = None
-
-          for idx, record in enumerate(records, start=2):
-            r_voucher = str(record.get("VoucherCode", "")).strip()
-            r_email = str(record.get("AssignedEmail", "")).strip()
-            r_status = str(record.get("Status", "")).strip()
-
-            if (
-                r_voucher == voucher_input.strip()
-                and r_email != ""
-                and r_email.lower() == email_input.strip().lower()
-                and r_status.lower() == "used"
-            ):
-              matched_record = record
-              row_index = idx
-              break
-
-          if matched_record:
-            exam_status_val = str(matched_record.get("ExamEndTime", "")).strip() 
-            committed_time = str(matched_record.get("Committed", "")).strip()     
-
-            if exam_status_val != "":
-              st.error(f"❌ **Access Denied:** This voucher has already been finalized with status: **{exam_status_val}**. Re-entry is strictly prohibited.")
-            
-            elif committed_time != "":
-              try:
-                committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
-                elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
-                EXAM_TIME_LIMIT = 5400  # 90 minutes
-
-                if elapsed_seconds > EXAM_TIME_LIMIT:
-                    vouchers_sheet.update_cell(row_index, 13, "DNF")
-                    st.error("❌ **Access Denied:** Exam session expired. Status updated to Did Not Finish (DNF).")
-                else:
-                    f_name = str(matched_record.get("EnglishFirstName", "")).strip()
-                    l_name = str(matched_record.get("EnglishLastName", "")).strip()
-                    j_name = str(matched_record.get("JapaneseName", "")).strip()
-
-                    elapsed_seconds_since_commit = int(elapsed_seconds)
-                    remaining_allowed_seconds = max(0, EXAM_TIME_LIMIT - elapsed_seconds_since_commit)
-
-                    st.session_state.authenticated = True
-                    st.session_state.candidate_email = email_input.strip()
-                    st.session_state.voucher_code = voucher_input.strip()
-                    st.session_state.candidate_first_name = f_name
-                    st.session_state.candidate_last_name = l_name
-                    st.session_state.candidate_japanese_name = j_name
-                    st.session_state.candidate_name = f"{f_name} {l_name}".strip()
-
-                    st.session_state.exam_remaining_seconds = remaining_allowed_seconds
-                    st.session_state.exam_timer_start_local = time.time()
-
-                    st.session_state.exam_step = 3
-                    st.success("🔄 Resuming your active examination session...")
-                    time.sleep(1)
-                    st.rerun()
-              except Exception as e:
-                st.error(f"Time calculation error: {e}")
+        if submitted:
+            if not email_input or not voucher_input or not email_input.strip() or not voucher_input.strip():
+                st.error("Please enter both your Email and Voucher Code.")
             else:
-              f_name = str(matched_record.get("EnglishFirstName", "")).strip()
-              l_name = str(matched_record.get("EnglishLastName", "")).strip()
-              j_name = str(matched_record.get("JapaneseName", "")).strip()
+                try:
+                    db = get_sheets_connection()
+                    vouchers_sheet = db.worksheet("Vouchers")
+                    records = vouchers_sheet.get_all_records()
 
-              st.session_state.authenticated = True
-              st.session_state.candidate_email = email_input.strip()
-              st.session_state.voucher_code = voucher_input.strip()
-              st.session_state.candidate_first_name = f_name
-              st.session_state.candidate_last_name = l_name
-              st.session_state.candidate_japanese_name = j_name
-              st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+                    matched_record = None
+                    row_index = None
 
-              st.session_state.exam_step = 1
-              st.rerun()
-          else:
-            st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
-        except Exception as e:
-          st.error(f"Connection error: {e}")
+                    for idx, record in enumerate(records, start=2):
+                        r_voucher = str(record.get("VoucherCode", "")).strip()
+                        r_email = str(record.get("AssignedEmail", "")).strip()
+                        r_status = str(record.get("Status", "")).strip()
+
+                        if (
+                            r_voucher == voucher_input.strip()
+                            and r_email != ""
+                            and r_email.lower() == email_input.strip().lower()
+                            and r_status.lower() == "used"
+                        ):
+                            matched_record = record
+                            row_index = idx
+                            break
+
+                    if matched_record:
+                        exam_status_val = str(matched_record.get("ExamEndTime", "")).strip() 
+                        committed_time = str(matched_record.get("Committed", "")).strip()     
+
+                        if exam_status_val != "":
+                            st.error(f"❌ **Access Denied:** This voucher has already been finalized with status: **{exam_status_val}**. Re-entry is strictly prohibited.")
+                        
+                        elif committed_time != "":
+                            try:
+                                committed_dt = datetime.datetime.strptime(committed_time, "%Y-%m-%d %H:%M:%S")
+                                elapsed_seconds = (datetime.datetime.now() - committed_dt).total_seconds()
+                                EXAM_TIME_LIMIT = 5400  # 90 minutes
+
+                                if elapsed_seconds > EXAM_TIME_LIMIT:
+                                    vouchers_sheet.update_cell(row_index, 13, "DNF")
+                                    st.error("❌ **Access Denied:** Exam session expired. Status updated to Did Not Finish (DNF).")
+                                else:
+                                    f_name = str(matched_record.get("EnglishFirstName", "")).strip()
+                                    l_name = str(matched_record.get("EnglishLastName", "")).strip()
+                                    j_name = str(matched_record.get("JapaneseName", "")).strip()
+
+                                    elapsed_seconds_since_commit = int(elapsed_seconds)
+                                    remaining_allowed_seconds = max(0, EXAM_TIME_LIMIT - elapsed_seconds_since_commit)
+
+                                    st.session_state.authenticated = True
+                                    st.session_state.candidate_email = email_input.strip()
+                                    st.session_state.voucher_code = voucher_input.strip()
+                                    st.session_state.candidate_first_name = f_name
+                                    st.session_state.candidate_last_name = l_name
+                                    st.session_state.candidate_japanese_name = j_name
+                                    st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+
+                                    st.session_state.exam_remaining_seconds = remaining_allowed_seconds
+                                    st.session_state.exam_timer_start_local = time.time()
+
+                                    st.session_state.exam_step = 3
+                                    st.success("🔄 Resuming your active examination session...")
+                                    time.sleep(1)
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Time calculation error: {e}")
+                        else:
+                            f_name = str(matched_record.get("EnglishFirstName", "")).strip()
+                            l_name = str(matched_record.get("EnglishLastName", "")).strip()
+                            j_name = str(matched_record.get("JapaneseName", "")).strip()
+
+                            st.session_state.authenticated = True
+                            st.session_state.candidate_email = email_input.strip()
+                            st.session_state.voucher_code = voucher_input.strip()
+                            st.session_state.candidate_first_name = f_name
+                            st.session_state.candidate_last_name = l_name
+                            st.session_state.candidate_japanese_name = j_name
+                            st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+
+                            st.session_state.exam_step = 1
+                            st.rerun()
+                    else:
+                        st.error("❌ Invalid Email, Voucher Code, or the voucher has not been activated yet.")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
 
 # ==========================================
-# Step 1 - 身分核對與考試須知[cite: 8]
+# Step 1 - 身分核對與考試須知
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 1:
-  st.markdown(f"### Welcome, {st.session_state.candidate_first_name} {st.session_state.candidate_last_name}!")
-  st.write("---")
+    st.markdown(f"### Welcome, {st.session_state.candidate_first_name} {st.session_state.candidate_last_name}!")
+    st.write("---")
 
-  st.markdown("### Step 1: Candidate Information Verification")
-  st.write("Please carefully verify your registered information below:")
+    st.markdown("### Step 1: Candidate Information Verification")
+    st.write("Please carefully verify your registered information below:")
 
-  st.markdown(f"""
+    st.markdown(f"""
     - **1. Last Name:** {st.session_state.candidate_last_name}
     - **2. First Name:** {st.session_state.candidate_first_name}
     - **3. Japanese Name:** {st.session_state.candidate_japanese_name}
     - **4. Email Address:** {st.session_state.candidate_email}
     """)
 
-  st.warning("⚠️ If the above information is incorrect or missing, please end the exam now and contact administrator.")
+    st.warning("⚠️ If the above information is incorrect or missing, please end the exam now and contact administrator.")
 
-  st.markdown(
-      """
+    st.markdown(
+        """
         <div style="text-align: left; margin-top: 10px; margin-bottom: 20px;">
             <a href="https://shisakanko.org/contact" target="_self" style="
                 display: inline-block;
@@ -471,157 +481,156 @@ elif st.session_state.authenticated and st.session_state.exam_step == 1:
             ">🚪 Quit and Contact Administrator</a>
         </div>
     """,
-      unsafe_allow_html=True,
-  )
-  st.write("---")
-  st.markdown("### Step 2: Examination Rules & Instructions")
-  st.write("Please read the following rules carefully before starting:")
-
-  try:
-    with open("examinstruction.txt", "r", encoding="utf-8") as f:
-      exam_instructions = f.read()
-  except FileNotFoundError:
-    exam_instructions = (
-        "1. Time Limit: Once started, the timer cannot be paused.\n2. Anti-Cheat:"
-        " Do not switch browser tabs or close the window.\n3. Submission:"
-        " Ensure you click the submit button before time expires."
-    )
-
-  st.markdown(
-      f"""
-      <div style="
-          background-color: #ffffff;
-          color: #212529;
-          border: 1px solid #ced4da;
-          border-radius: 6px;
-          padding: 15px;
-          height: 200px;
-          overflow-y: auto;
-          white-space: pre-line;
-          font-size: 15px;
-          line-height: 1.6;
-          box-shadow: inset 0 1px 2px rgba(0,0,0,0.075);
-      ">
-      {exam_instructions}
-  """,
-      unsafe_allow_html=True,
-  )
-
-  st.markdown("<br>", unsafe_allow_html=True)
-  if st.button("🚀 I Understand and Agree"):
-    st.session_state.exam_step = 2
-    st.rerun()
-
-  st.write("---")
-
-# ==========================================
-# Step 2 - 考生拍照驗證與倒數休息頁面[cite: 8]
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 2:
-  
-  if st.session_state.on_break:
-    st.markdown("<h2 style='text-align: center;'>Pre-Exam Candidate Transition Pause</h2>", unsafe_allow_html=True)
-    st.write(
-        "<p style='text-align: center;'>Your photo has been successfully verified. "
-        "Take a brief break before your core examination begins. "
-        "The exam will start automatically when the timer expires. "
-        "Once the exam started, your voucher will be count as used and committed.</p>",
         unsafe_allow_html=True,
     )
     st.write("---")
+    st.markdown("### Step 2: Examination Rules & Instructions")
+    st.write("Please read the following rules carefully before starting:")
 
-    TOTAL_SECONDS = 5 * 60
-    elapsed = int(time.time() - st.session_state.break_start_time)
-    remaining = TOTAL_SECONDS - elapsed
+    try:
+        with open("examinstruction.txt", "r", encoding="utf-8") as f:
+            exam_instructions = f.read()
+    except FileNotFoundError:
+        exam_instructions = (
+            "1. Time Limit: Once started, the timer cannot be paused.\n2. Anti-Cheat:"
+            " Do not switch browser tabs or close the window.\n3. Submission:"
+            " Ensure you click the submit button before time expires."
+        )
 
-    if remaining <= 0:
-      st.session_state.on_break = False
-      st.session_state.exam_step = 3
-      st.rerun()
-
-    mins, secs = divmod(remaining, 60)
     st.markdown(
-        f"<h1 style='text-align: center; font-size: 70px; color: #0066cc;'>⏳ {mins:02d}:{secs:02d}</h1>",
+        f"""
+        <div style="
+            background-color: #ffffff;
+            color: #212529;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-line;
+            font-size: 15px;
+            line-height: 1.6;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.075);
+        ">
+        {exam_instructions}
+    """,
         unsafe_allow_html=True,
     )
 
-    if 20 <= remaining <= 30:
-      st.warning("⚠️ **Warning:** Only 30 seconds remaining before the core examination starts automatically!")
-
     st.markdown("<br>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-      if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
-        update_voucher_committed(st.session_state.voucher_code)
-        st.session_state.on_break = False
-        st.session_state.exam_step = 3
+    if st.button("🚀 I Understand and Agree"):
+        st.session_state.exam_step = 2
         st.rerun()
 
-    time.sleep(1)
-    st.rerun()
+    st.write("---")
 
-  else:
-    st.markdown("### Step 3: Candidate Photo Verification")
-    st.write(f"Candidate: **{st.session_state.candidate_name}** ({st.session_state.candidate_email})")
+# ==========================================
+# Step 2 - 考生拍照驗證與倒數休息頁面
+# ==========================================
+elif st.session_state.authenticated and st.session_state.exam_step == 2:
+    if st.session_state.on_break:
+        st.markdown("<h2 style='text-align: center;'>Pre-Exam Candidate Transition Pause</h2>", unsafe_allow_html=True)
+        st.write(
+            "<p style='text-align: center;'>Your photo has been successfully verified. "
+            "Take a brief break before your core examination begins. "
+            "The exam will start automatically when the timer expires. "
+            "Once the exam started, your voucher will be count as used and committed.</p>",
+            unsafe_allow_html=True,
+        )
+        st.write("---")
 
-    if "photo_attempts" not in st.session_state:
-      st.session_state.photo_attempts = 0
+        TOTAL_SECONDS = 5 * 60
+        elapsed = int(time.time() - st.session_state.break_start_time)
+        remaining = TOTAL_SECONDS - elapsed
 
-    MAX_ATTEMPTS = 3
-    remaining_attempts = MAX_ATTEMPTS - st.session_state.photo_attempts
+        if remaining <= 0:
+            st.session_state.on_break = False
+            st.session_state.exam_step = 3
+            st.rerun()
 
-    if remaining_attempts <= 0:
-      st.error(f"❌ You have exceeded the maximum allowed photo verification attempts ({MAX_ATTEMPTS}/{MAX_ATTEMPTS}). Your session is locked. Please contact the administrator.")
-    else:
-      st.write("Please take a photo for identity verification records prior to starting the exam.")
-      photo_file = st.camera_input("Capture Your Photo", key="exam_camera_input")
+        mins, secs = divmod(remaining, 60)
+        st.markdown(
+            f"<h1 style='text-align: center; font-size: 70px; color: #0066cc;'>⏳ {mins:02d}:{secs:02d}</h1>",
+            unsafe_allow_html=True,
+        )
 
-      if photo_file is not None:
-        st.success("✅ Photo captured successfully!")
+        if 20 <= remaining <= 30:
+            st.warning("⚠️ **Warning:** Only 30 seconds remaining before the core examination starts automatically!")
+
         st.markdown("<br>", unsafe_allow_html=True)
 
-        if st.button("🚀 Proceed to Next Step", key="proceed_btn"):
-          st.session_state.photo_attempts += 1
-
-          with st.spinner("Uploading verification photo to secure storage and proceeding..."):
-            try:
-              import requests
-              imgbb_key = st.secrets["imgbb"]["api_key"]
-              upload_url = "https://api.imgbb.com/1/upload"
-
-              image_bytes = photo_file.getvalue()
-              voucher_code = st.session_state.get("voucher_code", "EXAM")
-              file_name = f"{voucher_code}-Verified"
-
-              payload = {"key": imgbb_key, "name": file_name}
-              files = {"image": image_bytes}
-
-              response = requests.post(upload_url, data=payload, files=files)
-              result = response.json()
-
-              if result.get("success"):
-                photo_url = result["data"]["url"]
-                try:
-                  db = get_sheets_connection()
-                  sheet = db.worksheet("Vouchers")
-                  cell = sheet.find(st.session_state.candidate_email)
-                  if cell:
-                    sheet.update_cell(cell.row, 9, photo_url)
-                except Exception:
-                  pass
-
-                st.session_state.on_break = True
-                st.session_state.break_start_time = time.time()
-                st.rerun()
-              else:
-                error_msg = result.get("error", {}).get("message", "Unknown error")
-                st.error(f"Upload failed: {error_msg}. Please try again. ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
+                update_voucher_committed(st.session_state.voucher_code)
+                st.session_state.on_break = False
+                st.session_state.exam_step = 3
                 st.rerun()
 
-            except Exception as e:
-              st.error(f"An unexpected error occurred: {e}. ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)")
-              st.rerun()
+        time.sleep(1)
+        st.rerun()
+
+    else:
+        st.markdown("### Step 3: Candidate Photo Verification")
+        st.write(f"Candidate: **{st.session_state.candidate_name}** ({st.session_state.candidate_email})")
+
+        if "photo_attempts" not in st.session_state:
+            st.session_state.photo_attempts = 0
+
+        MAX_ATTEMPTS = 3
+        remaining_attempts = MAX_ATTEMPTS - st.session_state.photo_attempts
+
+        if remaining_attempts <= 0:
+            st.error(f"❌ You have exceeded the maximum allowed photo verification attempts ({MAX_ATTEMPTS}/{MAX_ATTEMPTS}). Your session is locked. Please contact the administrator.")
+        else:
+            st.write("Please take a photo for identity verification records prior to starting the exam.")
+            photo_file = st.camera_input("Capture Your Photo", key="exam_camera_input")
+
+            if photo_file is not None:
+                st.success("✅ Photo captured successfully!")
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                if st.button("🚀 Proceed to Next Step", key="proceed_btn"):
+                    st.session_state.photo_attempts += 1
+
+                    with st.spinner("Uploading verification photo to secure storage and proceeding..."):
+                        try:
+                            import requests
+                            imgbb_key = st.secrets["imgbb"]["api_key"]
+                            upload_url = "https://api.imgbb.com/1/upload"
+
+                            image_bytes = photo_file.getvalue()
+                            voucher_code = st.session_state.get("voucher_code", "EXAM")
+                            file_name = f"{voucher_code}-Verified"
+
+                            payload = {"key": imgbb_key, "name": file_name}
+                            files = {"image": image_bytes}
+
+                            response = requests.post(upload_url, data=payload, files=files)
+                            result = response.json()
+
+                            if result.get("success"):
+                                photo_url = result["data"]["url"]
+                                try:
+                                    db = get_sheets_connection()
+                                    sheet = db.worksheet("Vouchers")
+                                    cell = sheet.find(st.session_state.candidate_email)
+                                    if cell:
+                                        sheet.update_cell(cell.row, 9, photo_url)
+                                except Exception:
+                                    pass
+
+                                st.session_state.on_break = True
+                                st.session_state.break_start_time = time.time()
+                                st.rerun()
+                            else:
+                                error_msg = result.get("error", {}).get("message", "Unknown error")
+                                st.error(f"Upload failed: {error_msg}. Please try again. ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)")
+                                st.rerun()
+
+                        except Exception as e:
+                            st.error(f"An unexpected error occurred: {e}. ({MAX_ATTEMPTS - st.session_state.photo_attempts} attempts left)")
+                            st.rerun()
 
 # ==========================================
 # Step 3 - 核心問答模組
@@ -648,28 +657,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         user_answers = st.session_state.get("answers", {})
         focus_losses = st.session_state.get("focus_loss_count", 0)
         
-        correct_count = 0
-        for idx, q_data in enumerate(exam_questions, start=1):
-            user_ans = str(user_answers.get(idx, "")).strip()
-            
-            correct_letter = ""
-            for k, v in q_data.items():
-                if k.strip().lower() in ["correctanswer", "correct_answer", "answer"]:
-                    correct_letter = str(v).strip().upper()
-                    break
-            
-            correct_text = ""
-            if correct_letter:
-                for k, v in q_data.items():
-                    if k.strip().lower() in [f"option{correct_letter.lower()}", f"opt{correct_letter.lower()}", correct_letter.lower()]:
-                        correct_text = str(v).strip()
-                        break
-
-            if user_ans and (user_ans.upper() == correct_letter or user_ans == correct_text):
-                correct_count += 1
-        
+        # 使用統一計分 logic
+        correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
+                
         passing_score_percentage = 70.0
-        score_percentage = (correct_count / TOTAL_QUESTIONS) * 100 if TOTAL_QUESTIONS > 0 else 0
+        score_percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
         final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
         
         # 1. Record submission in Google Sheets
@@ -677,7 +669,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             st.session_state.voucher_code,
             focus_losses,
             final_status,
-            explanation=f"Auto-submitted on timeout. Correct {correct_count}/{TOTAL_QUESTIONS}"
+            explanation=f"Auto-submitted on timeout. Correct {correct_count}/{total_q}"
         )
         
         # 2. Send Email Notification
@@ -689,7 +681,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 user_email=user_email,
                 user_name=user_name,
                 score=correct_count,
-                total=TOTAL_QUESTIONS,
+                total=total_q,
                 pass_percentage=passing_score_percentage,
                 exam_title="Shisa Kanko-Shi Examination"
             )
@@ -700,7 +692,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.session_state.exam_step = 5
         st.rerun()
 
-    # Backend triggers (hidden completely via the CSS rule above)
+    # Backend triggers
     if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
         pass
 
@@ -780,6 +772,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             
         elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
         remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
+
+        # Server-side Timeout Check: 若時間用盡即刻發起自動提交
+        if remaining_seconds <= 0:
+            handle_auto_submit()
 
         timer_html = """
             <div style="background-color: #1e293b; padding: 6px; border-radius: 6px; text-align: center; color: white; font-family: sans-serif;">
@@ -946,21 +942,20 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if opt_val:
                     options.append(opt_val)
             
-            default_index = 0
-            if current_answer in options:
-                default_index = options.index(current_answer)
+            # 未答題時 default_index 為 None，防止預設誤選
+            default_index = options.index(current_answer) if current_answer in options else None
 
             selected = st.radio("Select your answer:", options, index=default_index, key=f"q_radio_{q_idx}")
-            if selected:
+            if selected is not None:
                 st.session_state.answers[q_idx] = selected
 
         elif q_type == "TF":
             tf_options = ["TRUE", "FALSE"]
-            default_index = 0
-            if current_answer in tf_options:
-                default_index = tf_options.index(current_answer)
+            # 未答題時 default_index 為 None，防止預設誤選
+            default_index = tf_options.index(current_answer) if current_answer in tf_options else None
+            
             selected = st.radio("Select True or False:", tf_options, index=default_index, key=f"tf_radio_{q_idx}")
-            if selected:
+            if selected is not None:
                 st.session_state.answers[q_idx] = selected
 
         elif q_type == "ORDER":
@@ -975,14 +970,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
             option_labels = list(options_dict.values())
 
-            # Retrieve existing saved answer (e.g., "D,B,C,A")
-            current_saved = str(st.session_state.answers.get(q_idx, ""))
+            current_saved = str(st.session_state.answers.get(q_idx, "")) if q_idx in st.session_state.answers else ""
             default_selection = []
             for letter in [x.strip().upper() for x in current_saved.split(",") if x.strip()]:
                 if letter in options_dict:
                     default_selection.append(options_dict[letter])
 
-            # Multiselect naturally preserves your exact selection order
             selected_items = st.multiselect(
                 "Ranked Order (Click items in your preferred order)",
                 options=option_labels,
@@ -990,7 +983,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 key=f"order_rank_{q_idx}"
             )
 
-            # Save immediately to session state as a comma-separated string of letters
             if selected_items:
                 letters = [item.split(":")[0].strip() for item in selected_items]
                 st.session_state.answers[q_idx] = ",".join(letters)
@@ -1004,7 +996,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
             raw_row = current_q_data.get("raw_row", [])
 
-            # 1. Gather options A to H
             options_dict = {}
             for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
@@ -1015,7 +1006,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if val:
                     options_dict[opt_letter] = val
 
-            # 2. Gather definitions A to H
             defs_dict = {}
             for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
                 val = get_val(current_q_data, f"Def{def_letter}", f"Definition{def_letter}")
@@ -1031,8 +1021,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if not defs_dict:
                 st.warning("⚠️ No definitions found. Please check columns M through P.")
 
-            # Parse saved answer string (handles both "A:B,B:A" and old "A:DefB,B:DefA")
-            current_saved = str(st.session_state.answers.get(q_idx, ""))
+            current_saved = str(st.session_state.answers.get(q_idx, "")) if q_idx in st.session_state.answers else ""
             saved_pairs = {}
             for pair in current_saved.split(","):
                 if ":" in pair:
@@ -1040,13 +1029,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     saved_pairs[parts[0].strip().upper()] = parts[1].strip().replace("DEF", "").upper()
 
             matching_results = {}
-            # Clean drop-down choices using just letters (e.g., ["-- Select Definition --", "A", "B", "C", "D"])
             def_choices = ["-- Select Definition --"] + list(defs_dict.keys())
 
-            # 3. Create Side-by-Side Split Panel Layout
             col_left, col_right = st.columns([1, 1], gap="medium")
 
-            # Left Column: Items & Clean Single-Letter Dropdowns
             with col_left:
                 st.markdown("#### ✏️ Items")
                 for opt_letter, opt_text in options_dict.items():
@@ -1068,13 +1054,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     if choice and choice != "-- Select Definition --":
                         matching_results[opt_letter] = choice.strip()
 
-            # Right Column: Clean Definitions Pool (without "Def" prefix)
             with col_right:
                 st.markdown("#### 📖 Definitions Pool")
                 for d_letter, d_text in defs_dict.items():
                     st.info(f"**{d_letter}:** {d_text}")
 
-            # 4. Save clean formatted result string (e.g., "A:B,B:A")
             if matching_results:
                 sorted_keys = sorted(matching_results.keys())
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
@@ -1082,8 +1066,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
-       
-        
+
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
@@ -1116,7 +1099,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.markdown("---")
 
 # ==========================================
-# Step 4 - 考試總結與詳細清單確認頁面[cite: 8]
+# Step 4 - 考試總結與詳細清單確認頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Question Checklist</h2>", unsafe_allow_html=True)
@@ -1183,34 +1166,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     answered_count = len(user_answers)
                     focus_losses = st.session_state.get("focus_loss_count", 0)
                     
-                    correct_count = 0
-                    for idx, q_data in enumerate(exam_questions, start=1):
-                        user_ans = user_answers.get(idx, "")
-                        q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
-                        correct_val = str(q_data.get("CorrectAnswer", "")).strip()
-                        
-                        if q_type in ["MC", "MC_MEDIA"]:
-                            correct_letter = correct_val.upper()
-                            correct_text = str(q_data.get(f"Option{correct_letter}", "")).strip()
-                            user_str = str(user_ans).strip()
-                            if user_str and (user_str.upper() == correct_letter or user_str == correct_text):
-                                correct_count += 1
-                        elif q_type == "TF":
-                            if str(user_ans).strip().upper() == correct_val.upper():
-                                correct_count += 1
-                        elif q_type == "ORDER":
-                            correct_sequence = [l.strip().upper() for l in correct_val.split(",") if l.strip()]
-                            user_sequence = [l.strip().upper() for l in str(user_ans).split(",") if l.strip()]
-                            if user_sequence == correct_sequence and correct_sequence:
-                                correct_count += 1
-                        elif q_type == "MATCH":
-                            user_clean = str(user_ans).upper().replace(" ", "").replace("DEF", "")
-                            correct_clean = str(correct_val).upper().replace(" ", "").replace("DEF", "")
-                            if user_clean and user_clean == correct_clean:
-                                correct_count += 1
+                    # 統一呼叫 calculate_exam_score 評分
+                    correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
                     
                     passing_score_percentage = 70.0
-                    score_percentage = (correct_count / total_q_count) * 100 if total_q_count > 0 else 0
+                    score_percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
                     final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
                     
                     # 1. Record submission in Google Sheets
@@ -1218,7 +1178,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                         st.session_state.voucher_code,
                         focus_losses,
                         final_status,
-                        explanation=f"Answered {answered_count}/{total_q_count}, Correct {correct_count}"
+                        explanation=f"Answered {answered_count}/{total_q}, Correct {correct_count}"
                     )
                     
                     # 2. Send Pass / Fail Email Notification
@@ -1230,7 +1190,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             user_email=user_email,
                             user_name=user_name,
                             score=correct_count,
-                            total=total_q_count,
+                            total=total_q,
                             pass_percentage=passing_score_percentage,
                             exam_title="Shisa Kanko-Shi Examination"
                         )
@@ -1247,7 +1207,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.divider()
 
 # ==========================================
-# Step 5 - 考試結果與結算頁面[cite: 8]
+# Step 5 - 考試結果與結算頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 5:
     st.markdown("<h2 style='text-align: center;'>📋 Examination Result & Summary</h2>", unsafe_allow_html=True)
@@ -1275,7 +1235,37 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
     st.markdown("---")
     st.info("💡 Your results and timestamps have been securely recorded in the official examination database.")
     
-    if st.button("🚪 Exit Examination Portal", use_container_width=True):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+    col_b1, col_b2, col_b3 = st.columns(3)
+
+    with col_b1:
+        if st.button("🖨️ Print Result", use_container_width=True):
+            components.html("<script>window.print();</script>", height=0)
+
+    with col_b2:
+        if st.button("✉️ Resend Email", use_container_width=True):
+            user_email = st.session_state.get("candidate_email", "")
+            user_name = st.session_state.get("candidate_name", "Candidate")
+            passing_score_percentage = 70.0
+            
+            if user_email:
+                with st.spinner("Resending result email..."):
+                    sent = send_exam_result_email(
+                        user_email=user_email,
+                        user_name=user_name,
+                        score=correct_cnt,
+                        total=total_q_count,
+                        pass_percentage=passing_score_percentage,
+                        exam_title="Shisa Kanko-Shi Examination"
+                    )
+                    if sent:
+                        st.success("📧 Result email has been resent successfully!")
+                    else:
+                        st.error(f"❌ Failed to resend email: {st.session_state.get('email_error', 'Unknown error')}")
+            else:
+                st.error("❌ Email address not found.")
+
+    with col_b3:
+        if st.button("🚪 Exit Examination Portal", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
