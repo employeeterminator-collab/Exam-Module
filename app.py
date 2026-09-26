@@ -1268,9 +1268,33 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
     col_b1, col_b2, col_b3 = st.columns(3)
 
     with col_b1:
-        if st.button("🖨️ Print Result", use_container_width=True):
-            # 修正：呼叫 window.parent.print() 穿透 iframe 觸發主頁面列印
-            components.html("<script>window.parent.print();</script>", height=0)
+        # Parent DOM Injection to bypass iframe modal sandbox restrictions
+        components.html("""
+            <button onclick="
+                try {
+                    const pDoc = window.parent.document;
+                    const s = pDoc.createElement('script');
+                    s.innerHTML = 'window.print();';
+                    pDoc.body.appendChild(s);
+                    setTimeout(() => { try { pDoc.body.removeChild(s); } catch(e){} }, 1000);
+                } catch(e) {
+                    console.error('Print Error:', e);
+                }
+            " style="
+                width: 100%;
+                height: 38px;
+                background-color: #ffffff;
+                color: #31333f;
+                border: 1px solid #d3d3d3;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 14px;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            " onmouseover="this.style.backgroundColor='#f0f2f6'" onmouseout="this.style.backgroundColor='#ffffff'">
+                🖨️ Print Result
+            </button>
+        """, height=45)
 
     with col_b2:
         if st.button("✉️ Resend Email", use_container_width=True):
