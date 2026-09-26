@@ -1240,25 +1240,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
 # Step 5 - 考試結果與結算頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 5:
-    # Clean Print Stylesheet
-    st.markdown("""
-        <style>
-        @media print {
-            header, footer, [data-testid="stSidebar"], [data-testid="stHeader"], .stButton, iframe {
-                display: none !important;
-            }
-            .main .block-container {
-                max-width: 100% !important;
-                padding: 1rem !important;
-            }
-            * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     st.markdown("<h2 style='text-align: center;'>📋 Examination Result & Summary</h2>", unsafe_allow_html=True)
     st.write("---")
     
@@ -1282,39 +1263,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
     col_res4.metric("Exam Outcome", "Completed")
     
     st.markdown("---")
-    st.info("💡 Press **Ctrl + P** (or **Cmd + P** on Mac) to print or save this result sheet as a PDF.")
+    st.info("💡 Your results and timestamps have been securely recorded in the official examination database.")
     
-    col_b1, col_b2, col_b3 = st.columns(3)
+    # 2-Column Action Bar
+    col_b1, col_b2 = st.columns(2)
 
     with col_b1:
-        components.html("""
-            <button onclick="
-                try {
-                    window.parent.focus();
-                    window.parent.print();
-                } catch(e) {
-                    alert('Please press Ctrl+P (or Cmd+P on Mac) to print/save your result.');
-                }
-            " style="
-                width: 100%;
-                height: 38px;
-                background-color: #ffffff;
-                color: #31333f;
-                border: 1px solid #d3d3d3;
-                border-radius: 8px;
-                font-weight: 600;
-                font-size: 13px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 6px;
-            " onmouseover="this.style.backgroundColor='#f0f2f6'" onmouseout="this.style.backgroundColor='#ffffff'">
-                🖨️ Print Result <span style="background:#e0e0e0; padding:2px 6px; border-radius:4px; font-size:11px;">Ctrl + P</span>
-            </button>
-        """, height=45)
-
-    with col_b2:
         if st.button("✉️ Resend Email", use_container_width=True):
             user_email = st.session_state.get("candidate_email", "")
             user_name = st.session_state.get("candidate_name", "Candidate")
@@ -1337,7 +1291,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
             else:
                 st.error("❌ Email address not found.")
 
-    with col_b3:
+    with col_b2:
         if st.button("🚪 Exit Examination Portal", use_container_width=True):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
