@@ -190,7 +190,7 @@ def get_exam_questions():
         
     return []
 
-# 統一算分邏輯 (支援 MC, TF, ORDER, MATCH)
+# 增強版統一算分邏輯 (完整支援 MC/MC_MEDIA, TF, ORDER, MATCH 跨格式比對)
 def calculate_exam_score(questions, user_answers):
     correct_count = 0
     total_q = len(questions)
@@ -200,18 +200,53 @@ def calculate_exam_score(questions, user_answers):
         if not user_ans:
             continue
             
+        q_type = str(q_data.get("QuestionType", "MC")).strip().upper()
         correct_val = str(q_data.get("CorrectAnswer", "")).strip().upper()
         u_ans_str = str(user_ans).strip().upper()
         
-        # 1. 直接字串比對
+        # 1. 完全相同的直接比對
         if u_ans_str == correct_val:
             correct_count += 1
-        else:
-            # 2. 針對 ORDER 或 MATCH 做去空格比對
+            continue
+
+        # 2. MC 及 MC_MEDIA 的彈性比對邏輯
+        if q_type in ["MC", "MC_MEDIA", ""]:
+            # 情況 A：CorrectAnswer 填寫字母（如 "A", "B", "C", "D"）
+            if len(correct_val) == 1 and correct_val in ["A", "B", "C", "D", "E", "F", "G", "H"]:
+                # 取得該字母在題庫中對應的選項文字
+                opt_text = str(q_data.get(f"Option{correct_val}", "")).strip().upper()
+                
+                # 考生選擇了該選項的完整文字
+                if opt_text and u_ans_str == opt_text:
+                    correct_count += 1
+                    continue
+                # 考生選擇的文字包含前綴（例如 "A. ..." 或 "A: ..."）
+                if u_ans_str.startswith(f"{correct_val}.") or u_ans_str.startswith(f"{correct_val}:") or u_ans_str.startswith(f"{correct_val})") or u_ans_str.startswith(f"{correct_val} "):
+                    correct_count += 1
+                    continue
+
+            # 情況 B：比較去除字母前綴後的實際文字內容
+            clean_u = re.sub(r'^[A-H][.:\)]\s*', '', u_ans_str)
+            clean_c = re.sub(r'^[A-H][.:\)]\s*', '', correct_val)
+            if clean_u and clean_u == clean_c:
+                correct_count += 1
+                continue
+
+        # 3. TF 判斷題標準化比對
+        elif q_type == "TF":
+            norm_c = "TRUE" if correct_val in ["T", "TRUE", "1", "YES"] else ("FALSE" if correct_val in ["F", "FALSE", "0", "NO"] else correct_val)
+            norm_u = "TRUE" if u_ans_str in ["T", "TRUE", "1", "YES"] else ("FALSE" if u_ans_str in ["F", "FALSE", "0", "NO"] else u_ans_str)
+            if norm_c == norm_u:
+                correct_count += 1
+                continue
+
+        # 4. ORDER 及 MATCH 題目去空格比對
+        elif q_type in ["ORDER", "MATCH"]:
             clean_u = re.sub(r'\s+', '', u_ans_str)
             clean_c = re.sub(r'\s+', '', correct_val)
             if clean_u and clean_u == clean_c:
                 correct_count += 1
+                continue
 
     return correct_count, total_q
 
@@ -231,7 +266,6 @@ def update_voucher_committed(voucher_code):
 
 # 記錄違規事件到 ViolationLogs Tab 同時即時更新 Vouchers 上的警告次數
 def log_violation_to_sheet(voucher_code):
-    # 本地狀態優先遞增，確保網絡連線有誤時計數不丟失
     st.session_state.focus_loss_count = st.session_state.get("focus_loss_count", 0) + 1
     try:
         db = get_sheets_connection()
@@ -657,7 +691,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         user_answers = st.session_state.get("answers", {})
         focus_losses = st.session_state.get("focus_loss_count", 0)
         
-        # 使用統一計分 logic
+        # 使用統一增強版計分 logic
         correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
                 
         passing_score_percentage = 70.0
@@ -773,7 +807,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
         remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
 
-        # Server-side Timeout Check: 若時間用盡即刻發起自動提交
         if remaining_seconds <= 0:
             handle_auto_submit()
 
@@ -942,7 +975,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 if opt_val:
                     options.append(opt_val)
             
-            # 未答題時 default_index 為 None，防止預設誤選
             default_index = options.index(current_answer) if current_answer in options else None
 
             selected = st.radio("Select your answer:", options, index=default_index, key=f"q_radio_{q_idx}")
@@ -951,7 +983,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 
         elif q_type == "TF":
             tf_options = ["TRUE", "FALSE"]
-            # 未答題時 default_index 為 None，防止預設誤選
             default_index = tf_options.index(current_answer) if current_answer in tf_options else None
             
             selected = st.radio("Select True or False:", tf_options, index=default_index, key=f"tf_radio_{q_idx}")
@@ -1166,7 +1197,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     answered_count = len(user_answers)
                     focus_losses = st.session_state.get("focus_loss_count", 0)
                     
-                    # 統一呼叫 calculate_exam_score 評分
                     correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
                     
                     passing_score_percentage = 70.0
@@ -1239,7 +1269,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
 
     with col_b1:
         if st.button("🖨️ Print Result", use_container_width=True):
-            components.html("<script>window.print();</script>", height=0)
+            # 修正：呼叫 window.parent.print() 穿透 iframe 觸發主頁面列印
+            components.html("<script>window.parent.print();</script>", height=0)
 
     with col_b2:
         if st.button("✉️ Resend Email", use_container_width=True):
