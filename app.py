@@ -1133,7 +1133,165 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 # Step 4 - 考試總結與詳細清單確認頁面
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
+    if not st.session_state.exam_questions:
+        st.session_state.exam_questions = get_exam_questions()
+
+    exam_questions = st.session_state.exam_questions
+
+    def handle_focus_loss():
+        log_violation_to_sheet(st.session_state.voucher_code)
+
+    def handle_auto_submit():
+        user_answers = st.session_state.get("answers", {})
+        focus_losses = st.session_state.get("focus_loss_count", 0)
+        
+        correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
+                
+        passing_score_percentage = 70.0
+        score_percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
+        final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
+        
+        finalize_exam_submission(
+            st.session_state.voucher_code,
+            focus_losses,
+            final_status,
+            explanation=f"Auto-submitted on timeout from Review Page. Correct {correct_count}/{total_q}"
+        )
+        
+        user_email = st.session_state.get("candidate_email", "")
+        user_name = st.session_state.get("candidate_name", "Candidate")
+
+        if user_email:
+            send_exam_result_email(
+                user_email=user_email,
+                user_name=user_name,
+                score=correct_count,
+                total=total_q,
+                pass_percentage=passing_score_percentage,
+                exam_title="Shisa Kanko-Shi Examination"
+            )
+        
+        st.session_state.exam_final_status = final_status
+        st.session_state.exam_correct_count = correct_count
+        st.session_state.exam_step = 5
+        st.rerun()
+
+    # Hidden Backend Triggers
+    if st.button("TriggerViolationBackend", key="hidden-violation-trigger-step4", on_click=handle_focus_loss):
+        pass
+
+    if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger-step4", on_click=handle_auto_submit):
+        pass
+
+    # JavaScript Security Monitor & Auto-submit trigger
+    st.components.v1.html("""
+        <script>
+            function hideTriggers() {
+                const buttons = parent.document.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend') || btn.innerText.includes('AutoSubmitBackend')) {
+                        let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
+                        if (container) { container.style.display = 'none'; }
+                    }
+                });
+            }
+
+            const observer = new MutationObserver(hideTriggers);
+            observer.observe(parent.document.body, { childList: true, subtree: true });
+            hideTriggers();
+
+            if (!parent.document.getElementById('global-warning-banner')) {
+                const banner = parent.document.createElement('div');
+                banner.id = 'global-warning-banner';
+                banner.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100vw;
+                    background-color: #dc2626; color: white; text-align: center; 
+                    padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
+                    font-size: 15px; z-index: 2147483647; display: none; box-sizing: border-box;
+                `;
+                banner.innerHTML = "🚨 WARNING: Tab switch, blur, or mouse exit detected!";
+                parent.document.body.appendChild(banner);
+            }
+
+            let bannerTimer;
+            function triggerGlobalWarning() {
+                const b = parent.document.getElementById('global-warning-banner');
+                if (b) {
+                    b.style.display = 'block';
+                    clearTimeout(bannerTimer);
+                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
+                }
+                parent.document.querySelectorAll('button').forEach(btn => {
+                    if (btn.innerText.includes('TriggerViolationBackend')) { btn.click(); }
+                });
+            }
+
+            parent.document.addEventListener("visibilitychange", function() { 
+                if (parent.document.hidden) triggerGlobalWarning(); 
+            });
+            
+            parent.window.addEventListener("blur", function() { 
+                if (parent.document.activeElement && parent.document.activeElement.tagName === 'IFRAME') {
+                    return; 
+                }
+                triggerGlobalWarning(); 
+            });
+
+            parent.document.addEventListener("mouseleave", function(e) {
+                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
+                    triggerGlobalWarning();
+                }
+            });
+        </script>
+    """, height=0)
+
+    # Timer Calculation & Server Fallback Check
+    if "exam_remaining_seconds" not in st.session_state:
+        st.session_state.exam_remaining_seconds = 5400
+        st.session_state.exam_timer_start_local = time.time()
+        
+    elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
+    remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
+
+    if remaining_seconds <= 0:
+        handle_auto_submit()
+
     st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Question Checklist</h2>", unsafe_allow_html=True)
+    
+    # Live JS Timer Widget
+    timer_html = """
+        <div style="background-color: #1e293b; padding: 8px 16px; border-radius: 6px; text-align: center; color: white; font-family: sans-serif; max-width: 280px; margin: 0 auto 15px auto;">
+            <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px;">⏳ TIME REMAINING</div>
+            <div id="review-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
+        </div>
+        <script>
+            const serverRemaining = SERVER_REMAINING_PLACEHOLDER;
+            let endTime = Date.now() + (serverRemaining * 1000);
+            let hasAutoSubmitted = false;
+
+            function updateCountdown() {
+                let timeLeft = Math.floor((endTime - Date.now()) / 1000);
+                if (timeLeft <= 0) {
+                    timeLeft = 0;
+                    if (!hasAutoSubmitted) {
+                        hasAutoSubmitted = true;
+                        parent.document.querySelectorAll('button').forEach(btn => {
+                            if (btn.innerText.includes('AutoSubmitBackend')) { btn.click(); }
+                        });
+                    }
+                }
+                const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
+                const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
+                const s = String(timeLeft % 60).padStart(2, '0');
+                const target = document.getElementById('review-js-timer');
+                if (target) { target.innerText = h + ":" + m + ":" + s; }
+            }
+            updateCountdown();
+            setInterval(updateCountdown, 1000);
+        </script>
+    """.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
+    st.components.v1.html(timer_html, height=65)
+
     st.write("Review your answered, unanswered, and flagged questions below. Click **'Go to Q...'** next to any question to instantly jump back to it and revise your answer.")
     st.write("---")
 
@@ -1154,7 +1312,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
 
     user_answers = st.session_state.get("answers", {})
     flagged_set = st.session_state.get("flagged_questions", set())
-    exam_questions = st.session_state.get("exam_questions", [])
 
     for q_num in range(1, total_q_count + 1):
         is_answered = q_num in user_answers
@@ -1234,6 +1391,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                 except Exception as e:
                     st.error(f"Submission error: {e}")
   
+    st.divider()
     st.divider()
 
 # ==========================================
