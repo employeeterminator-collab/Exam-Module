@@ -368,6 +368,66 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
         st.session_state.email_error = str(e)
         return False
 
+import json
+
+# Auto-save current candidate answers to ActiveSessions tab (throttled)
+def save_draft_answers(voucher_code, answers_dict):
+    now = time.time()
+    last_save = st.session_state.get("last_draft_save_time", 0)
+    
+    # Throttle: Only write to Google Sheets if > 3 seconds have passed
+    if now - last_save < 3:
+        return
+        
+    try:
+        db = get_sheets_connection()
+        try:
+            sheet = db.worksheet("ActiveSessions")
+        except Exception:
+            sheet = db.add_worksheet(title="ActiveSessions", rows="500", cols="3")
+            sheet.append_row(["VoucherCode", "LastUpdated", "AnswersData"])
+
+        answers_json = json.dumps({str(k): v for k, v in answers_dict.items()})
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        cell = sheet.find(voucher_code)
+        if cell:
+            sheet.update_cell(cell.row, 2, current_time)
+            sheet.update_cell(cell.row, 3, answers_json)
+        else:
+            sheet.append_row([voucher_code, current_time, answers_json])
+            
+        st.session_state.last_draft_save_time = now
+    except Exception as e:
+        print(f"Auto-save draft API busy: {e}")
+
+# Restore candidate draft answers on re-connection
+def load_draft_answers(voucher_code):
+    try:
+        db = get_sheets_connection()
+        sheet = db.worksheet("ActiveSessions")
+        cell = sheet.find(voucher_code)
+        if cell:
+            raw_json = sheet.cell(cell.row, 3).value
+            if raw_json and str(raw_json).strip() != "":
+                parsed = json.loads(raw_json)
+                return {int(k): v for k, v in parsed.items()}
+    except Exception as e:
+        print(f"Load draft answers error: {e}")
+    return {}
+
+# Clean up temporary session row upon final submission
+def clear_draft_answers(voucher_code):
+    try:
+        db = get_sheets_connection()
+        sheet = db.worksheet("ActiveSessions")
+        cell = sheet.find(voucher_code)
+        if cell:
+            sheet.delete_rows(cell.row)
+    except Exception as e:
+        print(f"Clear draft session error: {e}")
+
+
 # ==========================================
 # Step 0 - 考生身分驗證
 # ==========================================
@@ -452,6 +512,11 @@ if not st.session_state.authenticated:
 
                                     st.session_state.exam_remaining_seconds = remaining_allowed_seconds
                                     st.session_state.exam_timer_start_local = time.time()
+
+                                    # Restore saved answers from previous session if disconnected
+                                    restored_answers = load_draft_answers(voucher_input.strip())
+                                    if restored_answers:
+                                        st.session_state.answers = restored_answers
 
                                     st.session_state.exam_step = 3
                                     st.success("🔄 Resuming your active examination session...")
@@ -978,16 +1043,19 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             default_index = options.index(current_answer) if current_answer in options else None
 
             selected = st.radio("Select your answer:", options, index=default_index, key=f"q_radio_{q_idx}")
+            # Whenever st.session_state.answers[q_idx] is assigned:
             if selected is not None:
                 st.session_state.answers[q_idx] = selected
-
+                save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
         elif q_type == "TF":
             tf_options = ["TRUE", "FALSE"]
             default_index = tf_options.index(current_answer) if current_answer in tf_options else None
             
             selected = st.radio("Select True or False:", tf_options, index=default_index, key=f"tf_radio_{q_idx}")
+            # Whenever st.session_state.answers[q_idx] is assigned:
             if selected is not None:
                 st.session_state.answers[q_idx] = selected
+                save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
 
         elif q_type == "ORDER":
             st.markdown("##### 🔢 Order Ranking")
@@ -1017,9 +1085,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected_items:
                 letters = [item.split(":")[0].strip() for item in selected_items]
                 st.session_state.answers[q_idx] = ",".join(letters)
+                # Auto-save draft on sequence update
+                save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
+                    # Auto-save draft when selection is cleared
+                    save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
 
         elif q_type == "MATCH":
             st.markdown("##### 🔗 Matching Exercise")
@@ -1094,9 +1166,14 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 sorted_keys = sorted(matching_results.keys())
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
                 st.session_state.answers[q_idx] = pairs_str
+                # Auto-save draft on matching update
+                save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
+                    # Auto-save draft when selections are cleared
+                    save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
+
 
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
@@ -1121,6 +1198,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         with col_next:
             if st.session_state.current_q < TOTAL_QUESTIONS:
                 if st.button("Next Question ➡️", use_container_width=True):
+                    save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
                     st.session_state.current_q += 1
                     st.rerun()
             else:
