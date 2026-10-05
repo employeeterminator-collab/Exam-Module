@@ -729,11 +729,22 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                                 try:
                                     db = get_sheets_connection()
                                     sheet = db.worksheet("Vouchers")
-                                    cell = sheet.find(st.session_state.candidate_email)
+                                    # Search by unique voucher code instead of email
+                                    cell = sheet.find(st.session_state.voucher_code)
                                     if cell:
-                                        sheet.update_cell(cell.row, 9, photo_url)
-                                except Exception:
-                                    pass
+                                        # Explicitly look up the header column name "PhotoURL" or fallback to column index 9
+                                        headers = sheet.row_values(1)
+                                        col_idx = 9 # Default fallback
+                                        for h_idx, h_name in enumerate(headers, start=1):
+                                            if "photo" in h_name.lower() or "url" in h_name.lower():
+                                                col_idx = h_idx
+                                                break
+                                        
+                                        sheet.update_cell(cell.row, col_idx, photo_url)
+                                    else:
+                                        print(f"Error: Voucher code {st.session_state.voucher_code} not found in Vouchers sheet.")
+                                except Exception as sheet_err:
+                                    print(f"Failed to update photo URL in Google Sheets: {sheet_err}")
 
                                 st.session_state.on_break = True
                                 st.session_state.break_start_time = time.time()
