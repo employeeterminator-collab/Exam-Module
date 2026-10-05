@@ -370,8 +370,8 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
 
 import json
 
-# Auto-save current candidate answers to ActiveSessions tab (throttled)
-def save_draft_answers(voucher_code, answers_dict):
+# Auto-save current candidate answers & flagged questions to ActiveSessions tab
+def save_draft_answers(voucher_code, answers_dict, flagged_set=None):
     now = time.time()
     last_save = st.session_state.get("last_draft_save_time", 0)
     
@@ -387,7 +387,15 @@ def save_draft_answers(voucher_code, answers_dict):
             sheet = db.add_worksheet(title="ActiveSessions", rows="500", cols="3")
             sheet.append_row(["VoucherCode", "LastUpdated", "AnswersData"])
 
-        answers_json = json.dumps({str(k): v for k, v in answers_dict.items()})
+        flagged_list = list(flagged_set) if flagged_set else []
+        
+        # Package both answers and flagged questions into a single JSON payload
+        session_payload = {
+            "answers": {str(k): v for k, v in answers_dict.items()},
+            "flagged": flagged_list
+        }
+        
+        answers_json = json.dumps(session_payload)
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         cell = sheet.find(voucher_code)
@@ -401,7 +409,7 @@ def save_draft_answers(voucher_code, answers_dict):
     except Exception as e:
         print(f"Auto-save draft API busy: {e}")
 
-# Restore candidate draft answers on re-connection
+# Restore candidate draft answers and flagged questions on re-connection
 def load_draft_answers(voucher_code):
     try:
         db = get_sheets_connection()
@@ -411,22 +419,18 @@ def load_draft_answers(voucher_code):
             raw_json = sheet.cell(cell.row, 3).value
             if raw_json and str(raw_json).strip() != "":
                 parsed = json.loads(raw_json)
-                return {int(k): v for k, v in parsed.items()}
+                
+                # Support legacy payload format (if payload was just answers)
+                if "answers" in parsed:
+                    answers = {int(k): v for k, v in parsed["answers"].items()}
+                    flagged = set(parsed.get("flagged", []))
+                    return answers, flagged
+                else:
+                    answers = {int(k): v for k, v in parsed.items()}
+                    return answers, set()
     except Exception as e:
         print(f"Load draft answers error: {e}")
-    return {}
-
-# Clean up temporary session row upon final submission
-def clear_draft_answers(voucher_code):
-    try:
-        db = get_sheets_connection()
-        sheet = db.worksheet("ActiveSessions")
-        cell = sheet.find(voucher_code)
-        if cell:
-            sheet.delete_rows(cell.row)
-    except Exception as e:
-        print(f"Clear draft session error: {e}")
-
+    return {}, set()
 
 # ==========================================
 # Step 0 - 考生身分驗證
@@ -513,11 +517,13 @@ if not st.session_state.authenticated:
                                     st.session_state.exam_remaining_seconds = remaining_allowed_seconds
                                     st.session_state.exam_timer_start_local = time.time()
 
-                                    # Restore saved answers from previous session if disconnected
-                                    restored_answers = load_draft_answers(voucher_input.strip())
+                                    # Restore saved answers and flagged questions from previous session if disconnected
+                                    restored_answers, restored_flagged = load_draft_answers(voucher_input.strip())
                                     if restored_answers:
                                         st.session_state.answers = restored_answers
-
+                                    if restored_flagged:
+                                        st.session_state.flagged_questions = restored_flagged
+                                    
                                     st.session_state.exam_step = 3
                                     st.success("🔄 Resuming your active examination session...")
                                     time.sleep(1)
@@ -1167,14 +1173,20 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
                 st.session_state.answers[q_idx] = pairs_str
                 # Auto-save draft on matching update
-                save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
+                save_draft_answers(
+                    st.session_state.voucher_code, 
+                    st.session_state.answers, 
+                    st.session_state.get("flagged_questions", set())
+                )
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
                     # Auto-save draft when selections are cleared
-                    save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
-
-
+                    save_draft_answers(
+                    st.session_state.voucher_code, 
+                    st.session_state.answers, 
+                    st.session_state.get("flagged_questions", set())
+                )
         st.markdown("---")
         col_prev, col_flag, col_next = st.columns([1, 1, 1])
 
@@ -1184,7 +1196,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     st.session_state.current_q -= 1
                     st.rerun()
 
-        with col_flag:
+       with col_flag:
             current_q = st.session_state.current_q
             is_flagged = current_q in st.session_state.get("flagged_questions", set())
             flag_label = "⭐ Unflag" if is_flagged else "☆ Flag for Review"
@@ -1193,6 +1205,13 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     st.session_state.flagged_questions.remove(current_q)
                 else:
                     st.session_state.flagged_questions.add(current_q)
+                
+                # Auto-save immediately when flag state changes
+                save_draft_answers(
+                    st.session_state.voucher_code, 
+                    st.session_state.answers, 
+                    st.session_state.flagged_questions
+                )
                 st.rerun()
 
         with col_next:
