@@ -1460,13 +1460,23 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     st.warning("⚠️ Once you click **Confirm and Submit Exam**, your answers will be finalized and sent to the examination database. You cannot make any further changes.")
 
     col_sub1, col_sub2 = st.columns(2)
+    
+    # Initialize submission lock flag
+    if "is_submitting" not in st.session_state:
+        st.session_state.is_submitting = False
+
     with col_sub1:
-        if st.button("⬅️ Return to Exam", use_container_width=True):
-            st.session_state.exam_step = 3
-            st.rerun()
+        # Disable "Return to Exam" if submission is already in progress or completed
+        if st.button("⬅️ Return to Exam", use_container_width=True, disabled=st.session_state.is_submitting):
+            if not st.session_state.is_submitting:
+                st.session_state.exam_step = 3
+                st.rerun()
 
     with col_sub2:
-        if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
+        if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True, disabled=st.session_state.is_submitting):
+            # Lock the session instantly
+            st.session_state.is_submitting = True
+            
             with st.spinner("Submitting exam and recording results..."):
                 try:
                     user_answers = st.session_state.get("answers", {})
@@ -1487,7 +1497,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                         explanation=f"Answered {answered_count}/{total_q}, Correct {correct_count}"
                     )
                     
-                    # 2. Send Pass / Fail Email Notification
+                    # 2. Clear temporary session draft row
+                    clear_draft_answers(st.session_state.voucher_code)
+                    
+                    # 3. Send Pass / Fail Email Notification
                     user_email = st.session_state.get("candidate_email", "")
                     user_name = st.session_state.get("candidate_name", "Candidate")
 
@@ -1501,18 +1514,18 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                             exam_title="Shisa Kanko-Shi Examination"
                         )
                     
-                    # 3. Update Session State and navigate to Step 5
+                    # 4. Update Session State and navigate to Step 5
                     st.session_state.exam_final_status = final_status
                     st.session_state.exam_correct_count = correct_count
                     st.session_state.exam_step = 5
+                    st.session_state.is_submitting = False  # Reset flag for safety
                     st.rerun()
 
                 except Exception as e:
+                    st.session_state.is_submitting = False  # Unlock on error so they can retry
                     st.error(f"Submission error: {e}")
-  
     st.divider()
     st.divider()
-
 # ==========================================
 # Step 5 - 考試結果與結算頁面
 # ==========================================
