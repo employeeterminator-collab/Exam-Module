@@ -371,12 +371,12 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
 import json
 
 # Auto-save current candidate answers & flagged questions to ActiveSessions tab
-def save_draft_answers(voucher_code, answers_dict, flagged_set=None):
+def save_draft_answers(voucher_code, answers_dict, flagged_set=None, force=False):
     now = time.time()
     last_save = st.session_state.get("last_draft_save_time", 0)
     
-    # Throttle: Only write to Google Sheets if > 3 seconds have passed
-    if now - last_save < 3:
+    # Throttle: Only skip if NOT forced AND less than 3 seconds have passed
+    if not force and (now - last_save < 3):
         return
         
     try:
@@ -391,7 +391,8 @@ def save_draft_answers(voucher_code, answers_dict, flagged_set=None):
         if flagged_set is None:
             flagged_set = st.session_state.get("flagged_questions", set())
 
-        flagged_list = list(flagged_set) if flagged_set else []
+        # Ensure integers are converted to plain list of ints
+        flagged_list = [int(q) for q in flagged_set] if flagged_set else []
         
         # Package both answers and flagged questions into a single JSON payload
         session_payload = {
@@ -1187,11 +1188,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 else:
                     st.session_state.flagged_questions.add(current_q)
                 
-                # Auto-save immediately when flag state changes
+                # Force instant auto-save bypassing throttle timer
                 save_draft_answers(
                     st.session_state.voucher_code, 
                     st.session_state.answers, 
-                    st.session_state.flagged_questions
+                    st.session_state.flagged_questions,
+                    force=True
                 )
                 st.rerun()
 
