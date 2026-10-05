@@ -1196,7 +1196,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     st.session_state.current_q -= 1
                     st.rerun()
 
-       with col_flag:
+        with col_flag:
             current_q = st.session_state.current_q
             is_flagged = current_q in st.session_state.get("flagged_questions", set())
             flag_label = "⭐ Unflag" if is_flagged else "☆ Flag for Review"
