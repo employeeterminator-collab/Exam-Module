@@ -387,6 +387,10 @@ def save_draft_answers(voucher_code, answers_dict, flagged_set=None):
             sheet = db.add_worksheet(title="ActiveSessions", rows="500", cols="3")
             sheet.append_row(["VoucherCode", "LastUpdated", "AnswersData"])
 
+        # Fallback to session state if flagged_set is not explicitly passed
+        if flagged_set is None:
+            flagged_set = st.session_state.get("flagged_questions", set())
+
         flagged_list = list(flagged_set) if flagged_set else []
         
         # Package both answers and flagged questions into a single JSON payload
@@ -408,29 +412,6 @@ def save_draft_answers(voucher_code, answers_dict, flagged_set=None):
         st.session_state.last_draft_save_time = now
     except Exception as e:
         print(f"Auto-save draft API busy: {e}")
-
-# Restore candidate draft answers and flagged questions on re-connection
-def load_draft_answers(voucher_code):
-    try:
-        db = get_sheets_connection()
-        sheet = db.worksheet("ActiveSessions")
-        cell = sheet.find(voucher_code)
-        if cell:
-            raw_json = sheet.cell(cell.row, 3).value
-            if raw_json and str(raw_json).strip() != "":
-                parsed = json.loads(raw_json)
-                
-                # Support legacy payload format (if payload was just answers)
-                if "answers" in parsed:
-                    answers = {int(k): v for k, v in parsed["answers"].items()}
-                    flagged = set(parsed.get("flagged", []))
-                    return answers, flagged
-                else:
-                    answers = {int(k): v for k, v in parsed.items()}
-                    return answers, set()
-    except Exception as e:
-        print(f"Load draft answers error: {e}")
-    return {}, set()
 
 # ==========================================
 # Step 0 - 考生身分驗證
