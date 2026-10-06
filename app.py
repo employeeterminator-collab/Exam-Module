@@ -1,5 +1,6 @@
 import base64
 import datetime
+import random
 import re
 import smtplib
 import time
@@ -97,6 +98,8 @@ if "candidate_japanese_name" not in st.session_state:
     st.session_state.candidate_japanese_name = ""
 if "candidate_name" not in st.session_state:
     st.session_state.candidate_name = ""
+if "assigned_paper" not in st.session_state:
+    st.session_state.assigned_paper = "A"
 if "exam_step" not in st.session_state:
     st.session_state.exam_step = 0
 if "on_break" not in st.session_state:
@@ -124,8 +127,8 @@ def get_sheets_connection():
     sheet = client.open("ShisaKanko_Exam_Database")
     return sheet
 
-# 動態載入獨立題庫檔案資料 (從 Google Sheet "Questions", 頁籤 "A")
-def get_exam_questions():
+# 支援動態指定考卷分頁 (A, B, C, D, E) 載入題庫
+def get_exam_questions(paper_name="A"):
     try:
         scope = [
             "https://spreadsheets.google.com/feeds",
@@ -136,7 +139,7 @@ def get_exam_questions():
         client = gspread.authorize(creds)
         
         spreadsheet = client.open("Questions")
-        sheet = spreadsheet.worksheet("A")
+        sheet = spreadsheet.worksheet(str(paper_name).strip().upper())
         rows = sheet.get_all_values()
         
         if not rows or len(rows) < 2:
@@ -186,7 +189,7 @@ def get_exam_questions():
         return normalized_records
             
     except Exception as e:
-        st.error(f"Google Sheets Debug Error: {e}")
+        st.error(f"Google Sheets Debug Error (Paper {paper_name}): {e}")
         
     return []
 
@@ -211,21 +214,15 @@ def calculate_exam_score(questions, user_answers):
 
         # 2. MC 及 MC_MEDIA 的彈性比對邏輯
         if q_type in ["MC", "MC_MEDIA", ""]:
-            # 情況 A：CorrectAnswer 填寫字母（如 "A", "B", "C", "D"）
             if len(correct_val) == 1 and correct_val in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                # 取得該字母在題庫中對應的選項文字
                 opt_text = str(q_data.get(f"Option{correct_val}", "")).strip().upper()
-                
-                # 考生選擇了該選項的完整文字
                 if opt_text and u_ans_str == opt_text:
                     correct_count += 1
                     continue
-                # 考生選擇的文字包含前綴（例如 "A. ..." 或 "A: ..."）
                 if u_ans_str.startswith(f"{correct_val}.") or u_ans_str.startswith(f"{correct_val}:") or u_ans_str.startswith(f"{correct_val})") or u_ans_str.startswith(f"{correct_val} "):
                     correct_count += 1
                     continue
 
-            # 情況 B：比較去除字母前綴後的實際文字內容
             clean_u = re.sub(r'^[A-H][.:\)]\s*', '', u_ans_str)
             clean_c = re.sub(r'^[A-H][.:\)]\s*', '', correct_val)
             if clean_u and clean_u == clean_c:
@@ -250,19 +247,47 @@ def calculate_exam_score(questions, user_answers):
 
     return correct_count, total_q
 
-# 記錄第一次開始考試的時間 (Committed)
-def update_voucher_committed(voucher_code):
+# 記錄第一次開始考試的時間 (Committed) 並同時指派或取得隨機考卷
+def initialize_voucher_session_in_sheet(voucher_code):
+    assigned_paper = "A"
     try:
         db = get_sheets_connection()
         sheet = db.worksheet("Vouchers")
         cell = sheet.find(voucher_code)
         if cell:
-            current_value = sheet.cell(cell.row, 10).value
-            if not current_value or str(current_value).strip() == "":
+            row_idx = cell.row
+            headers = sheet.row_values(1)
+            
+            # 尋找或確認 AssignedPaper 欄位位置（預設第 15 欄）
+            paper_col_idx = 15
+            for h_idx, h_name in enumerate(headers, start=1):
+                if "paper" in h_name.lower():
+                    paper_col_idx = h_idx
+                    break
+            
+            # 讀取現有的 AssignedPaper
+            current_paper_val = sheet.cell(row_idx, paper_col_idx).value if len(sheet.row_values(row_idx)) >= paper_col_idx else ""
+            
+            if current_paper_val and str(current_paper_val).strip() in ["A", "B", "C", "D", "E"]:
+                assigned_paper = str(current_paper_val).strip().upper()
+            else:
+                # 隨機從 A, B, C, D, E 中抽出一套
+                assigned_paper = random.choice(["A", "B", "C", "D", "E"])
+                try:
+                    sheet.update_cell(row_idx, paper_col_idx, assigned_paper)
+                except Exception:
+                    pass
+
+            # 檢查並記錄 Committed 時間
+            current_committed = sheet.cell(row_idx, 10).value
+            if not current_committed or str(current_committed).strip() == "":
                 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                sheet.update_cell(cell.row, 10, current_time)
+                sheet.update_cell(row_idx, 10, current_time)
+                
     except Exception as e:
-        print(f"Failed to update Committed time: {e}")
+        print(f"Failed to initialize voucher session in sheet: {e}")
+        
+    return assigned_paper
 
 # 記錄違規事件到 ViolationLogs Tab 同時即時更新 Vouchers 上的警告次數
 def log_violation_to_sheet(voucher_code):
@@ -324,10 +349,9 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
             <div style="max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
               <h2 style="color: {status_color}; margin-top: 0;">Exam Result: {status_text}</h2>
               <p>Dear <strong>{user_name}</strong>,</p>
-              <p>Thank you for completing <strong>{exam_title}</strong>. Below is your performance summary:</p>
+              <p>Thank you for completing <strong>{exam_title}</strong>. Below is your performance status:</p>
               
               <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-               
                 <tr style="background-color: #f8f9fa;">
                   <td style="padding: 10px; border: 1px solid #ddd;"><strong>Status</strong></td>
                   <td style="padding: 10px; border: 1px solid #ddd; color: {status_color}; font-weight: bold;">{status_text}</td>
@@ -488,6 +512,7 @@ if not st.session_state.authenticated:
                     if matched_record:
                         exam_status_val = str(matched_record.get("ExamEndTime", "")).strip() 
                         committed_time = str(matched_record.get("Committed", "")).strip()     
+                        assigned_paper_val = str(matched_record.get("AssignedPaper", "")).strip().upper()
 
                         if exam_status_val != "":
                             st.error(f"❌ **Access Denied:** This voucher has already been finalized with status: **{exam_status_val}**. Re-entry is strictly prohibited.")
@@ -516,6 +541,10 @@ if not st.session_state.authenticated:
                                     st.session_state.candidate_last_name = l_name
                                     st.session_state.candidate_japanese_name = j_name
                                     st.session_state.candidate_name = f"{f_name} {l_name}".strip()
+                                    
+                                    # 確保復原時使用原本分配到的考卷
+                                    st.session_state.assigned_paper = assigned_paper_val if assigned_paper_val in ["A", "B", "C", "D", "E"] else "A"
+                                    st.session_state.exam_questions = get_exam_questions(st.session_state.assigned_paper)
 
                                     st.session_state.exam_remaining_seconds = remaining_allowed_seconds
                                     st.session_state.exam_timer_start_local = time.time()
@@ -528,7 +557,7 @@ if not st.session_state.authenticated:
                                         st.session_state.flagged_questions = restored_flagged
                                     
                                     st.session_state.exam_step = 3
-                                    st.success("🔄 Resuming your active examination session...")
+                                    st.success(f"🔄 Resuming your active examination session (Paper {st.session_state.assigned_paper})...")
                                     time.sleep(1)
                                     st.rerun()
                             except Exception as e:
@@ -652,6 +681,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
         remaining = TOTAL_SECONDS - elapsed
 
         if remaining <= 0:
+            # 倒數結束自動指派考卷並開始
+            assigned_p = initialize_voucher_session_in_sheet(st.session_state.voucher_code)
+            st.session_state.assigned_paper = assigned_p
+            st.session_state.exam_questions = get_exam_questions(assigned_p)
+            
             st.session_state.on_break = False
             st.session_state.exam_step = 3
             st.rerun()
@@ -670,7 +704,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
-                update_voucher_committed(st.session_state.voucher_code)
+                # 點擊開始時隨機抽卷並寫入 Google Sheets
+                assigned_p = initialize_voucher_session_in_sheet(st.session_state.voucher_code)
+                st.session_state.assigned_paper = assigned_p
+                st.session_state.exam_questions = get_exam_questions(assigned_p)
+                
                 st.session_state.on_break = False
                 st.session_state.exam_step = 3
                 st.rerun()
@@ -722,10 +760,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                                 try:
                                     db = get_sheets_connection()
                                     sheet = db.worksheet("Vouchers")
-                                    # Search by unique voucher code instead of email
                                     cell = sheet.find(st.session_state.voucher_code)
                                     if cell:
-                                        # Explicitly look up the header column name "PhotoURL" or fallback to column index 9
                                         headers = sheet.row_values(1)
                                         col_idx = 9 # Default fallback
                                         for h_idx, h_name in enumerate(headers, start=1):
@@ -764,7 +800,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.session_state.flagged_questions = set()  
 
     if not st.session_state.exam_questions:
-        st.session_state.exam_questions = get_exam_questions()
+        st.session_state.exam_questions = get_exam_questions(st.session_state.get("assigned_paper", "A"))
 
     exam_questions = st.session_state.exam_questions
     TOTAL_QUESTIONS = len(exam_questions) if exam_questions else 75
@@ -776,14 +812,12 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         user_answers = st.session_state.get("answers", {})
         focus_losses = st.session_state.get("focus_loss_count", 0)
         
-        # 使用統一增強版計分 logic
         correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
                 
         passing_score_percentage = 70.0
         score_percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
         final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
         
-        # 1. Record submission in Google Sheets
         finalize_exam_submission(
             st.session_state.voucher_code,
             focus_losses,
@@ -791,7 +825,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             explanation=f"Auto-submitted on timeout. Correct {correct_count}/{total_q}"
         )
         
-        # 2. Send Email Notification
         user_email = st.session_state.get("candidate_email", "")
         user_name = st.session_state.get("candidate_name", "Candidate")
 
@@ -805,7 +838,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 exam_title="Shisa Kanko-Shi Examination"
             )
         
-        # 3. Navigate to Results Step
         st.session_state.exam_final_status = final_status
         st.session_state.exam_correct_count = correct_count
         st.session_state.exam_step = 5
@@ -1063,7 +1095,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             default_index = options.index(current_answer) if current_answer in options else None
 
             selected = st.radio("Select your answer:", options, index=default_index, key=f"q_radio_{q_idx}")
-            # Whenever st.session_state.answers[q_idx] is assigned:
             if selected is not None:
                 st.session_state.answers[q_idx] = selected
                 save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
@@ -1072,7 +1103,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             default_index = tf_options.index(current_answer) if current_answer in tf_options else None
             
             selected = st.radio("Select True or False:", tf_options, index=default_index, key=f"tf_radio_{q_idx}")
-            # Whenever st.session_state.answers[q_idx] is assigned:
             if selected is not None:
                 st.session_state.answers[q_idx] = selected
                 save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
@@ -1105,12 +1135,10 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             if selected_items:
                 letters = [item.split(":")[0].strip() for item in selected_items]
                 st.session_state.answers[q_idx] = ",".join(letters)
-                # Auto-save draft on sequence update
                 save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
-                    # Auto-save draft when selection is cleared
                     save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
 
         elif q_type == "MATCH":
@@ -1186,7 +1214,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 sorted_keys = sorted(matching_results.keys())
                 pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
                 st.session_state.answers[q_idx] = pairs_str
-                # Auto-save draft on matching update
                 save_draft_answers(
                     st.session_state.voucher_code, 
                     st.session_state.answers, 
@@ -1195,7 +1222,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
             else:
                 if q_idx in st.session_state.answers:
                     del st.session_state.answers[q_idx]
-                    # Auto-save draft when selections are cleared
                     save_draft_answers(
                     st.session_state.voucher_code, 
                     st.session_state.answers, 
@@ -1220,7 +1246,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 else:
                     st.session_state.flagged_questions.add(current_q)
                 
-                # Force instant auto-save bypassing throttle timer
                 save_draft_answers(
                     st.session_state.voucher_code, 
                     st.session_state.answers, 
@@ -1246,7 +1271,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
 # ==========================================
 elif st.session_state.authenticated and st.session_state.exam_step == 4:
     if not st.session_state.exam_questions:
-        st.session_state.exam_questions = get_exam_questions()
+        st.session_state.exam_questions = get_exam_questions(st.session_state.get("assigned_paper", "A"))
 
     exam_questions = st.session_state.exam_questions
 
@@ -1295,7 +1320,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger-step4", on_click=handle_auto_submit):
         pass
 
-    # JavaScript Security Monitor & Auto-submit trigger
     st.components.v1.html("""
         <script>
             function hideTriggers() {
@@ -1357,7 +1381,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
         </script>
     """, height=0)
 
-    # Timer Calculation & Server Fallback Check
     if "exam_remaining_seconds" not in st.session_state:
         st.session_state.exam_remaining_seconds = 5400
         st.session_state.exam_timer_start_local = time.time()
@@ -1368,13 +1391,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
     if remaining_seconds <= 0:
         handle_auto_submit()
 
-    # ==========================================
-    # SUBMISSION STATE CONTROLLER
-    # ==========================================
     if "submitting" not in st.session_state:
         st.session_state.submitting = False
 
-    # PHASE 1: Execution locked - instantly masked and showing loading indicator
     if st.session_state.submitting:
         st.markdown("<h2 style='text-align: center; color: #38bdf8;'>🔒 Finalizing Exam Submission...</h2>", unsafe_allow_html=True)
         with st.spinner("Submitting exam to database, clearing draft cache, and sending confirmation email..."):
@@ -1389,7 +1408,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                 score_percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
                 final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
                 
-                # 1. Record submission in Google Sheets
                 finalize_exam_submission(
                     st.session_state.voucher_code,
                     focus_losses,
@@ -1397,10 +1415,8 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     explanation=f"Answered {answered_count}/{total_q}, Correct {correct_count}"
                 )
                 
-                # 2. Clear temporary session draft row
                 clear_draft_answers(st.session_state.voucher_code)
                 
-                # 3. Send Pass / Fail Email Notification
                 user_email = st.session_state.get("candidate_email", "")
                 user_name = st.session_state.get("candidate_name", "Candidate")
 
@@ -1414,7 +1430,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                         exam_title="Shisa Kanko-Shi Examination"
                     )
                 
-                # 4. Update Session State and navigate to Step 5
                 st.session_state.exam_final_status = final_status
                 st.session_state.exam_correct_count = correct_count
                 st.session_state.exam_step = 5
@@ -1428,11 +1443,9 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     st.session_state.submitting = True
                     st.rerun()
 
-    # PHASE 2: Normal Review Page View
     else:
         st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Question Checklist</h2>", unsafe_allow_html=True)
         
-        # Live JS Timer Widget
         timer_html = """
             <div style="background-color: #1e293b; padding: 8px 16px; border-radius: 6px; text-align: center; color: white; font-family: sans-serif; max-width: 280px; margin: 0 auto 15px auto;">
                 <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px;">⏳ TIME REMAINING</div>
@@ -1523,11 +1536,11 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
 
         with col_sub2:
             if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
-                # Instantly set submitting flag and rerun to paint the spinner and remove buttons
                 st.session_state.submitting = True
                 st.rerun()
         st.divider()
         st.divider()
+
 # ==========================================
 # Step 5 - 考試結果與結算頁面
 # ==========================================
@@ -1557,7 +1570,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 5:
     st.markdown("---")
     st.info("💡 Your results and timestamps have been securely recorded in the official examination database.")
     
-    # 2-Column Action Bar
     col_b1, col_b2 = st.columns(2)
 
     with col_b1:
