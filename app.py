@@ -293,6 +293,7 @@ def log_violation_to_sheet(voucher_code):
         vouchers_sheet = db.worksheet("Vouchers")
         cell = vouchers_sheet.find(voucher_code)
         if cell:
+            # 直接更新第 11 欄 (warningCount)
             vouchers_sheet.update_cell(cell.row, 11, st.session_state.focus_loss_count)
     except Exception as e:
         print(f"Failed to log violation globally: {e}")
@@ -305,7 +306,7 @@ def finalize_exam_submission(voucher_code, warning_count, exam_status, explanati
         if cell:
             completed_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             sheet.update_cell(cell.row, 12, completed_time)  
-            sheet.update_cell(cell.row, 11, warning_count) 
+            sheet.update_cell(cell.row, 11, warning_count) # 更新第 11 欄 (warningCount)
             sheet.update_cell(cell.row, 13, exam_status)   
             sheet.update_cell(cell.row, 14, explanation)   
     except Exception as e:
@@ -515,11 +516,12 @@ if not st.session_state.authenticated:
                                     l_name = str(matched_record.get("EnglishLastName", "")).strip()
                                     j_name = str(matched_record.get("JapaneseName", "")).strip()
 
+                                    # 直接從 Google Sheets 第 11 欄 (Col 11: warningCount) 讀取警告次數
                                     existing_warnings = 0
                                     try:
-                                        raw_warnings = matched_record.get("WarningCount", 0)
-                                        if raw_warnings and str(raw_warnings).strip().isdigit():
-                                            existing_warnings = int(raw_warnings)
+                                        cell_val = vouchers_sheet.cell(row_index, 11).value
+                                        if cell_val is not None and str(cell_val).strip().isdigit():
+                                            existing_warnings = int(str(cell_val).strip())
                                     except Exception:
                                         existing_warnings = 0
 
@@ -549,7 +551,7 @@ if not st.session_state.authenticated:
                                         st.session_state.flagged_questions = restored_flagged
                                     
                                     st.session_state.exam_step = 3
-                                    st.success(f"🔄 Resuming your active examination session (Paper {st.session_state.assigned_paper})...")
+                                    st.success(f"🔄 Resuming your active examination session...")
                                     time.sleep(1)
                                     st.rerun()
                             except Exception as e:
@@ -1156,7 +1158,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                     defs_dict[def_letter] = val
 
             if not options_dict:
-                st.warning("⚠️️ No options found for this question.")
+                st.warning("⚠️ No options found for this question.")
             if not defs_dict:
                 st.warning("⚠️ No definitions found. Please check columns M through P.")
 
