@@ -916,37 +916,37 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         if remaining_seconds <= 0:
             handle_auto_submit()
 
-        timer_html = """
+        timer_html = f"""
             <div style="background-color: #1e293b; padding: 6px; border-radius: 6px; text-align: center; color: white; font-family: sans-serif;">
                 <div style="font-size: 9px; color: #94a3b8;">⏳ TIME REMAINING</div>
                 <div id="native-js-timer" style="font-size: 16px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
             </div>
             <script>
-                const serverRemaining = SERVER_REMAINING_PLACEHOLDER;
+                const serverRemaining = {remaining_seconds};
                 let endTime = Date.now() + (serverRemaining * 1000);
                 let hasAutoSubmitted = false;
 
-                function updateCountdown() {
+                function updateCountdown() {{
                     let timeLeft = Math.floor((endTime - Date.now()) / 1000);
-                    if (timeLeft <= 0) {
+                    if (timeLeft <= 0) {{
                         timeLeft = 0;
-                        if (!hasAutoSubmitted) {
+                        if (!hasAutoSubmitted) {{
                             hasAutoSubmitted = true;
-                            parent.document.querySelectorAll('button').forEach(btn => {
-                                if (btn.innerText.includes('AutoSubmitBackend')) { btn.click(); }
-                            });
-                        }
-                    }
+                            parent.document.querySelectorAll('button').forEach(btn => {{
+                                if (btn.innerText.includes('AutoSubmitBackend')) {{ btn.click(); }}
+                            }});
+                        }}
+                    }}
                     const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
                     const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
                     const s = String(timeLeft % 60).padStart(2, '0');
                     const target = document.getElementById('native-js-timer');
-                    if (target) { target.innerText = h + ":" + m + ":" + s; }
-                }
+                    if (target) {{ target.innerText = h + ":" + m + ":" + s; }}
+                }}
                 updateCountdown();
                 setInterval(updateCountdown, 1000);
             </script>
-        """.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
+        """
         st.components.v1.html(timer_html, height=55)
 
         if st.button("📋 Go to Review Page", type="primary", use_container_width=True, key="top_review_btn"):
@@ -1331,254 +1331,4 @@ elif st.session_state.authenticated and st.session_state.exam_step == 4:
                     position: fixed; top: 0; left: 0; width: 100vw;
                     background-color: #dc2626; color: white; text-align: center; 
                     padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
-                    font-size: 15px; z-index: 2147483647; display: none; box-sizing: border-box;
-                `;
-                banner.innerHTML = "🚨 WARNING: Tab switch, blur, or mouse exit detected!";
-                parent.document.body.appendChild(banner);
-            }
-
-            let bannerTimer;
-            function triggerGlobalWarning() {
-                const b = parent.document.getElementById('global-warning-banner');
-                if (b) {
-                    b.style.display = 'block';
-                    clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
-                }
-                parent.document.querySelectorAll('button').forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) { btn.click(); }
-                });
-            }
-
-            parent.document.addEventListener("visibilitychange", function() { 
-                if (parent.document.hidden) triggerGlobalWarning(); 
-            });
-            
-            parent.window.addEventListener("blur", function() { 
-                if (parent.document.activeElement && parent.document.activeElement.tagName === 'IFRAME') {
-                    return; 
-                }
-                triggerGlobalWarning(); 
-            });
-
-            parent.document.addEventListener("mouseleave", function(e) {
-                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
-                    triggerGlobalWarning();
-                }
-            });
-        </script>
-    """, height=0)
-
-    if "exam_remaining_seconds" not in st.session_state:
-        st.session_state.exam_remaining_seconds = 5400
-        st.session_state.exam_timer_start_local = time.time()
-        
-    elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
-    remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
-
-    if remaining_seconds <= 0:
-        handle_auto_submit()
-
-    # 修正後的完整字串閉合
-    timer_html = f"""
-        <div style="background-color: #1e293b; padding: 8px 16px; border-radius: 6px; text-align: center; color: white; font-family: sans-serif; max-width: 280px; margin: 0 auto 15px auto;">
-            <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px;">⏳ TIME REMAINING</div>
-            <div id="review-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
-        </div>
-        <script>
-            const serverRemaining = {remaining_seconds};
-            let endTime = Date.now() + (serverRemaining * 1000);
-            let hasAutoSubmitted = false;
-
-            function updateCountdown() {
-                let timeLeft = Math.floor((endTime - Date.now()) / 1000);
-                if (timeLeft <= 0) {
-                    timeLeft = 0;
-                    if (!hasAutoSubmitted) {
-                        hasAutoSubmitted = true;
-                        parent.document.querySelectorAll('button').forEach(btn => {
-                            if (btn.innerText.includes('AutoSubmitBackend')) { btn.click(); }
-                        });
-                    }
-                }
-                const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
-                const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
-                const s = String(timeLeft % 60).padStart(2, '0');
-                const target = document.getElementById('review-js-timer');
-                if (target) { target.innerText = h + ":" + m + ":" + s; }
-            }
-            updateCountdown();
-            setInterval(updateCountdown, 1000);
-        </script>
-    """
-    st.components.v1.html(timer_html, height=65)
-
-    if "submitting" not in st.session_state:
-        st.session_state.submitting = False
-
-    if st.session_state.submitting:
-        st.markdown("<h2 style='text-align: center; color: #38bdf8;'>🔒 Finalizing Exam Submission...</h2>", unsafe_allow_html=True)
-        with st.spinner("Submitting exam to database, clearing draft cache, and sending confirmation email..."):
-            try:
-                user_answers = st.session_state.get("answers", {})
-                answered_count = len(user_answers)
-                focus_losses = st.session_state.get("focus_loss_count", 0)
-                
-                correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
-                
-                passing_score_percentage = 70.0
-                score_percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
-                final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
-                
-                finalize_exam_submission(
-                    st.session_state.voucher_code,
-                    focus_losses,
-                    final_status,
-                    explanation=f"Answered {answered_count}/{total_q}, Correct {correct_count}"
-                )
-                
-                clear_draft_answers(st.session_state.voucher_code)
-                
-                user_email = st.session_state.get("candidate_email", "")
-                user_name = st.session_state.get("candidate_name", "Candidate")
-
-                if user_email:
-                    send_exam_result_email(
-                        user_email=user_email,
-                        user_name=user_name,
-                        score=correct_count,
-                        total=total_q,
-                        pass_percentage=passing_score_percentage,
-                        exam_title="Shisa Kanko-Shi Examination"
-                    )
-                
-                st.session_state.exam_final_status = final_status
-                st.session_state.exam_correct_count = correct_count
-                st.session_state.exam_step = 5
-                st.session_state.submitting = False
-                st.rerun()
-
-            except Exception as e:
-                st.session_state.submitting = False
-                st.error(f"Submission error: {e}")
-                if st.button("Retry Submission"):
-                    st.session_state.submitting = True
-                    st.rerun()
-
-    else:
-        st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Question Checklist</h2>", unsafe_allow_html=True)
-        st.write("Review your answered, unanswered, and flagged questions below. Click **'Go to Q...'** next to any question to instantly jump back to it and revise your answer.")
-        st.write("---")
-
-        total_q_count = len(st.session_state.get("exam_questions", [])) or 75
-        answered_cnt = len(st.session_state.get("answers", {}))
-        unanswered_cnt = total_q_count - answered_cnt
-        flagged_cnt = len(st.session_state.get("flagged_questions", set()))
-        focus_warnings = st.session_state.get("focus_loss_count", 0)
-
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("Answered", answered_cnt)
-        col_m2.metric("Unanswered", unanswered_cnt)
-        col_m3.metric("Flagged", flagged_cnt)
-        col_m4.metric("Warnings", focus_warnings)
-
-        st.markdown("---")
-        st.markdown("### Detailed Question Status List")
-
-        user_answers = st.session_state.get("answers", {})
-        flagged_set = st.session_state.get("flagged_questions", set())
-
-        for q_num in range(1, total_q_count + 1):
-            is_answered = q_num in user_answers
-            is_flagged = q_num in flagged_set
-            
-            status_badge = "🟢 Answered" if is_answered else "⚪ Unanswered"
-            if is_flagged:
-                status_badge += " | ⭐ Flagged"
-
-            ans_preview = user_answers.get(q_num, "No answer selected yet")
-            if isinstance(ans_preview, dict):
-                ans_preview = ", ".join([f"{k}: {v}" for k, v in ans_preview.items()])
-            if len(str(ans_preview)) > 60:
-                ans_preview = str(ans_preview)[:57] + "..."
-
-            with st.container():
-                col_info, col_action = st.columns([4, 1])
-                with col_info:
-                    st.markdown(f"**Q{q_num}** [{status_badge}]<br><small style='color: #64748b;'>Selected: {ans_preview}</small>", unsafe_allow_html=True)
-                with col_action:
-                    if st.button(f"Go to Q{q_num}", key=f"review_jump_{q_num}", use_container_width=True):
-                        st.session_state.current_q = q_num
-                        st.session_state.exam_step = 3
-                        st.rerun()
-                st.divider()
-
-        st.warning("⚠️ Once you click **Confirm and Submit Exam**, your answers will be finalized and sent to the examination database. You cannot make any further changes.")
-
-        col_sub1, col_sub2 = st.columns(2)
-
-        with col_sub1:
-            if st.button("⬅️ Return to Exam", use_container_width=True):
-                st.session_state.exam_step = 3
-                st.rerun()
-
-        with col_sub2:
-            if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
-                st.session_state.submitting = True
-                st.rerun()
-        st.divider()
-        st.divider()
-
-# ==========================================
-# Step 5 - 考試結果與結算頁面
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 5:
-    st.markdown("<h2 style='text-align: center;'>📋 Examination Result & Summary</h2>", unsafe_allow_html=True)
-    st.write("---")
-    
-    status = st.session_state.get("exam_final_status", "Submitted")
-    correct_cnt = st.session_state.get("exam_correct_count", 0)
-    answered_cnt = len(st.session_state.get("answers", {}))
-    total_q_count = len(st.session_state.get("exam_questions", [])) or 75
-    focus_warnings = st.session_state.get("focus_loss_count", 0)
-    
-    if status == "Pass":
-        st.success("🎉 **CONGRATULATIONS! You have PASSED the examination.**")
-    else:
-        st.error("❌ **EXAMINATION RESULT: FAIL.** You did not meet the passing criteria.")
-        
-    st.write(f"Candidate: **{st.session_state.get('candidate_name', 'Candidate')}** ({st.session_state.get('candidate_email', '')})")
-    
-    col_res1, col_res2, col_res3, col_res4 = st.columns(4)
-    col_res1.metric("Final Status", status)
-    col_res2.metric("Questions Answered", f"{answered_cnt} / {total_q_count}")
-    col_res3.metric("Focus Warnings", focus_warnings)
-    col_res4.metric("Exam Outcome", "Completed")
-    
-    st.markdown("---")
-    st.info("💡 Your results and timestamps have been securely recorded in the official examination database.")
-    
-    col_b1, col_b2 = st.columns(2)
-
-    with col_b1:
-        if st.button("✉️ Resend Email", use_container_width=True):
-            user_email = st.session_state.get("candidate_email", "")
-            user_name = st.session_state.get("candidate_name", "Candidate")
-            passing_score_percentage = 70.0
-            
-            if user_email:
-                with st.spinner("Resending result email..."):
-                    sent = send_exam_result_email(
-                        user_email=user_email,
-                        user_name=user_name,
-                        score=correct_cnt,
-                        total=total_q_count,
-                        pass_percentage=passing_score_percentage,
-                        exam_title="Shisa Kanko-Shi Examination"
-                    )
-                    if sent:
-                        st.success("📧 Result email has been resent successfully!")
-                    else:
-                        st.error(f"❌ Failed to resend email: {st.session_state.get('email_error', 'Unknown error')}")
-            else:
-                st.error
+                    font
