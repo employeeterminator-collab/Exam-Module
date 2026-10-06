@@ -327,14 +327,7 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
               <p>Thank you for completing <strong>{exam_title}</strong>. Below is your performance summary:</p>
               
               <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                <tr style="background-color: #f8f9fa;">
-                  <td style="padding: 10px; border: 1px solid #ddd;"><strong>Score</strong></td>
-                  <td style="padding: 10px; border: 1px solid #ddd;">{score} / {total}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 10px; border: 1px solid #ddd;"><strong>Percentage</strong></td>
-                  <td style="padding: 10px; border: 1px solid #ddd;">{percentage}%</td>
-                </tr>
+               
                 <tr style="background-color: #f8f9fa;">
                   <td style="padding: 10px; border: 1px solid #ddd;"><strong>Status</strong></td>
                   <td style="padding: 10px; border: 1px solid #ddd; color: {status_color}; font-weight: bold;">{status_text}</td>
