@@ -193,7 +193,6 @@ def get_exam_questions(paper_name="A"):
         
     return []
 
-# 增強版統一算分邏輯 (完整支援 MC/MC_MEDIA, TF, ORDER, MATCH 跨格式比對)
 def calculate_exam_score(questions, user_answers):
     correct_count = 0
     total_q = len(questions)
@@ -207,12 +206,10 @@ def calculate_exam_score(questions, user_answers):
         correct_val = str(q_data.get("CorrectAnswer", "")).strip().upper()
         u_ans_str = str(user_ans).strip().upper()
         
-        # 1. 完全相同的直接比對
         if u_ans_str == correct_val:
             correct_count += 1
             continue
 
-        # 2. MC 及 MC_MEDIA 的彈性比對邏輯
         if q_type in ["MC", "MC_MEDIA", ""]:
             if len(correct_val) == 1 and correct_val in ["A", "B", "C", "D", "E", "F", "G", "H"]:
                 opt_text = str(q_data.get(f"Option{correct_val}", "")).strip().upper()
@@ -229,7 +226,6 @@ def calculate_exam_score(questions, user_answers):
                 correct_count += 1
                 continue
 
-        # 3. TF 判斷題標準化比對
         elif q_type == "TF":
             norm_c = "TRUE" if correct_val in ["T", "TRUE", "1", "YES"] else ("FALSE" if correct_val in ["F", "FALSE", "0", "NO"] else correct_val)
             norm_u = "TRUE" if u_ans_str in ["T", "TRUE", "1", "YES"] else ("FALSE" if u_ans_str in ["F", "FALSE", "0", "NO"] else u_ans_str)
@@ -237,7 +233,6 @@ def calculate_exam_score(questions, user_answers):
                 correct_count += 1
                 continue
 
-        # 4. ORDER 及 MATCH 題目去空格比對
         elif q_type in ["ORDER", "MATCH"]:
             clean_u = re.sub(r'\s+', '', u_ans_str)
             clean_c = re.sub(r'\s+', '', correct_val)
@@ -247,7 +242,6 @@ def calculate_exam_score(questions, user_answers):
 
     return correct_count, total_q
 
-# 記錄第一次開始考試的時間 (Committed) 並同時指派或取得隨機考卷
 def initialize_voucher_session_in_sheet(voucher_code):
     assigned_paper = "A"
     try:
@@ -258,27 +252,23 @@ def initialize_voucher_session_in_sheet(voucher_code):
             row_idx = cell.row
             headers = sheet.row_values(1)
             
-            # 尋找或確認 AssignedPaper 欄位位置（預設第 15 欄）
             paper_col_idx = 15
             for h_idx, h_name in enumerate(headers, start=1):
                 if "paper" in h_name.lower():
                     paper_col_idx = h_idx
                     break
             
-            # 讀取現有的 AssignedPaper
             current_paper_val = sheet.cell(row_idx, paper_col_idx).value if len(sheet.row_values(row_idx)) >= paper_col_idx else ""
             
             if current_paper_val and str(current_paper_val).strip() in ["A", "B", "C", "D", "E"]:
                 assigned_paper = str(current_paper_val).strip().upper()
             else:
-                # 隨機從 A, B, C, D, E 中抽出一套
                 assigned_paper = random.choice(["A", "B", "C", "D", "E"])
                 try:
                     sheet.update_cell(row_idx, paper_col_idx, assigned_paper)
                 except Exception:
                     pass
 
-            # 檢查並記錄 Committed 時間
             current_committed = sheet.cell(row_idx, 10).value
             if not current_committed or str(current_committed).strip() == "":
                 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -289,7 +279,6 @@ def initialize_voucher_session_in_sheet(voucher_code):
         
     return assigned_paper
 
-# 記錄違規事件到 ViolationLogs Tab 同時即時更新 Vouchers 上的警告次數
 def log_violation_to_sheet(voucher_code):
     st.session_state.focus_loss_count = st.session_state.get("focus_loss_count", 0) + 1
     try:
@@ -309,7 +298,6 @@ def log_violation_to_sheet(voucher_code):
     except Exception as e:
         print(f"Failed to log violation globally: {e}")
 
-# 完成考試時更新狀態
 def finalize_exam_submission(voucher_code, warning_count, exam_status, explanation=""):
     try:
         db = get_sheets_connection()
@@ -387,9 +375,6 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
 
 import json
 
-# ==========================================
-# Session Draft Persistence Helpers
-# ==========================================
 def save_draft_answers(voucher_code, answers_dict, flagged_set=None, force=False):
     now = time.time()
     last_save = st.session_state.get("last_draft_save_time", 0)
@@ -531,6 +516,15 @@ if not st.session_state.authenticated:
                                     l_name = str(matched_record.get("EnglishLastName", "")).strip()
                                     j_name = str(matched_record.get("JapaneseName", "")).strip()
 
+                                    # 讀取原本已累積的警告次數
+                                    existing_warnings = 0
+                                    try:
+                                        raw_warnings = matched_record.get("WarningCount", 0)
+                                        if raw_warnings and str(raw_warnings).strip().isdigit():
+                                            existing_warnings = int(raw_warnings)
+                                    except Exception:
+                                        existing_warnings = 0
+
                                     elapsed_seconds_since_commit = int(elapsed_seconds)
                                     remaining_allowed_seconds = max(0, EXAM_TIME_LIMIT - elapsed_seconds_since_commit)
 
@@ -542,14 +536,15 @@ if not st.session_state.authenticated:
                                     st.session_state.candidate_japanese_name = j_name
                                     st.session_state.candidate_name = f"{f_name} {l_name}".strip()
                                     
-                                    # 確保復原時使用原本分配到的考卷
+                                    # 恢復警告次數，不歸零
+                                    st.session_state.focus_loss_count = existing_warnings
+                                    
                                     st.session_state.assigned_paper = assigned_paper_val if assigned_paper_val in ["A", "B", "C", "D", "E"] else "A"
                                     st.session_state.exam_questions = get_exam_questions(st.session_state.assigned_paper)
 
                                     st.session_state.exam_remaining_seconds = remaining_allowed_seconds
                                     st.session_state.exam_timer_start_local = time.time()
 
-                                    # Restore saved answers and flagged questions from previous session if disconnected
                                     restored_answers, restored_flagged = load_draft_answers(voucher_input.strip())
                                     if restored_answers:
                                         st.session_state.answers = restored_answers
@@ -681,7 +676,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
         remaining = TOTAL_SECONDS - elapsed
 
         if remaining <= 0:
-            # 倒數結束自動指派考卷並開始
             assigned_p = initialize_voucher_session_in_sheet(st.session_state.voucher_code)
             st.session_state.assigned_paper = assigned_p
             st.session_state.exam_questions = get_exam_questions(assigned_p)
@@ -704,7 +698,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("🚀 Start Exam Now", use_container_width=True, key="start_exam_btn"):
-                # 點擊開始時隨機抽卷並寫入 Google Sheets
                 assigned_p = initialize_voucher_session_in_sheet(st.session_state.voucher_code)
                 st.session_state.assigned_paper = assigned_p
                 st.session_state.exam_questions = get_exam_questions(assigned_p)
@@ -763,7 +756,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                                     cell = sheet.find(st.session_state.voucher_code)
                                     if cell:
                                         headers = sheet.row_values(1)
-                                        col_idx = 9 # Default fallback
+                                        col_idx = 9 
                                         for h_idx, h_name in enumerate(headers, start=1):
                                             if "photo" in h_name.lower() or "url" in h_name.lower():
                                                 col_idx = h_idx
@@ -843,7 +836,6 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
         st.session_state.exam_step = 5
         st.rerun()
 
-    # Backend triggers
     if st.button("TriggerViolationBackend", key="hidden-violation-trigger", on_click=handle_focus_loss):
         pass
 
@@ -937,666 +929,4 @@ elif st.session_state.authenticated and st.session_state.exam_step == 3:
                 let endTime = Date.now() + (serverRemaining * 1000);
                 let hasAutoSubmitted = false;
 
-                function updateCountdown() {
-                    let timeLeft = Math.floor((endTime - Date.now()) / 1000);
-                    if (timeLeft <= 0) {
-                        timeLeft = 0;
-                        if (!hasAutoSubmitted) {
-                            hasAutoSubmitted = true;
-                            parent.document.querySelectorAll('button').forEach(btn => {
-                                if (btn.innerText.includes('AutoSubmitBackend')) { btn.click(); }
-                            });
-                        }
-                    }
-                    const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
-                    const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
-                    const s = String(timeLeft % 60).padStart(2, '0');
-                    const target = document.getElementById('native-js-timer');
-                    if (target) { target.innerText = h + ":" + m + ":" + s; }
-                }
-                updateCountdown();
-                setInterval(updateCountdown, 1000);
-            </script>
-        """.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
-        st.components.v1.html(timer_html, height=55)
-
-        if st.button("📋 Go to Review Page", type="primary", use_container_width=True, key="top_review_btn"):
-            st.session_state.exam_step = 4
-            st.rerun()
-    
-    with top_col3:
-        st.components.v1.html("""
-            <div style="border: 2px solid #22c55e; border-radius: 6px; background-color: #f0fdf4; text-align: center; padding: 2px;">
-                <div style="color: #15803d; font-weight: bold; font-size: 9px;">🟢 PROCTOR</div>
-                <video id="top-webcam" autoplay playsinline muted style="width: 99%; height: 100px; object-fit: cover; border-radius: 4px; background: #000; display: block;"></video>
-            </div>
-            <script>
-                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                    .then(stream => { document.getElementById('top-webcam').srcObject = stream; })
-                    .catch(e => console.error("Camera error", e));
-            </script>
-        """, height=150)
-
-    st.divider()
-
-    def get_val(data_dict, *possible_keys):
-        for pk in possible_keys:
-            for actual_k, val in data_dict.items():
-                if actual_k.strip().lower() == pk.strip().lower():
-                    if val is not None and str(val).strip() != "":
-                        return str(val).strip()
-        return ""
-
-    with st.sidebar:
-        if st.button("📋 Go to Review Page", type="primary", use_container_width=True, key="sidebar_review_btn"):
-            st.session_state.exam_step = 4
-            st.rerun()
-
-        st.markdown("---")
-        st.markdown("### 📹 Security Status")
-        st.markdown(f"""
-            <div style="border: 2px dashed #22c55e; padding: 10px; border-radius: 8px; text-align: center; background-color: #f0fdf4;">
-                <div style="color: #15803d; font-weight: bold; font-size: 12px;">🟢 Focus Guard Active</div>
-                <div style="color: #475569; font-size: 11px; margin-top: 4px;">Warnings: {st.session_state.get('focus_loss_count', 0)}</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown(f"### 🗺️ Question Palette (1–{TOTAL_QUESTIONS})")
-        
-        cols_per_row = 5
-        for i in range(1, TOTAL_QUESTIONS + 1, cols_per_row):
-            cols = st.columns(cols_per_row)
-            for j in range(cols_per_row):
-                q_num = i + j
-                if q_num <= TOTAL_QUESTIONS:
-                    label = f"⭐{q_num}" if q_num in st.session_state.flagged_questions else f"{q_num}"
-                    if cols[j].button(label, key=f"pal_{q_num}", use_container_width=True):
-                        st.session_state.current_q = q_num
-                        st.rerun()
-
-    if not exam_questions:
-        st.error("❌ Failed to load exam questions from the database.")
-    else:
-        q_idx = st.session_state.current_q
-        current_q_data = exam_questions[q_idx - 1]
-        
-        q_type = get_val(current_q_data, "QuestionType", "Type", "QType").upper() or "MC"
-        q_text = get_val(current_q_data, "QuestionText", "Question", "Text", "QText")
-        media_url = get_val(current_q_data, "MediaURL", "Media", "ImageURL")
-
-        st.markdown(f"#### Question {q_idx} of {TOTAL_QUESTIONS} — [{q_type}]")
-        st.progress(q_idx / TOTAL_QUESTIONS)
-        
-        if q_text:
-            st.markdown(f"#### Q{q_idx}. {q_text}")
-        else:
-            st.warning(f"⚠️ Q{q_idx}: Question text is empty. Raw row data: {current_q_data}")
-
-        if media_url and media_url.lower() != "nan" and media_url != "":
-            st.markdown(f"**📎 Question Media:**")
-            
-            try:
-                if "youtube.com" in media_url.lower() or "youtu.be" in media_url.lower():
-                    st.video(media_url)
-                elif any(media_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov']):
-                    video_component_html = f'''
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                    <style>
-                      body {{ margin: 0; background: transparent; font-family: sans-serif; text-align: center; }}
-                      .video-container {{ position: relative; display: inline-block; width: 100%; }}
-                      video {{ width: 100%; max-height: 420px; border-radius: 6px; background: #000; display: block; }}
-                      .overlay {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent; }}
-                      .btn-container {{ margin-top: 8px; }}
-                      button {{ padding: 6px 16px; font-size: 13px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background-color: #f0f2f6; color: #31333F; font-weight: 500; }}
-                      button:hover {{ background-color: #e0e2e6; }}
-                    </style>
-                    </head>
-                    <body>
-                      <div class="video-container">
-                        <video id="securedVideo" autoplay loop playsinline oncontextmenu="return false;">
-                          <source src="{media_url}" type="video/mp4">
-                          Your browser does not support the video tag.
-                        </video>
-                        <div class="overlay" oncontextmenu="return false;"></div>
-                      </div>
-                      <div class="btn-container">
-                        <button type="button" onclick="var v=document.getElementById('securedVideo'); if(v.paused){{v.play();}}else{{v.pause();}}">Play / Pause</button>
-                      </div>
-                    </body>
-                    </html>
-                    '''
-                    components.html(video_component_html, height=480)
-                else:
-                    img_html = f'''
-                        <div style="position: relative; display: inline-block; width: 100%;">
-                            <img src="{media_url}" draggable="false" oncontextmenu="return false;" style="max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
-                            <div oncontextmenu="return false;" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent;"></div>
-                        </div>
-                    '''
-                    st.markdown(img_html, unsafe_allow_html=True)
-            except Exception as e:
-                st.warning(f"⚠️ Could not load media: {e}")
-                
-            st.markdown("---")
-            
-        user_answers = st.session_state.get("answers", {})
-        current_answer = user_answers.get(q_idx, None)
-
-        if q_type in ["MC", "MC_MEDIA", ""]:
-            options = []
-            for opt_letter in ["A", "B", "C", "D"]:
-                opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
-                if opt_val:
-                    options.append(opt_val)
-            
-            default_index = options.index(current_answer) if current_answer in options else None
-
-            selected = st.radio("Select your answer:", options, index=default_index, key=f"q_radio_{q_idx}")
-            if selected is not None:
-                st.session_state.answers[q_idx] = selected
-                save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
-        elif q_type == "TF":
-            tf_options = ["TRUE", "FALSE"]
-            default_index = tf_options.index(current_answer) if current_answer in tf_options else None
-            
-            selected = st.radio("Select True or False:", tf_options, index=default_index, key=f"tf_radio_{q_idx}")
-            if selected is not None:
-                st.session_state.answers[q_idx] = selected
-                save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
-
-        elif q_type == "ORDER":
-            st.markdown("##### 🔢 Order Ranking")
-            st.write("Select the options in your desired ranked order (click them in sequence):")
-
-            options_dict = {}
-            for opt_letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
-                opt_val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
-                if opt_val:
-                    options_dict[opt_letter] = f"{opt_letter}: {opt_val}"
-
-            option_labels = list(options_dict.values())
-
-            current_saved = str(st.session_state.answers.get(q_idx, "")) if q_idx in st.session_state.answers else ""
-            default_selection = []
-            for letter in [x.strip().upper() for x in current_saved.split(",") if x.strip()]:
-                if letter in options_dict:
-                    default_selection.append(options_dict[letter])
-
-            selected_items = st.multiselect(
-                "Ranked Order (Click items in your preferred order)",
-                options=option_labels,
-                default=default_selection,
-                key=f"order_rank_{q_idx}"
-            )
-
-            if selected_items:
-                letters = [item.split(":")[0].strip() for item in selected_items]
-                st.session_state.answers[q_idx] = ",".join(letters)
-                save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
-            else:
-                if q_idx in st.session_state.answers:
-                    del st.session_state.answers[q_idx]
-                    save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
-
-        elif q_type == "MATCH":
-            st.markdown("##### 🔗 Matching Exercise")
-            st.write("Match each item on the left with its correct definition from the pool on the right:")
-
-            raw_row = current_q_data.get("raw_row", [])
-
-            options_dict = {}
-            for i, opt_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                val = get_val(current_q_data, f"Option{opt_letter}", f"Opt{opt_letter}", opt_letter)
-                if not val and raw_row and len(raw_row) > (2 + i):
-                    v = raw_row[2 + i]
-                    if v and str(v).lower() != "nan":
-                        val = str(v).strip()
-                if val:
-                    options_dict[opt_letter] = val
-
-            defs_dict = {}
-            for i, def_letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                val = get_val(current_q_data, f"Def{def_letter}", f"Definition{def_letter}")
-                if not val and raw_row and len(raw_row) > (12 + i):
-                    v = raw_row[12 + i]
-                    if v and str(v).lower() != "nan":
-                        val = str(v).strip()
-                if val:
-                    defs_dict[def_letter] = val
-
-            if not options_dict:
-                st.warning("⚠️ No options found for this question.")
-            if not defs_dict:
-                st.warning("⚠️ No definitions found. Please check columns M through P.")
-
-            current_saved = str(st.session_state.answers.get(q_idx, "")) if q_idx in st.session_state.answers else ""
-            saved_pairs = {}
-            for pair in current_saved.split(","):
-                if ":" in pair:
-                    parts = pair.split(":")
-                    saved_pairs[parts[0].strip().upper()] = parts[1].strip().replace("DEF", "").upper()
-
-            matching_results = {}
-            def_choices = ["-- Select Definition --"] + list(defs_dict.keys())
-
-            col_left, col_right = st.columns([1, 1], gap="medium")
-
-            with col_left:
-                st.markdown("#### ✏️ Items")
-                for opt_letter, opt_text in options_dict.items():
-                    default_idx = 0
-                    saved_def = saved_pairs.get(opt_letter, "")
-                    if saved_def:
-                        for idx_pos, d_letter in enumerate(defs_dict.keys()):
-                            if saved_def.upper() == d_letter.upper():
-                                default_idx = idx_pos + 1
-                                break
-
-                    choice = st.selectbox(
-                        f"**{opt_letter}: {opt_text}**",
-                        def_choices,
-                        index=default_idx,
-                        key=f"match_{q_idx}_{opt_letter}"
-                    )
-
-                    if choice and choice != "-- Select Definition --":
-                        matching_results[opt_letter] = choice.strip()
-
-            with col_right:
-                st.markdown("#### 📖 Definitions Pool")
-                for d_letter, d_text in defs_dict.items():
-                    st.info(f"**{d_letter}:** {d_text}")
-
-            if matching_results:
-                sorted_keys = sorted(matching_results.keys())
-                pairs_str = ",".join([f"{k}:{matching_results[k]}" for k in sorted_keys])
-                st.session_state.answers[q_idx] = pairs_str
-                save_draft_answers(
-                    st.session_state.voucher_code, 
-                    st.session_state.answers, 
-                    st.session_state.get("flagged_questions", set())
-                )
-            else:
-                if q_idx in st.session_state.answers:
-                    del st.session_state.answers[q_idx]
-                    save_draft_answers(
-                    st.session_state.voucher_code, 
-                    st.session_state.answers, 
-                    st.session_state.get("flagged_questions", set())
-                )
-        st.markdown("---")
-        col_prev, col_flag, col_next = st.columns([1, 1, 1])
-
-        with col_prev:
-            if st.session_state.current_q > 1:
-                if st.button("⬅️ Previous Question", use_container_width=True):
-                    st.session_state.current_q -= 1
-                    st.rerun()
-
-        with col_flag:
-            current_q = st.session_state.current_q
-            is_flagged = current_q in st.session_state.get("flagged_questions", set())
-            flag_label = "⭐ Unflag" if is_flagged else "☆ Flag for Review"
-            if st.button(flag_label, use_container_width=True):
-                if is_flagged:
-                    st.session_state.flagged_questions.remove(current_q)
-                else:
-                    st.session_state.flagged_questions.add(current_q)
-                
-                save_draft_answers(
-                    st.session_state.voucher_code, 
-                    st.session_state.answers, 
-                    st.session_state.flagged_questions,
-                    force=True
-                )
-                st.rerun()
-
-        with col_next:
-            if st.session_state.current_q < TOTAL_QUESTIONS:
-                if st.button("Next Question ➡️", use_container_width=True):
-                    save_draft_answers(st.session_state.voucher_code, st.session_state.answers)
-                    st.session_state.current_q += 1
-                    st.rerun()
-            else:
-                if st.button("📋 Go to Review Page", type="primary", use_container_width=True):
-                    st.session_state.exam_step = 4
-                    st.rerun()
-        st.markdown("---")
-
-# ==========================================
-# Step 4 - 考試總結與詳細清單確認頁面
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 4:
-    if not st.session_state.exam_questions:
-        st.session_state.exam_questions = get_exam_questions(st.session_state.get("assigned_paper", "A"))
-
-    exam_questions = st.session_state.exam_questions
-
-    def handle_focus_loss():
-        log_violation_to_sheet(st.session_state.voucher_code)
-
-    def handle_auto_submit():
-        user_answers = st.session_state.get("answers", {})
-        focus_losses = st.session_state.get("focus_loss_count", 0)
-        
-        correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
-                
-        passing_score_percentage = 70.0
-        score_percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
-        final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
-        
-        finalize_exam_submission(
-            st.session_state.voucher_code,
-            focus_losses,
-            final_status,
-            explanation=f"Auto-submitted on timeout from Review Page. Correct {correct_count}/{total_q}"
-        )
-        
-        user_email = st.session_state.get("candidate_email", "")
-        user_name = st.session_state.get("candidate_name", "Candidate")
-
-        if user_email:
-            send_exam_result_email(
-                user_email=user_email,
-                user_name=user_name,
-                score=correct_count,
-                total=total_q,
-                pass_percentage=passing_score_percentage,
-                exam_title="Shisa Kanko-Shi Examination"
-            )
-        
-        st.session_state.exam_final_status = final_status
-        st.session_state.exam_correct_count = correct_count
-        st.session_state.exam_step = 5
-        st.rerun()
-
-    # Hidden Backend Triggers
-    if st.button("TriggerViolationBackend", key="hidden-violation-trigger-step4", on_click=handle_focus_loss):
-        pass
-
-    if st.button("AutoSubmitBackend", key="hidden-auto-submit-trigger-step4", on_click=handle_auto_submit):
-        pass
-
-    st.components.v1.html("""
-        <script>
-            function hideTriggers() {
-                const buttons = parent.document.querySelectorAll('button');
-                buttons.forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend') || btn.innerText.includes('AutoSubmitBackend')) {
-                        let container = btn.closest('[data-testid="stVerticalBlock"] > div') || btn.closest('.element-container') || btn.parentElement;
-                        if (container) { container.style.display = 'none'; }
-                    }
-                });
-            }
-
-            const observer = new MutationObserver(hideTriggers);
-            observer.observe(parent.document.body, { childList: true, subtree: true });
-            hideTriggers();
-
-            if (!parent.document.getElementById('global-warning-banner')) {
-                const banner = parent.document.createElement('div');
-                banner.id = 'global-warning-banner';
-                banner.style.cssText = `
-                    position: fixed; top: 0; left: 0; width: 100vw;
-                    background-color: #dc2626; color: white; text-align: center; 
-                    padding: 16px 20px; font-family: sans-serif; font-weight: bold; 
-                    font-size: 15px; z-index: 2147483647; display: none; box-sizing: border-box;
-                `;
-                banner.innerHTML = "🚨 WARNING: Tab switch, blur, or mouse exit detected!";
-                parent.document.body.appendChild(banner);
-            }
-
-            let bannerTimer;
-            function triggerGlobalWarning() {
-                const b = parent.document.getElementById('global-warning-banner');
-                if (b) {
-                    b.style.display = 'block';
-                    clearTimeout(bannerTimer);
-                    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 8000);
-                }
-                parent.document.querySelectorAll('button').forEach(btn => {
-                    if (btn.innerText.includes('TriggerViolationBackend')) { btn.click(); }
-                });
-            }
-
-            parent.document.addEventListener("visibilitychange", function() { 
-                if (parent.document.hidden) triggerGlobalWarning(); 
-            });
-            
-            parent.window.addEventListener("blur", function() { 
-                if (parent.document.activeElement && parent.document.activeElement.tagName === 'IFRAME') {
-                    return; 
-                }
-                triggerGlobalWarning(); 
-            });
-
-            parent.document.addEventListener("mouseleave", function(e) {
-                if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= parent.window.innerWidth || e.clientY >= parent.window.innerHeight) {
-                    triggerGlobalWarning();
-                }
-            });
-        </script>
-    """, height=0)
-
-    if "exam_remaining_seconds" not in st.session_state:
-        st.session_state.exam_remaining_seconds = 5400
-        st.session_state.exam_timer_start_local = time.time()
-        
-    elapsed_local = int(time.time() - st.session_state.exam_timer_start_local)
-    remaining_seconds = max(0, st.session_state.exam_remaining_seconds - elapsed_local)
-
-    if remaining_seconds <= 0:
-        handle_auto_submit()
-
-    if "submitting" not in st.session_state:
-        st.session_state.submitting = False
-
-    if st.session_state.submitting:
-        st.markdown("<h2 style='text-align: center; color: #38bdf8;'>🔒 Finalizing Exam Submission...</h2>", unsafe_allow_html=True)
-        with st.spinner("Submitting exam to database, clearing draft cache, and sending confirmation email..."):
-            try:
-                user_answers = st.session_state.get("answers", {})
-                answered_count = len(user_answers)
-                focus_losses = st.session_state.get("focus_loss_count", 0)
-                
-                correct_count, total_q = calculate_exam_score(exam_questions, user_answers)
-                
-                passing_score_percentage = 70.0
-                score_percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
-                final_status = "Pass" if score_percentage >= passing_score_percentage else "Fail"
-                
-                finalize_exam_submission(
-                    st.session_state.voucher_code,
-                    focus_losses,
-                    final_status,
-                    explanation=f"Answered {answered_count}/{total_q}, Correct {correct_count}"
-                )
-                
-                clear_draft_answers(st.session_state.voucher_code)
-                
-                user_email = st.session_state.get("candidate_email", "")
-                user_name = st.session_state.get("candidate_name", "Candidate")
-
-                if user_email:
-                    send_exam_result_email(
-                        user_email=user_email,
-                        user_name=user_name,
-                        score=correct_count,
-                        total=total_q,
-                        pass_percentage=passing_score_percentage,
-                        exam_title="Shisa Kanko-Shi Examination"
-                    )
-                
-                st.session_state.exam_final_status = final_status
-                st.session_state.exam_correct_count = correct_count
-                st.session_state.exam_step = 5
-                st.session_state.submitting = False
-                st.rerun()
-
-            except Exception as e:
-                st.session_state.submitting = False
-                st.error(f"Submission error: {e}")
-                if st.button("Retry Submission"):
-                    st.session_state.submitting = True
-                    st.rerun()
-
-    else:
-        st.markdown("<h2 style='text-align: center;'>📋 Exam Review & Question Checklist</h2>", unsafe_allow_html=True)
-        
-        timer_html = """
-            <div style="background-color: #1e293b; padding: 8px 16px; border-radius: 6px; text-align: center; color: white; font-family: sans-serif; max-width: 280px; margin: 0 auto 15px auto;">
-                <div style="font-size: 10px; color: #94a3b8; letter-spacing: 1px;">⏳ TIME REMAINING</div>
-                <div id="review-js-timer" style="font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8;">01:30:00</div>
-            </div>
-            <script>
-                const serverRemaining = SERVER_REMAINING_PLACEHOLDER;
-                let endTime = Date.now() + (serverRemaining * 1000);
-                let hasAutoSubmitted = false;
-
-                function updateCountdown() {
-                    let timeLeft = Math.floor((endTime - Date.now()) / 1000);
-                    if (timeLeft <= 0) {
-                        timeLeft = 0;
-                        if (!hasAutoSubmitted) {
-                            hasAutoSubmitted = true;
-                            parent.document.querySelectorAll('button').forEach(btn => {
-                                if (btn.innerText.includes('AutoSubmitBackend')) { btn.click(); }
-                            });
-                        }
-                    }
-                    const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
-                    const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
-                    const s = String(timeLeft % 60).padStart(2, '0');
-                    const target = document.getElementById('review-js-timer');
-                    if (target) { target.innerText = h + ":" + m + ":" + s; }
-                }
-                updateCountdown();
-                setInterval(updateCountdown, 1000);
-            </script>
-        """.replace('SERVER_REMAINING_PLACEHOLDER', str(remaining_seconds))
-        st.components.v1.html(timer_html, height=65)
-
-        st.write("Review your answered, unanswered, and flagged questions below. Click **'Go to Q...'** next to any question to instantly jump back to it and revise your answer.")
-        st.write("---")
-
-        total_q_count = len(st.session_state.get("exam_questions", [])) or 75
-        answered_cnt = len(st.session_state.get("answers", {}))
-        unanswered_cnt = total_q_count - answered_cnt
-        flagged_cnt = len(st.session_state.get("flagged_questions", set()))
-        focus_warnings = st.session_state.get("focus_loss_count", 0)
-
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("Answered", answered_cnt)
-        col_m2.metric("Unanswered", unanswered_cnt)
-        col_m3.metric("Flagged", flagged_cnt)
-        col_m4.metric("Warnings", focus_warnings)
-
-        st.markdown("---")
-        st.markdown("### Detailed Question Status List")
-
-        user_answers = st.session_state.get("answers", {})
-        flagged_set = st.session_state.get("flagged_questions", set())
-
-        for q_num in range(1, total_q_count + 1):
-            is_answered = q_num in user_answers
-            is_flagged = q_num in flagged_set
-            
-            status_badge = "🟢 Answered" if is_answered else "⚪ Unanswered"
-            if is_flagged:
-                status_badge += " | ⭐ Flagged"
-
-            ans_preview = user_answers.get(q_num, "No answer selected yet")
-            if isinstance(ans_preview, dict):
-                ans_preview = ", ".join([f"{k}: {v}" for k, v in ans_preview.items()])
-            if len(str(ans_preview)) > 60:
-                ans_preview = str(ans_preview)[:57] + "..."
-
-            with st.container():
-                col_info, col_action = st.columns([4, 1])
-                with col_info:
-                    st.markdown(f"**Q{q_num}** [{status_badge}]<br><small style='color: #64748b;'>Selected: {ans_preview}</small>", unsafe_allow_html=True)
-                with col_action:
-                    if st.button(f"Go to Q{q_num}", key=f"review_jump_{q_num}", use_container_width=True):
-                        st.session_state.current_q = q_num
-                        st.session_state.exam_step = 3
-                        st.rerun()
-                st.divider()
-
-        st.warning("⚠️ Once you click **Confirm and Submit Exam**, your answers will be finalized and sent to the examination database. You cannot make any further changes.")
-
-        col_sub1, col_sub2 = st.columns(2)
-
-        with col_sub1:
-            if st.button("⬅️ Return to Exam", use_container_width=True):
-                st.session_state.exam_step = 3
-                st.rerun()
-
-        with col_sub2:
-            if st.button("✅ Confirm and Submit Exam", type="primary", use_container_width=True):
-                st.session_state.submitting = True
-                st.rerun()
-        st.divider()
-        st.divider()
-
-# ==========================================
-# Step 5 - 考試結果與結算頁面
-# ==========================================
-elif st.session_state.authenticated and st.session_state.exam_step == 5:
-    st.markdown("<h2 style='text-align: center;'>📋 Examination Result & Summary</h2>", unsafe_allow_html=True)
-    st.write("---")
-    
-    status = st.session_state.get("exam_final_status", "Submitted")
-    correct_cnt = st.session_state.get("exam_correct_count", 0)
-    answered_cnt = len(st.session_state.get("answers", {}))
-    total_q_count = len(st.session_state.get("exam_questions", [])) or 75
-    focus_warnings = st.session_state.get("focus_loss_count", 0)
-    
-    if status == "Pass":
-        st.success("🎉 **CONGRATULATIONS! You have PASSED the examination.**")
-    else:
-        st.error("❌ **EXAMINATION RESULT: FAIL.** You did not meet the passing criteria.")
-        
-    st.write(f"Candidate: **{st.session_state.get('candidate_name', 'Candidate')}** ({st.session_state.get('candidate_email', '')})")
-    
-    col_res1, col_res2, col_res3, col_res4 = st.columns(4)
-    col_res1.metric("Final Status", status)
-    col_res2.metric("Questions Answered", f"{answered_cnt} / {total_q_count}")
-    col_res3.metric("Focus Warnings", focus_warnings)
-    col_res4.metric("Exam Outcome", "Completed")
-    
-    st.markdown("---")
-    st.info("💡 Your results and timestamps have been securely recorded in the official examination database.")
-    
-    col_b1, col_b2 = st.columns(2)
-
-    with col_b1:
-        if st.button("✉️ Resend Email", use_container_width=True):
-            user_email = st.session_state.get("candidate_email", "")
-            user_name = st.session_state.get("candidate_name", "Candidate")
-            passing_score_percentage = 70.0
-            
-            if user_email:
-                with st.spinner("Resending result email..."):
-                    sent = send_exam_result_email(
-                        user_email=user_email,
-                        user_name=user_name,
-                        score=correct_cnt,
-                        total=total_q_count,
-                        pass_percentage=passing_score_percentage,
-                        exam_title="Shisa Kanko-Shi Examination"
-                    )
-                    if sent:
-                        st.success("📧 Result email has been resent successfully!")
-                    else:
-                        st.error(f"❌ Failed to resend email: {st.session_state.get('email_error', 'Unknown error')}")
-            else:
-                st.error("❌ Email address not found.")
-
-    with col_b2:
-        if st.button("🚪 Exit Examination Portal", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.rerun()
+                function update
