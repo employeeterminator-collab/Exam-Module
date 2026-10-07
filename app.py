@@ -117,80 +117,98 @@ if "exam_questions" not in st.session_state:
 # 3. Google Sheets 連線與資料庫輔助函式
 # ==========================================
 def get_sheets_connection():
+  scope = [
+      "https://spreadsheets.google.com/feeds",
+      "https://www.googleapis.com/auth/drive",
+  ]
+  creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT"))
+  creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+  client = gspread.authorize(creds)
+  sheet = client.open("ShisaKanko_Exam_Database")
+  return sheet
+
+
+def get_exam_questions(paper_name="A"):
+  try:
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    creds_dict = dict(st.secrets["gcp_service_account"])
+    creds_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT"))
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
-    sheet = client.open("ShisaKanko_Exam_Database")
-    return sheet
 
-def get_exam_questions(paper_name="A"):
-    try:
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        
-        spreadsheet = client.open("Questions")
-        sheet = spreadsheet.worksheet(str(paper_name).strip().upper())
-        rows = sheet.get_all_values()
-        
-        if not rows or len(rows) < 2:
-            return []
-            
-        headers_raw = rows[0]
-        headers_clean = [str(h).strip().lower().replace(" ", "").replace("_", "") for h in headers_raw]
+    spreadsheet = client.open("Questions")
+    sheet = spreadsheet.worksheet(str(paper_name).strip().upper())
+    rows = sheet.get_all_values()
 
-        def find_idx(possible_names, default_idx):
-            for name in possible_names:
-                clean_name = name.lower().replace(" ", "").replace("_", "")
-                if clean_name in headers_clean:
-                    return headers_clean.index(clean_name)
-            return default_idx
+    if not rows or len(rows) < 2:
+      return []
 
-        q_text_idx = find_idx(["questiontext", "question", "text", "qtext"], 0)
-        q_type_idx = find_idx(["questiontype", "type", "qtype"], 1)
-        correct_idx = find_idx(["correctanswer", "correct_answer", "answer"], 10)
-        media_idx = find_idx(["mediaurl", "media", "imageurl"], 11)
+    headers_raw = rows[0]
+    headers_clean = [
+        str(h).strip().lower().replace(" ", "").replace("_", "")
+        for h in headers_raw
+    ]
 
-        normalized_records = []
-        for row in rows[1:]:
-            if not row or not any(str(c).strip() for c in row):
-                continue
-            
-            record = {"raw_row": row}
-            for idx, cell_val in enumerate(row):
-                if idx < len(headers_raw):
-                    record[headers_raw[idx].strip()] = cell_val.strip()
-                    record[headers_clean[idx]] = cell_val.strip()
+    def find_idx(possible_names, default_idx):
+      for name in possible_names:
+        clean_name = name.lower().replace(" ", "").replace("_", "")
+        if clean_name in headers_clean:
+          return headers_clean.index(clean_name)
+      return default_idx
 
-            record["Question"] = row[q_text_idx].strip() if len(row) > q_text_idx else ""
-            record["QuestionType"] = row[q_type_idx].strip() if len(row) > q_type_idx else "MC"
-            record["CorrectAnswer"] = row[correct_idx].strip() if len(row) > correct_idx else ""
-            record["MediaURL"] = row[media_idx].strip() if len(row) > media_idx else ""
+    q_text_idx = find_idx(["questiontext", "question", "text", "qtext"], 0)
+    q_type_idx = find_idx(["questiontype", "type", "qtype"], 1)
+    correct_idx = find_idx(["correctanswer", "correct_answer", "answer"], 10)
+    media_idx = find_idx(["mediaurl", "media", "imageurl"], 11)
 
-            for i, letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                opt_idx = find_idx([f"option{letter.lower()}", f"opt{letter.lower()}"], 2 + i)
-                record[f"Option{letter}"] = row[opt_idx].strip() if len(row) > opt_idx else ""
+    normalized_records = []
+    for row in rows[1:]:
+      if not row or not any(str(c).strip() for c in row):
+        continue
 
-            for i, letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
-                def_idx = find_idx([f"def{letter.lower()}", f"definition{letter.lower()}"], 12 + i)
-                record[f"Def{letter}"] = row[def_idx].strip() if len(row) > def_idx else ""
+      record = {"raw_row": row}
+      for idx, cell_val in enumerate(row):
+        if idx < len(headers_raw):
+          record[headers_raw[idx].strip()] = cell_val.strip()
+          record[headers_clean[idx]] = cell_val.strip()
 
-            normalized_records.append(record)
-            
-        return normalized_records
-            
-    except Exception as e:
-        st.error(f"Google Sheets Debug Error (Paper {paper_name}): {e}")
-        
-    return []
+      record["Question"] = (
+          row[q_text_idx].strip() if len(row) > q_text_idx else ""
+      )
+      record["QuestionType"] = (
+          row[q_type_idx].strip() if len(row) > q_type_idx else "MC"
+      )
+      record["CorrectAnswer"] = (
+          row[correct_idx].strip() if len(row) > correct_idx else ""
+      )
+      record["MediaURL"] = row[media_idx].strip() if len(row) > media_idx else ""
+
+      for i, letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
+        opt_idx = find_idx(
+            [f"option{letter.lower()}", f"opt{letter.lower()}"], 2 + i
+        )
+        record[f"Option{letter}"] = (
+            row[opt_idx].strip() if len(row) > opt_idx else ""
+        )
+
+      for i, letter in enumerate(["A", "B", "C", "D", "E", "F", "G", "H"]):
+        def_idx = find_idx(
+            [f"def{letter.lower()}", f"definition{letter.lower()}"], 12 + i
+        )
+        record[f"Def{letter}"] = (
+            row[def_idx].strip() if len(row) > def_idx else ""
+          )
+
+      normalized_records.append(record)
+
+    return normalized_records
+
+  except Exception as e:
+    st.error(f"Google Sheets Debug Error (Paper {paper_name}): {e}")
+
+  return []
 
 def calculate_exam_score(questions, user_answers):
     correct_count = 0
@@ -319,12 +337,11 @@ def send_exam_result_email(user_email, user_name, score, total, pass_percentage=
         status_text = "PASSED" if is_passed else "FAILED"
         status_color = "#2e7d32" if is_passed else "#c62828"
 
-        smtp_config = st.secrets["smtp"]
-        server_host = str(smtp_config["server"]).strip()
-        port = int(smtp_config["port"])
-        login_user = str(smtp_config.get("login", smtp_config["sender_email"])).strip()
-        sender_password = str(smtp_config["sender_password"]).strip()
-        sender_email = str(smtp_config["sender_email"]).strip()
+        server_host = os.getenv("SMTP_SERVER", "").strip()
+        port = int(os.getenv("SMTP_PORT", "465"))
+        sender_email = os.getenv("SMTP_SENDER_EMAIL", "").strip()
+        sender_password = os.getenv("SMTP_SENDER_PASSWORD", "").strip()
+        login_user = os.getenv("SMTP_LOGIN", sender_email).strip()
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"[{status_text}] Your Exam Results - {exam_title}"
@@ -734,7 +751,7 @@ elif st.session_state.authenticated and st.session_state.exam_step == 2:
                     with st.spinner("Uploading verification photo to secure storage and proceeding..."):
                         try:
                             import requests
-                            imgbb_key = st.secrets["imgbb"]["api_key"]
+                            imgbb_key = os.getenv("IMGBB_API_KEY")
                             upload_url = "https://api.imgbb.com/1/upload"
 
                             image_bytes = photo_file.getvalue()
