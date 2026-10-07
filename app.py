@@ -5,7 +5,7 @@ import re
 import smtplib
 import time
 import os
-impoty json
+import json
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
